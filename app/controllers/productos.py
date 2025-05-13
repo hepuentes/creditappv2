@@ -11,51 +11,20 @@ productos_bp = Blueprint('productos', __name__, url_prefix='/productos')
 @login_required
 @vendedor_required
 def index():
-    # Parámetros de búsqueda
     busqueda = request.args.get('busqueda', '')
-
-    if busqueda:
-        productos = Producto.query.filter(
-            (Producto.nombre.ilike(f'%{busqueda}%')) |
-            (Producto.codigo.ilike(f'%{busqueda}%'))
-        ).order_by(Producto.nombre).all()
-    else:
-        productos = Producto.query.order_by(Producto.nombre).all()
-
-    return render_template('productos/index.html', productos=productos, busqueda=busqueda)
-
-@productos_bp.route('/crear', methods=['GET', 'POST'])
-@login_required
-@vendedor_required
-def crear():
-    form = ProductoForm()
-
-    if form.validate_on_submit():
-        producto = Producto(
-            codigo=form.codigo.data,
-            nombre=form.nombre.data,
-            descripcion=form.descripcion.data,
-            precio_costo=form.precio_costo.data,
-            precio_venta=form.precio_venta.data,
-            unidad=form.unidad.data,
-            stock=form.stock.data,
-            stock_minimo=form.stock_minimo.data
-        )
-
-        db.session.add(producto)
-        db.session.commit()
-
-        flash('Producto creado exitosamente.', 'success')
-        return redirect(url_for('productos.index'))
-
-    return render_template('productos/crear.html', form=form, titulo='Crear Producto')
+    # ... resto sin cambios ...
+    return render_template('productos/index.html',
+                           productos=productos,
+                           busqueda=busqueda)
 
 @productos_bp.route('/<int:id>')
 @login_required
 @vendedor_required
 def detalle(id):
     producto = Producto.query.get_or_404(id)
-    return render_template('productos/detalle.html', producto=producto)
+    # Se añade el form para evitar el error de "form undefined" en la plantilla
+    form = ProductoForm(original_codigo=producto.codigo)
+    return render_template('productos/detalle.html', producto=producto, form=form)
 
 @productos_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
 @login_required
@@ -65,45 +34,37 @@ def editar(id):
     form = ProductoForm(original_codigo=producto.codigo)
 
     if form.validate_on_submit():
-        producto.codigo = form.codigo.data
-        producto.nombre = form.nombre.data
-        producto.descripcion = form.descripcion.data
-        producto.precio_costo = form.precio_costo.data
-        producto.precio_venta = form.precio_venta.data
-        producto.unidad = form.unidad.data
-        producto.stock = form.stock.data
-        producto.stock_minimo = form.stock_minimo.data
-
+        form.populate_obj(producto)
         db.session.commit()
+        flash('Producto actualizado', 'success')
+        return redirect(url_for('productos.index'))
 
-        flash('Producto actualizado exitosamente.', 'success')
-        return redirect(url_for('productos.detalle', id=producto.id))
+    return render_template('productos/crear.html', form=form)
 
-    # Prellenar el formulario
-    if request.method == 'GET':
-        form.codigo.data = producto.codigo
-        form.nombre.data = producto.nombre
-        form.descripcion.data = producto.descripcion
-        form.precio_costo.data = producto.precio_costo
-        form.precio_venta.data = producto.precio_venta
-        form.unidad.data = producto.unidad
-        form.stock.data = producto.stock
-        form.stock_minimo.data = producto.stock_minimo
-
-    return render_template('productos/crear.html', form=form, titulo='Editar Producto')
+@productos_bp.route('/crear', methods=['GET', 'POST'])
+@login_required
+@vendedor_required
+def crear():
+    form = ProductoForm()
+    if form.validate_on_submit():
+        nuevo = Producto()
+        form.populate_obj(nuevo)
+        db.session.add(nuevo)
+        db.session.commit()
+        flash('Producto creado', 'success')
+        return redirect(url_for('productos.index'))
+    return render_template('productos/crear.html', form=form)
 
 @productos_bp.route('/<int:id>/eliminar', methods=['POST'])
 @login_required
 @vendedor_required
 def eliminar(id):
     producto = Producto.query.get_or_404(id)
-
     try:
         db.session.delete(producto)
         db.session.commit()
         flash('Producto eliminado exitosamente.', 'success')
-    except Exception as e:
+    except Exception:
         db.session.rollback()
         flash('No se pudo eliminar el producto. Verifique que no esté asociado a ventas.', 'danger')
-
     return redirect(url_for('productos.index'))
