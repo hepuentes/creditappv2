@@ -119,7 +119,13 @@ class Caja(db.Model):
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relaciones
-    movimientos = db.relationship('MovimientoCaja', backref='caja', lazy=True, cascade="all, delete-orphan")
+    movimientos = db.relationship(
+        'MovimientoCaja',
+        backref='caja',
+        lazy=True,
+        cascade="all, delete-orphan",
+        foreign_keys='MovimientoCaja.caja_id'
+    )
 
 class MovimientoCaja(db.Model):
     id = db.Column(db.Integer, primary_key=True)
