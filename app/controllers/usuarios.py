@@ -78,7 +78,7 @@ def editar(id):
         form.rol.data = usuario.rol
         form.activo.data = usuario.activo
 
-         return render_template('usuarios/crear.html', form=form, titulo='Editar Usuario')
+        return render_template('usuarios/crear.html', form=form, titulo='Editar Usuario')
 
 @usuarios_bp.route('/<int:id>/toggle-active', methods=['POST'])
 @login_required
