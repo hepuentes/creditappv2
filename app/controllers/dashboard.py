@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template
 from flask_login import login_required, current_user
+from app import db
 from datetime import datetime
 from app.models import Cliente, Producto, Venta, Abono, Caja
 from app.utils import format_currency, get_comisiones_periodo
