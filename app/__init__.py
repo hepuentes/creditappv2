@@ -1,0 +1,95 @@
+import os
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_login import LoginManager
+from flask_bcrypt import Bcrypt
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv()
+
+# Inicializar extensiones
+db = SQLAlchemy()
+migrate = Migrate()
+login_manager = LoginManager()
+bcrypt = Bcrypt()
+
+def create_app():
+    app = Flask(__name__)
+    
+    # Configuración
+    app.config.from_object('app.config.Config')
+    
+    # Inicializar extensiones con la app
+    db.init_app(app)
+    migrate.init_app(app, db)
+    login_manager.init_app(app)
+    bcrypt.init_app(app)
+    
+    # Configurar login_manager
+    login_manager.login_view = 'auth.login'
+    login_manager.login_message = 'Inicie sesión para acceder a esta página'
+    login_manager.login_message_category = 'warning'
+    
+    # Importar y registrar los blueprints
+    from app.controllers.auth import auth_bp
+    from app.controllers.dashboard import dashboard_bp
+    from app.controllers.clientes import clientes_bp
+    from app.controllers.productos import productos_bp
+    from app.controllers.ventas import ventas_bp
+    from app.controllers.creditos import creditos_bp
+    from app.controllers.abonos import abonos_bp
+    from app.controllers.cajas import cajas_bp
+    from app.controllers.usuarios import usuarios_bp
+    from app.controllers.config import config_bp
+    from app.controllers.reportes import reportes_bp
+    
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(dashboard_bp)
+    app.register_blueprint(clientes_bp)
+    app.register_blueprint(productos_bp)
+    app.register_blueprint(ventas_bp)
+    app.register_blueprint(creditos_bp)
+    app.register_blueprint(abonos_bp)
+    app.register_blueprint(cajas_bp)
+    app.register_blueprint(usuarios_bp)
+    app.register_blueprint(config_bp)
+    app.register_blueprint(reportes_bp)
+    
+    # Crear todas las tablas
+    with app.app_context():
+        db.create_all()
+        
+        # Importamos aquí para evitar importaciones circulares
+        from app.models import Usuario, Configuracion
+        
+        # Crear usuario administrador por defecto si no existe
+        admin = Usuario.query.filter_by(email='admin@creditapp.com').first()
+        if not admin:
+            admin = Usuario(
+                nombre='Administrador',
+                email='admin@creditapp.com',
+                rol='administrador',
+                activo=True
+            )
+            admin.set_password('admin123')
+            db.session.add(admin)
+            
+            # Crear configuración inicial
+            config = Configuracion(
+                nombre_empresa='CreditApp',
+                direccion='Dirección de la empresa',
+                telefono='123456789',
+                moneda='$',
+                iva=19,
+                logo='logo.png',
+                min_password=6,
+                porcentaje_comision=5,
+                periodo_comision='mensual'
+            )
+            db.session.add(config)
+            
+            db.session.commit()
+    
+    return app

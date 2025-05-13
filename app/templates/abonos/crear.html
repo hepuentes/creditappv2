@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Registrar Abono - CreditApp{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Registrar Abono</h1>
+        <div>
+            <a href="{{ url_for('abonos.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Datos del Abono</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        {{ form.hidden_tag() }}
+
+                        <div class="mb-3">
+                            {{ form.cliente_id.label(class="form-label") }}
+                            {% if form.cliente_id.errors %}
+                                {{ form.cliente_id(class="form-select is-invalid", id="cliente_select") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.cliente_id.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.cliente_id(class="form-select", id="cliente_select") }}
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.venta_id.label(class="form-label") }}
+                            {% if form.venta_id.errors %}
+                                {{ form.venta_id(class="form-select is-invalid", id="venta_select") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.venta_id.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.venta_id(class="form-select", id="venta_select") }}
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.monto.label(class="form-label") }}
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                {% if form.monto.errors %}
+                                    {{ form.monto(class="form-control is-invalid", id="monto_input") }}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.monto.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    {{ form.monto(class="form-control", id="monto_input") }}
+                                {% endif %}
+                            </div>
+                            <div class="form-text" id="saldo_info">Saldo pendiente: $0.00</div>
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.caja_id.label(class="form-label") }}
+                            {% if form.caja_id.errors %}
+                                {{ form.caja_id(class="form-select is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.caja_id.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.caja_id(class="form-select") }}
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.notas.label(class="form-label") }}
+                            {% if form.notas.errors %}
+                                {{ form.notas(class="form-control is-invalid", rows=3) }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.notas.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.notas(class="form-control", rows=3, placeholder="Observaciones adicionales...") }}
+                            {% endif %}
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-4">
+                            <a href="{{ url_for('abonos.index') }}" class="btn btn-secondary me-2">Cancelar</a>
+                            {{ form.submit(class="btn btn-success") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const clienteSelect = document.getElementById('cliente_select');
+        const ventaSelect = document.getElementById('venta_select');
+        const montoInput = document.getElementById('monto_input');
+        const saldoInfo = document.getElementById('saldo_info');
+
+        // Variable para almacenar el saldo pendiente de la venta seleccionada
+        let saldoPendiente = 0;
+
+        // Función para actualizar el saldo info
+        function actualizarSaldoInfo() {
+            const ventaOption = ventaSelect.options[ventaSelect.selectedIndex];
+            if (ventaOption) {
+                const texto = ventaOption.text;
+                const match = texto.match(/Saldo: \$([\d,]+\.\d+)/);
+                if (match) {
+                    saldoPendiente = parseFloat(match[1].replace(/,/g, ''));
+                    saldoInfo.textContent = `Saldo pendiente: $${saldoPendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+                    // Establecer el valor máximo del monto
+                    montoInput.max = saldoPendiente;
+
+                    // Si el monto actual es mayor al saldo, ajustarlo
+                    if (parseFloat(montoInput.value) > saldoPendiente) {
+                        montoInput.value = saldoPendiente;
+                    }
+                }
+            }
+        }
+
+        // Actualizar ventas cuando cambia el cliente
+        clienteSelect.addEventListener('change', function() {
+            const clienteId = this.value;
+
+            // Limpiar el select de ventas
+            ventaSelect.innerHTML = '<option value="" selected disabled>Cargando ventas...</option>';
+
+            // Cargar las ventas del cliente seleccionado
+            fetch(`/abonos/cargar-ventas/${clienteId}`)
+                .then(response => response.json())
+                .then(ventas => {
+                    ventaSelect.innerHTML = '';
+
+                    if (ventas.length === 0) {
+                        ventaSelect.innerHTML = '<option value="" selected disabled>No hay ventas pendientes</option>';
+                        return;
+                    }
+
+                    ventas.forEach(venta => {
+                        const option = document.createElement('option');
+                        option.value = venta.id;
+                        option.textContent = venta.texto;
+                        ventaSelect.appendChild(option);
+                    });
+
+                    // Actualizar la información de saldo
+                    actualizarSaldoInfo();
+                })
+                .catch(error => {
+                    console.error('Error al cargar ventas:', error);
+                    ventaSelect.innerHTML = '<option value="" selected disabled>Error al cargar ventas</option>';
+                });
+        });
+
+        // Actualizar saldo cuando cambia la venta
+        ventaSelect.addEventListener('change', actualizarSaldoInfo);
+
+        // Validar que el monto no exceda el saldo pendiente
+        montoInput.addEventListener('input', function() {
+            const monto = parseFloat(this.value) || 0;
+
+            if (monto > saldoPendiente) {
+                this.value = saldoPendiente;
+                alert(`El monto no puede ser mayor al saldo pendiente ($${saldoPendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})})`);
+            }
+        });
+
+        // Inicializar la información de saldo
+        actualizarSaldoInfo();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,467 @@
+{% extends "base.html" %}
+
+{% block title %}Nueva Venta - CreditApp{% endblock %}
+
+{% block extra_css %}
+<style>
+    .producto-item {
+        transition: all 0.3s ease;
+    }
+    .producto-item:hover {
+        background-color: rgba(0, 123, 255, 0.05);
+        cursor: pointer;
+    }
+    .detalle-item:hover {
+        background-color: rgba(220, 53, 69, 0.05);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Nueva Venta</h1>
+        <div>
+            <a href="{{ url_for('ventas.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+
+    <form method="POST" id="ventaForm">
+        {{ form.hidden_tag() }}
+
+        <div class="row">
+            <!-- Panel izquierdo: Datos de la venta -->
+            <div class="col-md-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Datos de la Venta</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            {{ form.cliente_id.label(class="form-label") }}
+                            {% if form.cliente_id.errors %}
+                                {{ form.cliente_id(class="form-select is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.cliente_id.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.cliente_id(class="form-select") }}
+                            {% endif %}
+                            <div class="mt-1">
+                                <a href="{{ url_for('clientes.crear') }}" target="_blank">
+                                    <i class="fas fa-plus-circle"></i> Nuevo Cliente
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.tipo.label(class="form-label") }}
+                            {% if form.tipo.errors %}
+                                {{ form.tipo(class="form-select is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.tipo.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.tipo(class="form-select") }}
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="caja_id" class="form-label">Caja</label>
+                            <select name="caja_id" id="caja_id" class="form-select" required>
+                                {% for caja in cajas %}
+                                <option value="{{ caja.id }}">{{ caja.nombre }} ({{ caja.tipo }}) - Saldo: {{ "${:,.2f}".format(caja.saldo_actual) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3 d-none">
+                            {{ form.productos(id="productos_json") }}
+                            {{ form.total(id="total_venta") }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Búsqueda de productos -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Buscar Productos</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="input-group">
+                                <input type="text" id="buscarProducto" class="form-control" placeholder="Buscar por nombre o código...">
+                                <button type="button" class="btn btn-primary" id="btnBuscar">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="resultadosBusqueda" class="list-group" style="max-height: 250px; overflow-y: auto;">
+                            <!-- Los resultados se cargarán dinámicamente aquí -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel derecho: Detalle de productos -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Productos en esta Venta</h5>
+                        <span class="badge bg-primary" id="contador-items">0 items</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 10%">Cantidad</th>
+                                        <th style="width: 15%">Código</th>
+                                        <th style="width: 35%">Producto</th>
+                                        <th style="width: 15%">Precio Unit.</th>
+                                        <th style="width: 15%">Subtotal</th>
+                                        <th style="width: 10%">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detalle-venta">
+                                    <tr class="table-secondary">
+                                        <td colspan="6" class="text-center py-3">Agregue productos a la venta</td>
+                                    </tr>
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <th colspan="4" class="text-end">Total:</th>
+                                        <th id="total-venta">${{ "{:,.2f}".format(0) }}</th>
+                                        <th></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="d-flex justify-content-end">
+                            <button type="button" class="btn btn-secondary me-2" id="btnCancelar">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="btnConfirmar" disabled>
+                                <i class="fas fa-check"></i> Confirmar Venta
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Modal para ingresar cantidad -->
+<div class="modal fade" id="cantidadModal" tabindex="-1" aria-labelledby="cantidadModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="cantidadModalLabel">Agregar Producto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="producto-id">
+                <input type="hidden" id="producto-nombre">
+                <input type="hidden" id="producto-codigo">
+                <input type="hidden" id="producto-precio">
+                <input type="hidden" id="producto-stock">
+                <input type="hidden" id="producto-unidad">
+
+                <div class="mb-3">
+                    <label for="cantidad" class="form-label">Cantidad:</label>
+                    <input type="number" class="form-control" id="cantidad" min="1" value="1">
+                    <small class="text-muted" id="stock-disponible"></small>
+                </div>
+
+                <div class="mb-3">
+                    <label for="precio-unitario" class="form-label">Precio Unitario:</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" id="precio-unitario" step="0.01">
+                    </div>
+                </div>
+
+                <div class="alert alert-info" id="subtotal-preview">
+                    Subtotal: $0.00
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnAgregarProducto">Agregar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Variables globales
+        let productos = [];
+        let total = 0;
+        const cantidadModal = new bootstrap.Modal(document.getElementById('cantidadModal'));
+
+        // Elementos del DOM
+        const buscarInput = document.getElementById('buscarProducto');
+        const resultadosDiv = document.getElementById('resultadosBusqueda');
+        const detalleTabla = document.getElementById('detalle-venta');
+        const totalSpan = document.getElementById('total-venta');
+        const productosInput = document.getElementById('productos_json');
+        const totalInput = document.getElementById('total_venta');
+        const btnConfirmar = document.getElementById('btnConfirmar');
+        const contadorItems = document.getElementById('contador-items');
+
+        // Buscar producto al presionar Enter
+        buscarInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                buscarProducto();
+            }
+        });
+
+        // Buscar producto al hacer clic en el botón de búsqueda
+        document.getElementById('btnBuscar').addEventListener('click', buscarProducto);
+
+        // Función para buscar productos
+        function buscarProducto() {
+            const query = buscarInput.value.trim();
+            if (query.length < 2) return;
+
+            resultadosDiv.innerHTML = '<div class="text-center py-3"><i class="fas fa-spinner fa-spin"></i> Buscando...</div>';
+
+            fetch(`/ventas/buscar-producto?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.length === 0) {
+                        resultadosDiv.innerHTML = '<div class="text-center py-3">No se encontraron productos</div>';
+                        return;
+                    }
+
+                    let html = '';
+                    data.forEach(producto => {
+                        html += `
+                            <div class="list-group-item producto-item" data-id="${producto.id}"
+                                 data-nombre="${producto.nombre}" data-codigo="${producto.codigo}"
+                                 data-precio="${producto.precio}" data-stock="${producto.stock}"
+                                 data-unidad="${producto.unidad}">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-0">${producto.nombre}</h6>
+                                        <small class="text-muted">Código: ${producto.codigo}</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="fw-bold">${formatCurrency(producto.precio)}</div>
+                                        <small class="text-muted">Stock: ${producto.stock} ${producto.unidad}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    resultadosDiv.innerHTML = html;
+
+                    // Agregar evento clic a cada producto
+                    document.querySelectorAll('.producto-item').forEach(item => {
+                        item.addEventListener('click', mostrarModalCantidad);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error al buscar productos:', error);
+                    resultadosDiv.innerHTML = '<div class="text-center py-3 text-danger">Error al buscar productos</div>';
+                });
+        }
+
+        // Función para mostrar modal de cantidad
+        function mostrarModalCantidad() {
+            const productoId = this.dataset.id;
+            const productoNombre = this.dataset.nombre;
+            const productoCodigo = this.dataset.codigo;
+            const productoPrecio = this.dataset.precio;
+            const productoStock = this.dataset.stock;
+            const productoUnidad = this.dataset.unidad;
+
+            document.getElementById('producto-id').value = productoId;
+            document.getElementById('producto-nombre').value = productoNombre;
+            document.getElementById('producto-codigo').value = productoCodigo;
+            document.getElementById('producto-precio').value = productoPrecio;
+            document.getElementById('producto-stock').value = productoStock;
+            document.getElementById('producto-unidad').value = productoUnidad;
+
+            document.getElementById('cantidad').value = 1;
+            document.getElementById('cantidad').max = productoStock;
+            document.getElementById('precio-unitario').value = productoPrecio;
+            document.getElementById('stock-disponible').textContent = `Disponible: ${productoStock} ${productoUnidad}`;
+
+            actualizarSubtotalPreview();
+
+            cantidadModal.show();
+        }
+
+        // Actualizar subtotal en el modal al cambiar cantidad o precio
+        document.getElementById('cantidad').addEventListener('input', actualizarSubtotalPreview);
+        document.getElementById('precio-unitario').addEventListener('input', actualizarSubtotalPreview);
+
+        function actualizarSubtotalPreview() {
+            const cantidad = parseInt(document.getElementById('cantidad').value) || 0;
+            const precio = parseFloat(document.getElementById('precio-unitario').value) || 0;
+            const subtotal = cantidad * precio;
+
+            document.getElementById('subtotal-preview').textContent = `Subtotal: ${formatCurrency(subtotal)}`;
+        }
+
+        // Agregar producto al detalle
+        document.getElementById('btnAgregarProducto').addEventListener('click', function() {
+            const id = document.getElementById('producto-id').value;
+            const nombre = document.getElementById('producto-nombre').value;
+            const codigo = document.getElementById('producto-codigo').value;
+            const unidad = document.getElementById('producto-unidad').value;
+            const stock = parseInt(document.getElementById('producto-stock').value);
+            const cantidad = parseInt(document.getElementById('cantidad').value) || 0;
+            const precio = parseFloat(document.getElementById('precio-unitario').value) || 0;
+            const subtotal = cantidad * precio;
+
+            // Validaciones
+            if (cantidad <= 0) {
+                alert('La cantidad debe ser mayor a cero');
+                return;
+            }
+
+            if (cantidad > stock) {
+                alert(`No hay suficiente stock. Disponible: ${stock}`);
+                return;
+            }
+
+            if (precio <= 0) {
+                alert('El precio debe ser mayor a cero');
+                return;
+            }
+
+            // Verificar si el producto ya está en el detalle
+            const productoExistente = productos.find(p => p.id === id);
+            if (productoExistente) {
+                if (productoExistente.cantidad + cantidad > stock) {
+                    alert(`No hay suficiente stock. Disponible: ${stock}`);
+                    return;
+                }
+
+                productoExistente.cantidad += cantidad;
+                productoExistente.subtotal = productoExistente.cantidad * productoExistente.precio;
+            } else {
+                // Agregar nuevo producto
+                productos.push({
+                    id,
+                    codigo,
+                    nombre,
+                    unidad,
+                    cantidad,
+                    precio,
+                    subtotal
+                });
+            }
+
+            // Actualizar la tabla y el total
+            actualizarTablaDetalle();
+            actualizarTotal();
+
+            // Cerrar modal
+            cantidadModal.hide();
+        });
+
+        // Actualizar tabla de detalle
+        function actualizarTablaDetalle() {
+            if (productos.length === 0) {
+                detalleTabla.innerHTML = `
+                    <tr class="table-secondary">
+                        <td colspan="6" class="text-center py-3">Agregue productos a la venta</td>
+                    </tr>
+                `;
+                contadorItems.textContent = '0 items';
+                btnConfirmar.disabled = true;
+                return;
+            }
+
+            let html = '';
+            productos.forEach((producto, index) => {
+                html += `
+                    <tr class="detalle-item">
+                        <td>${producto.cantidad}</td>
+                        <td>${producto.codigo}</td>
+                        <td>
+                            ${producto.nombre}
+                            <small class="text-muted d-block">${producto.unidad}</small>
+                        </td>
+                        <td>${formatCurrency(producto.precio)}</td>
+                        <td>${formatCurrency(producto.subtotal)}</td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-danger eliminar-producto" data-index="${index}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            detalleTabla.innerHTML = html;
+            contadorItems.textContent = `${productos.length} items`;
+            btnConfirmar.disabled = false;
+
+            // Agregar evento a los botones de eliminar
+            document.querySelectorAll('.eliminar-producto').forEach(btn => {
+                btn.addEventListener('click', eliminarProducto);
+            });
+        }
+
+        // Eliminar producto del detalle
+        function eliminarProducto() {
+            const index = parseInt(this.dataset.index);
+            productos.splice(index, 1);
+            actualizarTablaDetalle();
+            actualizarTotal();
+        }
+
+        // Actualizar total
+        function actualizarTotal() {
+            total = productos.reduce((suma, producto) => suma + producto.subtotal, 0);
+            totalSpan.textContent = formatCurrency(total);
+
+            // Actualizar los campos ocultos para enviar al servidor
+            productosInput.value = JSON.stringify(productos);
+            totalInput.value = total;
+        }
+
+        // Formatear moneda
+        function formatCurrency(amount) {
+            return '$' + parseFloat(amount).toLocaleString('es-CO', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        // Cancelar venta
+        document.getElementById('btnCancelar').addEventListener('click', function() {
+            if (confirm('¿Está seguro de cancelar esta venta?')) {
+                window.location.href = "{{ url_for('ventas.index') }}";
+            }
+        });
+
+        // Validar formulario antes de enviar
+        document.getElementById('ventaForm').addEventListener('submit', function(e) {
+            if (productos.length === 0) {
+                e.preventDefault();
+                alert('Debe agregar al menos un producto a la venta');
+            }
+        });
+    });
+</script>
+{% endblock %}
