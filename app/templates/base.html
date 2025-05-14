@@ -17,111 +17,84 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <div class="wrapper">
+    <div class="wrapper d-flex align-items-stretch">
         <!-- Sidebar -->
         <nav id="sidebar" class="sidebar">
-            <div class="sidebar-header">
+            <div class="sidebar-header d-flex justify-content-between align-items-center px-3 py-2">
                 <h3>CreditApp</h3>
-                <!-- Botón hamburguesa: sustituye el <div> por un <button> -->
-                <button type="button" id="sidebarCollapse" class="btn btn-primary d-md-none sidebar-toggle">
+                <!-- Botón hamburguesa para móvil -->
+                <button type="button" id="sidebarCollapse" class="btn btn-primary d-md-none">
                     <i class="fas fa-bars"></i>
                 </button>
             </div>
 
-            <ul class="list-unstyled components">
-                <li {% if request.endpoint == 'dashboard.index' %}class="active"{% endif %}>
-                    <a href="{{ url_for('dashboard.index') }}">
-                        <i class="fas fa-home"></i> Dashboard
-                    </a>
+            <ul class="list-unstyled components mb-0">
+                <!-- Dashboard -->
+                <li {% raw %}{% if request.endpoint == 'dashboard.index' %}class="active"{% endif %}{% endraw %}>
+                    <a href="{{ url_for('dashboard.index') }}"><i class="fas fa-home"></i> Dashboard</a>
                 </li>
-
-                {% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}
-                <li {% if 'clientes' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('clientes.index') }}">
-                        <i class="fas fa-users"></i> Clientes
-                    </a>
+                <!-- Clientes -->
+                {% raw %}{% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}{% endraw %}
+                <li {% raw %}{% if 'clientes' in request.endpoint %}class="active"{% endif %}{% endraw %}>
+                    <a href="{{ url_for('clientes.index') }}"><i class="fas fa-users"></i> Clientes</a>
                 </li>
-                {% endif %}
-
-                {% if current_user.is_vendedor() or current_user.is_admin() %}
-                <li {% if 'productos' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('productos.index') }}">
-                        <i class="fas fa-box"></i> Inventario
-                    </a>
+                {% raw %}{% endif %}{% endraw %}
+                <!-- Productos y Ventas -->
+                {% raw %}{% if current_user.is_vendedor() or current_user.is_admin() %}{% endraw %}
+                <li {% raw %}{% if 'productos' in request.endpoint %}class="active"{% endif %}{% endraw %}>
+                    <a href="{{ url_for('productos.index') }}"><i class="fas fa-box"></i> Inventario</a>
                 </li>
-
-                <li {% if 'ventas' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('ventas.index') }}">
-                        <i class="fas fa-shopping-cart"></i> Ventas
-                    </a>
+                <li {% raw %}{% if 'ventas' in request.endpoint %}class="active"{% endif %}{% endraw %}>
+                    <a href="{{ url_for('ventas.index') }}"><i class="fas fa-shopping-cart"></i> Ventas</a>
                 </li>
-                {% endif %}
-
-                {% if current_user.is_cobrador() or current_user.is_admin() %}
-                <li {% if 'creditos' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('creditos.index') }}">
-                        <i class="fas fa-credit-card"></i> Créditos
-                    </a>
+                {% raw %}{% endif %}{% endraw %}
+                <!-- Créditos y Abonos -->
+                {% raw %}{% if current_user.is_cobrador() or current_user.is_admin() %}{% endraw %}
+                <li {% raw %}{% if 'creditos' in request.endpoint %}class="active"{% endif %}{% endraw %}>
+                    <a href="{{ url_for('creditos.index') }}"><i class="fas fa-credit-card"></i> Créditos</a>
                 </li>
-
-                <li {% if 'abonos' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('abonos.index') }}">
-                        <i class="fas fa-money-bill-wave"></i> Abonos
-                    </a>
+                <li {% raw %}{% if 'abonos' in request.endpoint %}class="active"{% endif %}{% endraw %}>
+                    <a href="{{ url_for('abonos.index') }}"><i class="fas fa-money-bill-wave"></i> Abonos</a>
                 </li>
-                {% endif %}
-
-                {% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}
-                <li {% if 'cajas' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('cajas.index') }}">
-                        <i class="fas fa-cash-register"></i> Cajas
-                    </a>
+                {% raw %}{% endif %}{% endraw %}
+                <!-- Cajas -->
+                {% raw %}{% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}{% endraw %}
+                <li {% raw %}{% if 'cajas' in request.endpoint %}class="active"{% endif %}{% endraw %}>
+                    <a href="{{ url_for('cajas.index') }}"><i class="fas fa-cash-register"></i> Cajas</a>
                 </li>
-                {% endif %}
-
-                {% if current_user.is_admin() %}
-                <li {% if 'reportes' in request.endpoint %}class="active"{% endif %}>
+                {% raw %}{% endif %}{% endraw %}
+                <!-- Reportes, Usuarios, Configuración (solo admin) -->
+                {% raw %}{% if current_user.is_admin() %}{% endraw %}
+                <li>
                     <a href="#reportesSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
                         <i class="fas fa-chart-bar"></i> Reportes
                     </a>
                     <ul class="collapse list-unstyled" id="reportesSubmenu">
-                        <li>
-                            <a href="{{ url_for('reportes.comisiones') }}">
-                                <i class="fas fa-percentage"></i> Comisiones
-                            </a>
-                        </li>
+                        <li><a href="{{ url_for('reportes.comisiones') }}"><i class="fas fa-percentage"></i> Comisiones</a></li>
                     </ul>
                 </li>
-
-                <li {% if 'usuarios' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('usuarios.index') }}">
-                        <i class="fas fa-user-cog"></i> Usuarios
-                    </a>
+                <li {% raw %}{% if 'usuarios' in request.endpoint %}class="active"{% endif %}{% endraw %}>
+                    <a href="{{ url_for('usuarios.index') }}"><i class="fas fa-user-cog"></i> Usuarios</a>
                 </li>
-
-                <li {% if 'config' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('config.editar') }}">
-                        <i class="fas fa-cogs"></i> Configuración
-                    </a>
+                <li {% raw %}{% if 'config' in request.endpoint %}class="active"{% endif %}{% endraw %}>
+                    <a href="{{ url_for('config.editar') }}"><i class="fas fa-cogs"></i> Configuración</a>
                 </li>
-                {% endif %}
+                {% raw %}{% endif %}{% endraw %}
             </ul>
         </nav>
 
         <!-- Page Content -->
-        <div id="content">
+        <div id="content" class="flex-grow-1">
             <!-- Top Navbar -->
             <nav class="navbar navbar-expand-lg navbar-light bg-light">
                 <div class="container-fluid">
-                    <!-- Segundo toggle en el header -->
                     <button type="button" id="sidebarCollapse" class="btn btn-primary d-md-none">
                         <i class="fas fa-bars"></i>
                     </button>
-
                     <div class="ms-auto d-flex align-items-center">
                         <div class="dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-user-circle me-1"></i> {{ current_user.nombre }}
+                              <i class="fas fa-user-circle me-1"></i> {{ current_user.nombre }}
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
                                 <li><a class="dropdown-item" href="#">Mi Perfil</a></li>
@@ -134,26 +107,26 @@
             </nav>
 
             <!-- Flash Messages -->
-            <div class="container-fluid">
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
+            <div class="container-fluid mt-3">
+                {% raw %}{% with messages = get_flashed_messages(with_categories=true) %}{% endraw %}
+                    {% raw %}{% if messages %}{% endraw %}
+                        {% raw %}{% for category, message in messages %}{% endraw %}
                             <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
                                 {{ message }}
                                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                             </div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
+                        {% raw %}{% endfor %}{% endraw %}
+                    {% raw %}{% endif %}{% endraw %}
+                {% raw %}{% endwith %}{% endraw %}
             </div>
 
             <!-- Main Content -->
-            <div class="container-fluid">
-                {% block content %}{% endblock %}
+            <div class="container-fluid mt-4">
+                {% raw %}{% block content %}{% endblock %}{% endraw %}
             </div>
 
             <!-- Footer -->
-            <footer class="footer mt-auto py-3 bg-light">
+            <footer class="footer mt-auto py-3 bg-light mt-5">
                 <div class="container text-center">
                     <span class="text-muted">© 2025 CreditApp. Todos los derechos reservados.</span>
                 </div>
@@ -161,23 +134,12 @@
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- jQuery -->
+    <!-- Bootstrap JS & jQuery -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <!-- Custom JavaScript -->
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    <script>
-        // Toggle sidebar on mobile
-        $(document).ready(function() {
-            $('#sidebarCollapse, .sidebar-toggle').on('click', function() {
-                $('#sidebar').toggleClass('active');
-            });
-            // Auto-close alerts
-            setTimeout(() => $('.alert').alert('close'), 5000);
-        });
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-    {% block extra_js %}{% endblock %}
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% raw %}{% block extra_js %}{% endblock %}{% endraw %}
 </body>
 </html>
