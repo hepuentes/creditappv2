@@ -12,36 +12,21 @@ productos_bp = Blueprint('productos', __name__, url_prefix='/productos')
 @vendedor_required
 def index():
     busqueda = request.args.get('busqueda', '')
-    # ... resto sin cambios ...
-    return render_template('productos/index.html',
-                           productos=productos,
-                           busqueda=busqueda)
+    query = Producto.query
+    if busqueda:
+        query = query.filter(Producto.nombre.ilike(f"%{busqueda}%"))
+    productos = query.all()
+    return render_template('productos/index.html', productos=productos, busqueda=busqueda)
 
 @productos_bp.route('/<int:id>')
 @login_required
 @vendedor_required
 def detalle(id):
     producto = Producto.query.get_or_404(id)
-    # Se añade el form para evitar el error de "form undefined" en la plantilla
-    form = ProductoForm(original_codigo=producto.codigo)
+    form = ProductoForm(obj=producto)
     return render_template('productos/detalle.html', producto=producto, form=form)
 
-@productos_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
-@login_required
-@vendedor_required
-def editar(id):
-    producto = Producto.query.get_or_404(id)
-    form = ProductoForm(original_codigo=producto.codigo)
-
-    if form.validate_on_submit():
-        form.populate_obj(producto)
-        db.session.commit()
-        flash('Producto actualizado', 'success')
-        return redirect(url_for('productos.index'))
-
-    return render_template('productos/crear.html', form=form)
-
-@productos_bp.route('/crear', methods=['GET', 'POST'])
+@productos_bp.route('/crear', methods=['GET','POST'])
 @login_required
 @vendedor_required
 def crear():
@@ -55,16 +40,15 @@ def crear():
         return redirect(url_for('productos.index'))
     return render_template('productos/crear.html', form=form)
 
-@productos_bp.route('/<int:id>/eliminar', methods=['POST'])
+@productos_bp.route('/<int:id>/editar', methods=['GET','POST'])
 @login_required
 @vendedor_required
-def eliminar(id):
+def editar(id):
     producto = Producto.query.get_or_404(id)
-    try:
-        db.session.delete(producto)
+    form = ProductoForm(obj=producto)
+    if form.validate_on_submit():
+        form.populate_obj(producto)
         db.session.commit()
-        flash('Producto eliminado exitosamente.', 'success')
-    except Exception:
-        db.session.rollback()
-        flash('No se pudo eliminar el producto. Verifique que no esté asociado a ventas.', 'danger')
-    return redirect(url_for('productos.index'))
+        flash('Producto actualizado', 'success')
+        return redirect(url_for('productos.index'))
+    return render_template('productos/crear.html', form=form)
