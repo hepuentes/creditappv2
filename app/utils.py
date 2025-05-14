@@ -65,8 +65,8 @@ def get_comisiones_periodo(usuario_id=None, fecha_inicio=None, fecha_fin=None):
                     fecha_fin = datetime(today.year, today.month + 1, 1) - timedelta(days=1)
     
     query = Comision.query.filter(
-        Comision.fecha >= fecha_inicio,
-        Comision.fecha <= fecha_fin
+        Comision.fecha_generacion >= fecha_inicio,  # Cambiado de fecha a fecha_generacion
+        Comision.fecha_generacion <= fecha_fin      # Cambiado de fecha a fecha_generacion
     )
     
     if usuario_id:
