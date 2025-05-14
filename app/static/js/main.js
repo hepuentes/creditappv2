@@ -1,7 +1,6 @@
 // main.js
-
 document.addEventListener('DOMContentLoaded', () => {
-  // Corrección para el botón hamburguesa
+  // Corrección para el botón hamburguesa - este es el código nuevo
   const sidebarToggleBtns = document.querySelectorAll('#sidebarCollapse, .navbar-toggler');
   const sidebar = document.getElementById('sidebar');
   
@@ -31,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Ejemplo: seleccionar productos en ventas
+  // Código original para productos
   document.querySelectorAll('.producto-item').forEach(item => {
     item.addEventListener('click', () => {
       const id = item.dataset.id;
@@ -40,7 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
-// ---------- Selección de Producto ----------
+
+// ---------- Código jQuery original - no modificar ----------
 $(document).on('click', '.producto-item', function() {
     const id = $(this).data('id');
     const nombre = $(this).data('nombre');
@@ -53,8 +53,8 @@ $(document).on('click', '.producto-item', function() {
         <td><input type="number" name="cantidades[${id}]" value="${cantidad}" min="1" class="form-control cantidad-input"></td>
         <td>${id}</td>
         <td>${nombre}</td>
-        <td>${precio.toFixed(2)}</td>
-        <td class="subtotal">${precio.toFixed(2)}</td>
+        <td>${precio.toFixed(0)}</td>
+        <td class="subtotal">${precio.toFixed(0)}</td>
         <td>
           <button type="button" class="btn btn-sm btn-danger quitar-producto">&times;</button>
         </td>
@@ -70,7 +70,7 @@ $(document).on('input', '.cantidad-input', function() {
     const precio = parseFloat($tr.find('td:nth-child(4)').text());
     const qty = parseInt($(this).val());
     const sub = precio * qty;
-    $tr.find('.subtotal').text(sub.toFixed(2));
+    $tr.find('.subtotal').text(sub.toFixed(0));
     actualizarTotal();
 });
 
@@ -80,11 +80,11 @@ $(document).on('click', '.quitar-producto', function() {
     actualizarTotal();
 });
 
-// Función para actualizar total
+// Función para actualizar total - modificada para eliminar decimales
 function actualizarTotal() {
     let suma = 0;
     $('#tabla-productos .subtotal').each(function() {
         suma += parseFloat($(this).text());
     });
-    $('#total-venta').text('$' + suma.toFixed(2));
+    $('#total-venta').text('$' + suma.toFixed(0));
 }
