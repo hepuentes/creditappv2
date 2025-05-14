@@ -1,10 +1,34 @@
 // main.js
 
 document.addEventListener('DOMContentLoaded', () => {
-  const sidebarToggleBtns = document.querySelectorAll('#sidebarCollapse');
+  // Corrección para el botón hamburguesa
+  const sidebarToggleBtns = document.querySelectorAll('#sidebarCollapse, .navbar-toggler');
   const sidebar = document.getElementById('sidebar');
+  
   sidebarToggleBtns.forEach(btn => {
-    btn.addEventListener('click', () => sidebar.classList.toggle('active'));
+    btn.addEventListener('click', () => {
+      sidebar.classList.toggle('active');
+      document.body.classList.toggle('sidebar-open');
+    });
+  });
+
+  // Cerrar menú al hacer clic en un enlace en pantallas pequeñas
+  const sidebarLinks = document.querySelectorAll('#sidebar a');
+  sidebarLinks.forEach(link => {
+    link.addEventListener('click', () => {
+      if (window.innerWidth < 768 && sidebar.classList.contains('active')) {
+        sidebar.classList.remove('active');
+        document.body.classList.remove('sidebar-open');
+      }
+    });
+  });
+
+  // Cerrar menú al cambiar el tamaño de la ventana a uno mayor
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 768) {
+      sidebar.classList.remove('active');
+      document.body.classList.remove('sidebar-open');
+    }
   });
 
   // Ejemplo: seleccionar productos en ventas
