@@ -79,14 +79,28 @@ class Credito(db.Model):
         pagado = sum(a.monto for a in self.abonos)
         return self.monto - pagado
 
+    def __repr__(self):
+        return f"<Credito #{self.id} Cliente:{self.cliente_id} Monto:{self.monto}>"
+
 
 class Abono(db.Model):
     __tablename__ = 'abonos'
 
     id = db.Column(db.Integer, primary_key=True)
-    credito_id = db.Column(db.Integer, db.ForeignKey('creditos.id'), nullable=False)
+    credito_id = db.Column(db.Integer, db.ForeignKey('creditos.id'), nullable=True)
+    credito_venta_id = db.Column(db.Integer, db.ForeignKey('creditos_venta.id'), nullable=True)  # Nueva columna
     monto = db.Column(db.Float, nullable=False)
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Otros campos existentes...
+    cobrador_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    caja_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=True)
+    
+    # Asegurarse de que al menos uno de los tipos de crédito no sea nulo
+    __table_args__ = (
+        db.CheckConstraint('credito_id IS NOT NULL OR credito_venta_id IS NOT NULL', 
+                           name='check_credito_reference'),
+    )
 
 
 class Caja(db.Model):
@@ -99,8 +113,9 @@ class Caja(db.Model):
 
     movimientos = db.relationship('MovimientoCaja', backref='caja', lazy=True, cascade='all, delete-orphan')
 
-class Credito(db.Model):
-    __tablename__ = 'creditos'
+# CreditoVenta
+class CreditoVenta(db.Model):
+    __tablename__ = 'creditos_venta'  
 
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
@@ -111,14 +126,17 @@ class Credito(db.Model):
     fecha_fin = db.Column(db.DateTime, nullable=True)
     estado = db.Column(db.String(20), default='activo', nullable=False)
 
-    # Relación con Abonos
+    # Relación con Abonos - usando un backref diferente para evitar conflictos
     abonos = db.relationship(
         'Abono',
-        backref='credito',
+        backref='credito_venta',
         lazy=True,
-        cascade='all, delete-orphan'
+        cascade='all, delete-orphan',
+        foreign_keys='Abono.credito_venta_id'  # Nueva columna en Abono
     )
-
+    
+    def __repr__(self):
+        return f"<CreditoVenta #{self.id} Cliente:{self.cliente_id} Total:{self.total}>"
 
 class DetalleVenta(db.Model):
     __tablename__ = 'detalle_ventas'
