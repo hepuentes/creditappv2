@@ -22,14 +22,16 @@ def index():
 @cobrador_required
 def crear():
     form = AbonoForm()
-    # Clientes con créditos activos
-    clientes = Cliente.query.join(Credito).filter(Credito.activo == True).all()
-
+    # Modificar esta línea para usar CreditoVenta
+    clientes = Cliente.query.join(CreditoVenta).filter(CreditoVenta.estado == 'activo').all()
+    
     if form.validate_on_submit():
-        # Crear abono
+        # Crear un abono
         abono = Abono(
             cliente_id=form.cliente.data,
-            credito_id=form.credito.data,
+            # Decidir qué tipo de crédito es según el formulario
+            credito_id=form.credito.data if form.tipo_credito.data == 'credito' else None,
+            credito_venta_id=form.credito.data if form.tipo_credito.data == 'venta' else None,
             monto=form.monto.data,
             caja_id=form.caja.data,
             cobrador_id=current_user.id,
