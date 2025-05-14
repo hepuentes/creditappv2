@@ -50,7 +50,7 @@
         <div class="col-md-3">
             <div class="card bg-primary text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,.2f}".format(total_creditos) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(int(total_creditos)) }}</h3>
                     <p class="mb-0">Valor Total</p>
                 </div>
             </div>
@@ -58,7 +58,7 @@
         <div class="col-md-3">
             <div class="card bg-success text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,.2f}".format(total_creditos - total_pendiente) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(int(total_creditos - total_pendiente)) }}</h3>
                     <p class="mb-0">Total Abonado</p>
                 </div>
             </div>
@@ -66,7 +66,7 @@
         <div class="col-md-3">
             <div class="card bg-danger text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,.2f}".format(total_pendiente) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(int(total_pendiente)) }}</h3>
                     <p class="mb-0">Saldo Pendiente</p>
                 </div>
             </div>
@@ -104,8 +104,8 @@
                                     </a>
                                 </td>
                                 <td>{{ credito.vendedor.nombre }}</td>
-                                <td>{{ "${:,.2f}".format(credito.total) }}</td>
-                                <td class="text-danger fw-bold">{{ "${:,.2f}".format(credito.saldo_pendiente) }}</td>
+                                <td>{{ "${:,}".format(int(credito.total)) }}</td>
+                                <td class="text-danger fw-bold">{{ "${:,}".format(int(credito.saldo_pendiente)) }}</td>
                                 <td>
                                     <div class="btn-group">
                                         <a href="{{ url_for('ventas.detalle', id=credito.id) }}" class="btn btn-sm btn-info" data-bs-toggle="tooltip" title="Ver Detalle">
