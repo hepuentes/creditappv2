@@ -85,6 +85,7 @@ class VentaForm(FlaskForm):
 # --- Formulario de Abonos ---
 class AbonoForm(FlaskForm):
     cliente = SelectField('Cliente', coerce=int, validators=[DataRequired()])
+    tipo_credito = SelectField('Tipo de Crédito', choices=[('credito', 'Crédito Directo'), ('venta', 'Venta a Crédito')], validators=[DataRequired()])
     credito = SelectField('Crédito', coerce=int, validators=[DataRequired()])
     monto = FloatField('Monto', validators=[DataRequired(), NumberRange(min=0.01)])
     caja = SelectField('Caja', coerce=int, validators=[DataRequired()])
