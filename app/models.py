@@ -52,14 +52,13 @@ class Venta(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
-    total = db.Column(db.Float, nullable=False)
+    total = db.Column(db.Integer, nullable=False)  # Float a Integer
     tipo = db.Column(db.String(20), nullable=False)  # 'contado' o 'credito'
-    saldo_pendiente = db.Column(db.Float, nullable=True)  # sólo para crédito
+    saldo_pendiente = db.Column(db.Integer, nullable=True)  # Float a Integer
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
 
     # relaciones...
     productos = db.relationship('DetalleVenta', backref='venta', lazy=True, cascade='all, delete-orphan')
-
 
 class Credito(db.Model):
     __tablename__ = 'creditos'
