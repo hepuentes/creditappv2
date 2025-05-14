@@ -85,7 +85,7 @@ def create_app():
                 iva=19,
                 moneda='$',
                 porcentaje_comision=5,
-                porcentaje_comision=5,
+                periodo_comision='mensual',
                 min_password=6
             )
             db.session.add(config)
