@@ -191,10 +191,15 @@ class Configuracion(db.Model):
     __tablename__ = 'configuraciones'
 
     id = db.Column(db.Integer, primary_key=True)
-    iva = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    nombre_empresa = db.Column(db.String(100), nullable=False, default='CreditApp')
+    direccion = db.Column(db.String(200), nullable=True)
+    telefono = db.Column(db.String(20), nullable=True)
+    logo = db.Column(db.String(100), nullable=True)
+    iva = db.Column(db.Integer, nullable=False, default=0)
     moneda = db.Column(db.String(10), default='$', nullable=False)
-    porcentaje_comision = db.Column(db.Integer, nullable=False)  # Cambiado a entero
-    periodo_comision = db.Column(db.String(20), nullable=False)
+    porcentaje_comision = db.Column(db.Integer, nullable=False, default=5)
+    periodo_comision = db.Column(db.String(20), nullable=False, default='mensual')
+    min_password = db.Column(db.Integer, nullable=False, default=6)
 
 
 class MovimientoCaja(db.Model):
