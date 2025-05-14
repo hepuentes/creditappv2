@@ -105,8 +105,8 @@
                                     <span class="badge bg-warning text-dark">Cobrador</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ "${:,.2f}".format(datos.total_base) }}</td>
-                                <td>{{ "${:,.2f}".format(datos.total_comision) }}</td>
+                                <td>{{ "${:,}".format(int(datos.total_base)) }}</td>
+                                <td>{{ "${:,}".format(int(datos.total_comision)) }}</td>
                                 <td>
                                     <button type="button" class="btn btn-sm btn-info" data-bs-toggle="collapse" data-bs-target="#comisionesDetalle{{ usuario_id }}">
                                         <i class="fas fa-plus"></i> Ver Detalle
@@ -131,9 +131,9 @@
                                                 {% for comision in datos.comisiones %}
                                                 <tr>
                                                     <td>{{ comision.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
-                                                    <td>{{ "${:,.2f}".format(comision.monto_base) }}</td>
+                                                    <td>{{ "${:,}".format(int(comision.monto_base)) }}</td>
                                                     <td>{{ comision.porcentaje }}%</td>
-                                                    <td>{{ "${:,.2f}".format(comision.monto_comision) }}</td>
+                                                    <td>{{ "${:,}".format(int(comision.monto_comision)) }}</td>
                                                     <td>{{ comision.periodo }}</td>
                                                     <td>
                                                         {% if comision.pagado %}
@@ -159,8 +159,8 @@
                     <tfoot class="table-light">
                         <tr>
                             <th colspan="2" class="text-end">Totales:</th>
-                            <th>{{ "${:,.2f}".format(total_base) }}</th>
-                            <th>{{ "${:,.2f}".format(total_comision) }}</th>
+                            <th>{{ "${:,}".format(int(total_base)) }}</th>
+                            <th>{{ "${:,}".format(int(total_comision)) }}</th>
                             <th></th>
                         </tr>
                     </tfoot>
