@@ -17,7 +17,7 @@
         <div class="col-md-3">
             <div class="card bg-success text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,.2f}".format(total_efectivo) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(int(total_efectivo)) }}</h3>
                     <p class="mb-0">Efectivo</p>
                 </div>
             </div>
@@ -25,7 +25,7 @@
         <div class="col-md-3">
             <div class="card bg-primary text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,.2f}".format(total_nequi) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(int(total_nequi)) }}</h3>
                     <p class="mb-0">Nequi</p>
                 </div>
             </div>
@@ -33,7 +33,7 @@
         <div class="col-md-3">
             <div class="card bg-warning text-dark h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,.2f}".format(total_daviplata) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(int(total_daviplata)) }}</h3>
                     <p class="mb-0">Daviplata</p>
                 </div>
             </div>
@@ -41,7 +41,7 @@
         <div class="col-md-3">
             <div class="card bg-info text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,.2f}".format(total_transferencia) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(int(total_transferencia)) }}</h3>
                     <p class="mb-0">Transferencia</p>
                 </div>
             </div>
@@ -52,7 +52,7 @@
         <div class="col-md-12">
             <div class="card bg-dark text-white">
                 <div class="card-body text-center">
-                    <h2 class="mb-0">{{ "${:,.2f}".format(total_general) }}</h2>
+                    <h2 class="mb-0">{{ "${:,}".format(int(total_general)) }}</h2>
                     <p class="mb-0">Total General</p>
                 </div>
             </div>
@@ -93,8 +93,8 @@
                                     <span class="badge bg-info">Transferencia</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ "${:,.2f}".format(caja.saldo_inicial) }}</td>
-                                <td>{{ "${:,.2f}".format(caja.saldo_actual) }}</td>
+                                <td>{{ "${:,}".format(int(caja.saldo_inicial)) }}</td>
+                                <td>{{ "${:,}".format(int(caja.saldo_actual)) }}</td>
                                 <td>{{ caja.fecha_creacion.strftime('%d/%m/%Y %H:%M') }}</td>
                                 <td>
                                     <div class="btn-group">
