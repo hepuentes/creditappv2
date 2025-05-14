@@ -9,7 +9,7 @@ from app import db, login_manager, bcrypt
 def load_user(user_id):
     return Usuario.query.get(int(user_id))
 
-class Usuario(db.Model):
+class Usuario(db.Model, UserMixin):
     __tablename__ = 'usuarios'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -18,9 +18,32 @@ class Usuario(db.Model):
     password = db.Column(db.String(200), nullable=False)
     rol = db.Column(db.String(20), nullable=False, default='usuario')
     fecha_registro = db.Column(db.DateTime, default=datetime.utcnow)
+    activo = db.Column(db.Boolean, default=True)
+
+    def set_password(self, password):
+        """Establece la contraseña del usuario de forma segura"""
+        from app import bcrypt
+        self.password = bcrypt.generate_password_hash(password).decode('utf-8')
+    
+    def check_password(self, password):
+        """Verifica si la contraseña proporcionada coincide con la almacenada"""
+        from app import bcrypt
+        return bcrypt.check_password_hash(self.password, password)
+    
+    def is_authenticated(self):
+        return True
+        
+    def is_active(self):
+        return self.activo
+        
+    def is_anonymous(self):
+        return False
+        
+    def get_id(self):
+        return str(self.id)
 
     def is_admin(self):
-        return self.rol == 'admin'
+        return self.rol == 'administrador'
 
     def is_vendedor(self):
         return self.rol == 'vendedor'
@@ -52,22 +75,23 @@ class Venta(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
-    total = db.Column(db.Integer, nullable=False)  # Float a Integer
+    total = db.Column(db.Integer, nullable=False)
     tipo = db.Column(db.String(20), nullable=False)  # 'contado' o 'credito'
-    saldo_pendiente = db.Column(db.Integer, nullable=True)  # Float a Integer
+    saldo_pendiente = db.Column(db.Integer, nullable=True)  # sólo para crédito
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
 
     # relaciones...
     productos = db.relationship('DetalleVenta', backref='venta', lazy=True, cascade='all, delete-orphan')
+
 
 class Credito(db.Model):
     __tablename__ = 'creditos'
 
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
-    monto = db.Column(db.Float, nullable=False)
+    monto = db.Column(db.Integer, nullable=False)  # Cambiado a entero
     plazo = db.Column(db.Integer, nullable=False)
-    tasa = db.Column(db.Float, nullable=False)
+    tasa = db.Column(db.Integer, nullable=False)  # Cambiado a entero
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
 
     # relación con abonos
@@ -87,8 +111,8 @@ class Abono(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     credito_id = db.Column(db.Integer, db.ForeignKey('creditos.id'), nullable=True)
-    credito_venta_id = db.Column(db.Integer, db.ForeignKey('creditos_venta.id'), nullable=True)  # Nueva columna
-    monto = db.Column(db.Float, nullable=False)
+    credito_venta_id = db.Column(db.Integer, db.ForeignKey('creditos_venta.id'), nullable=True)
+    monto = db.Column(db.Integer, nullable=False)  # Cambiado a entero
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Otros campos existentes...
@@ -107,10 +131,11 @@ class Caja(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(100), nullable=False)
-    saldo_inicial = db.Column(db.Float, nullable=False, default=0)
+    saldo_inicial = db.Column(db.Integer, nullable=False, default=0)  # Cambiado a entero
     fecha_apertura = db.Column(db.DateTime, default=datetime.utcnow)
 
     movimientos = db.relationship('MovimientoCaja', backref='caja', lazy=True, cascade='all, delete-orphan')
+
 
 # CreditoVenta
 class CreditoVenta(db.Model):
@@ -119,23 +144,24 @@ class CreditoVenta(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
     vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
-    total = db.Column(db.Numeric(10, 2), nullable=False)
-    saldo_pendiente = db.Column(db.Numeric(10, 2), nullable=False)
+    total = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    saldo_pendiente = db.Column(db.Integer, nullable=False)  # Cambiado a entero
     fecha_inicio = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_fin = db.Column(db.DateTime, nullable=True)
     estado = db.Column(db.String(20), default='activo', nullable=False)
 
-    # Relación con Abonos - usando un backref diferente para evitar conflictos
+    # Relación con Abonos
     abonos = db.relationship(
         'Abono',
         backref='credito_venta',
         lazy=True,
         cascade='all, delete-orphan',
-        foreign_keys='Abono.credito_venta_id'  # Nueva columna en Abono
+        foreign_keys='Abono.credito_venta_id'
     )
     
     def __repr__(self):
         return f"<CreditoVenta #{self.id} Cliente:{self.cliente_id} Total:{self.total}>"
+
 
 class DetalleVenta(db.Model):
     __tablename__ = 'detalle_ventas'
@@ -144,8 +170,8 @@ class DetalleVenta(db.Model):
     venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=False)
     producto_id = db.Column(db.Integer, db.ForeignKey('productos.id'), nullable=False)
     cantidad = db.Column(db.Integer, nullable=False)
-    precio_unitario = db.Column(db.Numeric(10, 2), nullable=False)
-    subtotal = db.Column(db.Numeric(10, 2), nullable=False)
+    precio_unitario = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    subtotal = db.Column(db.Integer, nullable=False)  # Cambiado a entero
 
 
 class Comision(db.Model):
@@ -153,9 +179,9 @@ class Comision(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
-    monto_base = db.Column(db.Numeric(10, 2), nullable=False)
-    porcentaje = db.Column(db.Numeric(5, 2), nullable=False)
-    monto_comision = db.Column(db.Numeric(10, 2), nullable=False)
+    monto_base = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    porcentaje = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    monto_comision = db.Column(db.Integer, nullable=False)  # Cambiado a entero
     periodo = db.Column(db.String(20), nullable=False)
     pagado = db.Column(db.Boolean, default=False, nullable=False)
     fecha_generacion = db.Column(db.DateTime, default=datetime.utcnow)
@@ -165,10 +191,11 @@ class Configuracion(db.Model):
     __tablename__ = 'configuraciones'
 
     id = db.Column(db.Integer, primary_key=True)
-    iva = db.Column(db.Numeric(5, 2), nullable=False)               # p. ej. 0.00 si no aplica
+    iva = db.Column(db.Integer, nullable=False)  # Cambiado a entero
     moneda = db.Column(db.String(10), default='$', nullable=False)
-    porcentaje_comision = db.Column(db.Numeric(5, 2), nullable=False)
+    porcentaje_comision = db.Column(db.Integer, nullable=False)  # Cambiado a entero
     periodo_comision = db.Column(db.String(20), nullable=False)
+
 
 class MovimientoCaja(db.Model):
     __tablename__ = 'movimiento_caja'
@@ -176,11 +203,40 @@ class MovimientoCaja(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     caja_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=False)
     tipo = db.Column(db.String(20), nullable=False)  # 'ingreso' o 'egreso' o 'transferencia'
-    monto = db.Column(db.Float, nullable=False)
+    monto = db.Column(db.Integer, nullable=False)  # Cambiado a entero
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
     descripcion = db.Column(db.String(200), nullable=True)
-    abonos = db.relationship('Abono', backref='credito', lazy=True)
+    # Eliminamos la relación incorrecta que causa conflictos
+    # abonos = db.relationship('Abono', backref='credito', lazy=True)
+    
+    # Podemos agregar una relación correcta si es necesario:
+    # abono_id = db.Column(db.Integer, db.ForeignKey('abonos.id'), nullable=True)
+    # abono = db.relationship('Abono', backref='movimiento', foreign_keys=[abono_id])
 
     def __repr__(self):
-        return f"<Credito #{self.id} Cliente:{self.cliente_id} Monto:{self.monto}>"
+        return f"<MovimientoCaja #{self.id} Tipo:{self.tipo} Monto:{self.monto}>"
 
+
+# Falta definir la clase Producto
+class Producto(db.Model):
+    __tablename__ = 'productos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(50), unique=True, nullable=False)
+    nombre = db.Column(db.String(100), nullable=False)
+    descripcion = db.Column(db.String(200), nullable=True)
+    precio_compra = db.Column(db.Integer, nullable=True)  # Cambiado a entero
+    precio_venta = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    stock = db.Column(db.Integer, nullable=False, default=0)
+    stock_minimo = db.Column(db.Integer, nullable=False, default=0)
+    unidad = db.Column(db.String(20), nullable=True)
+    fecha_registro = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relación con DetalleVenta
+    detalles_venta = db.relationship('DetalleVenta', backref='producto', lazy=True)
+    
+    def esta_agotado(self):
+        return self.stock <= 0
+        
+    def stock_bajo(self):
+        return self.stock > 0 and self.stock <= self.stock_minimo
