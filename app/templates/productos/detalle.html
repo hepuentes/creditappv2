@@ -46,11 +46,11 @@
                             <table class="table table-borderless">
                                 <tr>
                                     <th style="width: 170px">Precio de Costo:</th>
-                                    <td>{{ "${:,.2f}".format(producto.precio_costo) }}</td>
+                                    <td>{{ "${:,}".format(int(producto.precio_costo)) }}</td>
                                 </tr>
                                 <tr>
                                     <th>Precio de Venta:</th>
-                                    <td>{{ "${:,.2f}".format(producto.precio_venta) }}</td>
+                                    <td>{{ "${:,}".format(int(producto.precio_venta)) }}</td>
                                 </tr>
                                 <tr>
                                     <th>Margen:</th>
@@ -151,8 +151,8 @@
                                     </a>
                                 </td>
                                 <td>{{ detalle.cantidad }}</td>
-                                <td>{{ "${:,.2f}".format(detalle.precio_unitario) }}</td>
-                                <td>{{ "${:,.2f}".format(detalle.subtotal) }}</td>
+                                <td>{{ "${:,}".format(int(detalle.precio_unitario)) }}</td>
+                                <td>{{ "${:,}".format(int(detalle.subtotal)) }}</td>
                                 <td>
                                     {% if detalle.venta.tipo == 'contado' %}
                                     <span class="badge bg-success">Contado</span>
