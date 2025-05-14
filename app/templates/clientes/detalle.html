@@ -42,7 +42,7 @@
                             <p>Total Ventas</p>
                         </div>
                         <div class="col-md-6 text-center">
-                            <h3>{{ "${:,.2f}".format(cliente.saldo_pendiente()) }}</h3>
+                            <h3>{{ "${:,}".format(int(cliente.saldo_pendiente())) }}</h3>
                             <p>Saldo Pendiente</p>
                         </div>
                     </div>
@@ -81,8 +81,8 @@
                                     <span class="badge bg-warning">Crédito</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ "${:,.2f}".format(venta.total) }}</td>
-                                <td>{{ "${:,.2f}".format(venta.saldo_pendiente) }}</td>
+                                <td>{{ "${:,}".format(int(venta.total)) }}</td>
+                                <td>{{ "${:,}".format(int(venta.saldo_pendiente)) }}</td>
                                 <td>
                                     {% if venta.estado == 'pagado' %}
                                     <span class="badge bg-success">Pagado</span>
@@ -149,7 +149,7 @@
                                         {{ abono.venta.fecha.strftime('%d/%m/%Y') }}
                                     </a>
                                 </td>
-                                <td>{{ "${:,.2f}".format(abono.monto) }}</td>
+                                <td>{{ "${:,}".format(int(abono.monto)) }}</td>
                                 <td>{{ abono.cobrador.nombre }}</td>
                                 <td>{{ abono.notas or 'N/A' }}</td>
                                 <td>
