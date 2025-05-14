@@ -64,7 +64,7 @@
         <div class="col-md-3">
             <div class="card bg-success text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,.2f}".format(productos|sum(attribute='precio_costo')|float) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(int(productos|sum(attribute='precio_costo')|float)) }}</h3>
                     <p class="mb-0">Valor Inventario (Costo)</p>
                 </div>
             </div>
@@ -97,8 +97,8 @@
                                 <td>{{ producto.codigo }}</td>
                                 <td>{{ producto.nombre }}</td>
                                 <td>{{ producto.unidad or 'Und.' }}</td>
-                                <td>{{ "${:,.2f}".format(producto.precio_costo) }}</td>
-                                <td>{{ "${:,.2f}".format(producto.precio_venta) }}</td>
+                                <td>{{ "${:,}".format(int(producto.precio_costo)) }}</td>
+                                <td>{{ "${:,}".format(int(producto.precio_venta)) }}</td>
                                 <td>
                                     {% if producto.esta_agotado() %}
                                     <span class="badge bg-danger">Agotado</span>
