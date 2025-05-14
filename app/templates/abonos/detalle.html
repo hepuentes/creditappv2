@@ -38,9 +38,9 @@
                                     #{{ abono.venta_id }}
                                 </a>
                             </p>
-                            <p><strong>Monto Abonado:</strong> <span class="fw-bold text-success">{{ "${:,.2f}".format(abono.monto) }}</span></p>
+                            <p><strong>Monto Abonado:</strong> <span class="fw-bold text-success">{{ "${:,}".format(int(abono.monto)) }}</span></p>
                             <p><strong>Saldo Restante:</strong> <span class="fw-bold {% if abono.venta.saldo_pendiente > 0 %}text-danger{% else %}text-success{% endif %}">
-                                {{ "${:,.2f}".format(abono.venta.saldo_pendiente) }}
+                                {{ "${:,}".format(int(abono.venta.saldo_pendiente)) }}
                             </span></p>
                         </div>
                     </div>
@@ -71,10 +71,10 @@
                         <span class="badge bg-danger">Pendiente</span>
                         {% endif %}
                     </p>
-                    <p><strong>Total Factura:</strong> {{ "${:,.2f}".format(abono.venta.total) }}</p>
-                    <p><strong>Total Abonado:</strong> {{ "${:,.2f}".format(abono.venta.total - abono.venta.saldo_pendiente) }}</p>
+                    <p><strong>Total Factura:</strong> {{ "${:,}".format(int(abono.venta.total)) }}</p>
+                    <p><strong>Total Abonado:</strong> {{ "${:,}".format(int(abono.venta.total - abono.venta.saldo_pendiente)) }}</p>
                     <p><strong>Saldo Pendiente:</strong> <span class="fw-bold {% if abono.venta.saldo_pendiente > 0 %}text-danger{% else %}text-success{% endif %}">
-                        {{ "${:,.2f}".format(abono.venta.saldo_pendiente) }}
+                        {{ "${:,}".format(int(abono.venta.saldo_pendiente)) }}
                     </span></p>
                 </div>
             </div>
@@ -128,7 +128,7 @@
                     {% for movimiento in abono.movimientos_caja %}
                     <p><strong>Caja:</strong> {{ movimiento.caja.nombre }} ({{ movimiento.caja.tipo }})</p>
                     <p><strong>Tipo de Movimiento:</strong> <span class="badge bg-success">Entrada</span></p>
-                    <p><strong>Monto:</strong> {{ "${:,.2f}".format(movimiento.monto) }}</p>
+                    <p><strong>Monto:</strong> {{ "${:,}".format(int(movimiento.monto)) }}</p>
                     <p><strong>Concepto:</strong> {{ movimiento.concepto }}</p>
                     <p><strong>Fecha:</strong> {{ movimiento.fecha.strftime('%d/%m/%Y %H:%M') }}</p>
                     {% endfor %}
@@ -160,7 +160,7 @@
                         <tr {% if a.id == abono.id %}class="table-info"{% endif %}>
                             <td>{{ a.id }}</td>
                             <td>{{ a.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
-                            <td>{{ "${:,.2f}".format(a.monto) }}</td>
+                            <td>{{ "${:,}".format(int(a.monto)) }}</td>
                             <td>{{ a.cobrador.nombre }}</td>
                             <td>{{ a.notas or 'N/A' }}</td>
                             <td>
@@ -179,7 +179,7 @@
                     <tfoot class="table-light">
                         <tr>
                             <th colspan="2" class="text-end">Total Abonado:</th>
-                            <th>{{ "${:,.2f}".format(abono.venta.total - abono.venta.saldo_pendiente) }}</th>
+                            <th>{{ "${:,}".format(int(abono.venta.total - abono.venta.saldo_pendiente)) }}</th>
                             <th colspan="3"></th>
                         </tr>
                     </tfoot>
