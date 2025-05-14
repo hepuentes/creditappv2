@@ -131,3 +131,10 @@ class ConfiguracionForm(FlaskForm):
         choices=[('quincenal','Quincenal'),('mensual','Mensual')]
     )
     submit = SubmitField('Guardar Configuración')
+
+# --- Formulario de Reportes de Comisiones ---
+class ReporteComisionesForm(FlaskForm):
+    usuario_id = SelectField('Usuario', coerce=int, validators=[DataRequired()])
+    fecha_inicio = StringField('Fecha Inicio', validators=[DataRequired()])
+    fecha_fin = StringField('Fecha Fin', validators=[DataRequired()])
+    submit = SubmitField('Generar Reporte')
