@@ -8,11 +8,11 @@ from app import db
 from app.models import Configuracion, Comision, Venta, Abono, MovimientoCaja
 
 def format_currency(amount):
-    """Formatea un monto como moneda"""
+    """Formatea un monto como moneda (sin decimales)"""
     config = Configuracion.query.first()
     if not config:
-        return f"$ {amount:,.2f}"
-    return f"{config.moneda} {amount:,.2f}"
+        return f"$ {int(amount):,}"
+    return f"{config.moneda} {int(amount):,}"
 
 def calcular_comision(monto, usuario_id):
     """Calcula la comisión sobre un monto para un usuario"""
