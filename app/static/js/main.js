@@ -1,21 +1,18 @@
 // main.js
 
 document.addEventListener('DOMContentLoaded', () => {
-  const sidebarCollapse = document.getElementById('sidebarCollapse');
+  const sidebarToggleBtns = document.querySelectorAll('#sidebarCollapse');
   const sidebar = document.getElementById('sidebar');
-  if (sidebarCollapse && sidebar) {
-    sidebarCollapse.addEventListener('click', () => {
-      sidebar.classList.toggle('active');
-    });
-  }
+  sidebarToggleBtns.forEach(btn => {
+    btn.addEventListener('click', () => sidebar.classList.toggle('active'));
+  });
 
-  // Gestión de productos en Ventas
+  // Ejemplo: seleccionar productos en ventas
   document.querySelectorAll('.producto-item').forEach(item => {
     item.addEventListener('click', () => {
-      const id = item.getAttribute('data-id');
-      const precio = item.getAttribute('data-precio');
-      // TODO: insertar lógica de agregar producto al carrito
-      console.log(`Agregar producto ${id} con precio ${precio}`);
+      const id = item.dataset.id;
+      const precio = item.dataset.precio;
+      console.log(`Agregar producto ${id} - $${precio}`);
     });
   });
 });
