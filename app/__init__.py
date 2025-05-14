@@ -78,10 +78,15 @@ def create_app():
             
             # Crear configuración inicial
             config = Configuracion(
-                moneda='$',
+                nombre_empresa='CreditApp',
+                direccion='Dirección de la empresa',
+                telefono='123456789',
+                logo='logo.png',
                 iva=19,
+                moneda='$',
                 porcentaje_comision=5,
-                periodo_comision='mensual'
+                porcentaje_comision=5,
+                min_password=6
             )
             db.session.add(config)
             
