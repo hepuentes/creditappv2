@@ -9,10 +9,14 @@ migrate_obj = Migrate(app, db)
 with app.app_context():
     # Generar migración si hay cambios en los modelos
     print("Generando migraciones automáticas...")
-    migrate()
-    
-    # Aplicar migraciones
-    print("Aplicando migraciones...")
-    upgrade()
-    
-    print("¡Migraciones completadas!")
+    try:
+        migrate()
+        
+        # Aplicar migraciones
+        print("Aplicando migraciones...")
+        upgrade()
+        
+        print("¡Migraciones completadas!")
+    except Exception as e:
+        print(f"Error en las migraciones: {e}")
+        print("Continuando con la inicialización de la aplicación...")
