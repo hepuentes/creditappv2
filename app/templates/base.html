@@ -27,19 +27,15 @@
                     <i class="fas fa-bars"></i>
                 </button>
             </div>
-
             <ul class="list-unstyled components mb-0">
-                <!-- Dashboard -->
                 <li {% raw %}{% if request.endpoint == 'dashboard.index' %}class="active"{% endif %}{% endraw %}>
                     <a href="{{ url_for('dashboard.index') }}"><i class="fas fa-home"></i> Dashboard</a>
                 </li>
-                <!-- Clientes -->
                 {% raw %}{% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}{% endraw %}
                 <li {% raw %}{% if 'clientes' in request.endpoint %}class="active"{% endif %}{% endraw %}>
                     <a href="{{ url_for('clientes.index') }}"><i class="fas fa-users"></i> Clientes</a>
                 </li>
                 {% raw %}{% endif %}{% endraw %}
-                <!-- Productos y Ventas -->
                 {% raw %}{% if current_user.is_vendedor() or current_user.is_admin() %}{% endraw %}
                 <li {% raw %}{% if 'productos' in request.endpoint %}class="active"{% endif %}{% endraw %}>
                     <a href="{{ url_for('productos.index') }}"><i class="fas fa-box"></i> Inventario</a>
@@ -48,7 +44,6 @@
                     <a href="{{ url_for('ventas.index') }}"><i class="fas fa-shopping-cart"></i> Ventas</a>
                 </li>
                 {% raw %}{% endif %}{% endraw %}
-                <!-- Créditos y Abonos -->
                 {% raw %}{% if current_user.is_cobrador() or current_user.is_admin() %}{% endraw %}
                 <li {% raw %}{% if 'creditos' in request.endpoint %}class="active"{% endif %}{% endraw %}>
                     <a href="{{ url_for('creditos.index') }}"><i class="fas fa-credit-card"></i> Créditos</a>
@@ -57,13 +52,11 @@
                     <a href="{{ url_for('abonos.index') }}"><i class="fas fa-money-bill-wave"></i> Abonos</a>
                 </li>
                 {% raw %}{% endif %}{% endraw %}
-                <!-- Cajas -->
                 {% raw %}{% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}{% endraw %}
                 <li {% raw %}{% if 'cajas' in request.endpoint %}class="active"{% endif %}{% endraw %}>
                     <a href="{{ url_for('cajas.index') }}"><i class="fas fa-cash-register"></i> Cajas</a>
                 </li>
                 {% raw %}{% endif %}{% endraw %}
-                <!-- Reportes, Usuarios, Configuración (solo admin) -->
                 {% raw %}{% if current_user.is_admin() %}{% endraw %}
                 <li>
                     <a href="#reportesSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
@@ -82,10 +75,7 @@
                 {% raw %}{% endif %}{% endraw %}
             </ul>
         </nav>
-
-        <!-- Page Content -->
         <div id="content" class="flex-grow-1">
-            <!-- Top Navbar -->
             <nav class="navbar navbar-expand-lg navbar-light bg-light">
                 <div class="container-fluid">
                     <button type="button" id="sidebarCollapse" class="btn btn-primary d-md-none">
@@ -93,10 +83,10 @@
                     </button>
                     <div class="ms-auto d-flex align-items-center">
                         <div class="dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                              <i class="fas fa-user-circle me-1"></i> {{ current_user.nombre }}
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-user-circle me-1"></i> {{ current_user.nombre }}
                             </a>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                            <ul class="dropdown-menu dropdown-menu-end">
                                 <li><a class="dropdown-item" href="#">Mi Perfil</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">Cerrar Sesión</a></li>
@@ -105,27 +95,21 @@
                     </div>
                 </div>
             </nav>
-
-            <!-- Flash Messages -->
             <div class="container-fluid mt-3">
                 {% raw %}{% with messages = get_flashed_messages(with_categories=true) %}{% endraw %}
                     {% raw %}{% if messages %}{% endraw %}
-                        {% raw %}{% for category, message in messages %}{% endraw %}
-                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        {% raw %}{% for cat, msg in messages %}{% endraw %}
+                            <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">
+                                {{ msg }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
                             </div>
                         {% raw %}{% endfor %}{% endraw %}
                     {% raw %}{% endif %}{% endraw %}
                 {% raw %}{% endwith %}{% endraw %}
             </div>
-
-            <!-- Main Content -->
             <div class="container-fluid mt-4">
-                {% raw %}{% block content %}{% endblock %}{% endraw %}
+                {% raw %}{% block content %}{% endraw %}{% endblock %}
             </div>
-
-            <!-- Footer -->
             <footer class="footer mt-auto py-3 bg-light mt-5">
                 <div class="container text-center">
                     <span class="text-muted">© 2025 CreditApp. Todos los derechos reservados.</span>
@@ -133,13 +117,9 @@
             </footer>
         </div>
     </div>
-
-    <!-- Bootstrap JS & jQuery -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    {% raw %}{% block extra_js %}{% endblock %}{% endraw %}
+    {% raw %}{% block extra_js %}{% endraw %}{% endblock %}
 </body>
 </html>
