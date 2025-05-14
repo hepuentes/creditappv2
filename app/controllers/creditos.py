@@ -1,8 +1,10 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
-from flask_login import login_required
+from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response
+from flask_login import login_required, current_user
 from app import db
-from app.models import Venta, Cliente
+from app.models import Credito, Cliente
+from app.forms import CreditoForm
 from app.decorators import cobrador_required
+from app.pdf.credito import generar_pdf_credito
 from datetime import datetime
 
 creditos_bp = Blueprint('creditos', __name__, url_prefix='/creditos')
@@ -11,37 +13,29 @@ creditos_bp = Blueprint('creditos', __name__, url_prefix='/creditos')
 @login_required
 @cobrador_required
 def index():
-    # Parámetros de búsqueda
-    busqueda = request.args.get('busqueda', '')
-    desde = request.args.get('desde', '')
-    hasta = request.args.get('hasta', '')
+    creditos = Credito.query.order_by(Credito.fecha.desc()).all()
+    return render_template('creditos/index.html', creditos=creditos)
 
-    # Construir consulta base (solo ventas a crédito con saldo pendiente)
-    query = Venta.query.filter(Venta.tipo == 'credito', Venta.saldo_pendiente > 0)
+@creditos_bp.route('/crear', methods=['GET','POST'])
+@login_required
+@cobrador_required
+def crear():
+    form = CreditoForm()
+    if form.validate_on_submit():
+        credito = Credito(
+            cliente_id=form.cliente.data,
+            monto=form.monto.data,
+            plazo=form.plazo.data,
+            tasa=form.tasa.data,
+            fecha=datetime.utcnow()
+        )
+        db.session.add(credito)
+        db.session.commit()
 
-    # Aplicar filtros
-    if busqueda:
-        query = query.join(Cliente).filter(Cliente.nombre.ilike(f'%{busqueda}%'))
-
-    if desde:
-        fecha_desde = datetime.strptime(desde, '%Y-%m-%d')
-        query = query.filter(Venta.fecha >= fecha_desde)
-
-    if hasta:
-        fecha_hasta = datetime.strptime(hasta, '%Y-%m-%d')
-        query = query.filter(Venta.fecha <= fecha_hasta)
-
-    # Ordenar por fecha (más reciente primero)
-    creditos = query.order_by(Venta.fecha.desc()).all()
-
-    # Calcular totales
-    total_creditos = sum(credito.total for credito in creditos)
-    total_pendiente = sum(credito.saldo_pendiente for credito in creditos)
-
-    return render_template('creditos/index.html',
-                          creditos=creditos,
-                          busqueda=busqueda,
-                          desde=desde,
-                          hasta=hasta,
-                          total_creditos=total_creditos,
-                          total_pendiente=total_pendiente)
+        # Generar PDF de contrato de crédito
+        pdf_bytes = generar_pdf_credito(credito)
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'inline; filename=credito_{credito.id}.pdf'
+        return response
+    return render_template('creditos/crear.html', form=form)
