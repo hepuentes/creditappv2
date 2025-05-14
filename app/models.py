@@ -37,6 +37,8 @@ class Usuario(db.Model, UserMixin):
         return self.rol == 'cobrador' or self.rol == 'administrador'
 
 class Cliente(db.Model):
+     __tablename__ = 'clientes'
+    
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(100), nullable=False)
     cedula = db.Column(db.String(20), unique=True, nullable=False)
@@ -47,7 +49,9 @@ class Cliente(db.Model):
     
     # Relaciones
     ventas = db.relationship('Venta', backref='cliente', lazy=True, cascade="all, delete-orphan")
-    
+    # Relación a créditos
+    creditos = db.relationship('Credito', backref='cliente', lazy=True)
+
     def saldo_pendiente(self):
         saldo = 0
         for venta in self.ventas:
@@ -161,3 +165,19 @@ class Configuracion(db.Model):
     min_password = db.Column(db.Integer, default=6)
     porcentaje_comision = db.Column(db.Float, default=5)
     periodo_comision = db.Column(db.String(20), default='mensual')  # quincenal, mensual
+
+class Credito(db.Model):
+    __tablename__ = 'creditos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
+    monto = db.Column(db.Float, nullable=False)
+    plazo = db.Column(db.Integer, nullable=False)      # en días
+    tasa = db.Column(db.Float, nullable=False)         # porcentaje
+    fecha = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relación a los abonos (si ya tienes un modelo Abono)
+    abonos = db.relationship('Abono', backref='credito', lazy=True)
+
+    def __repr__(self):
+        return f"<Credito #{self.id} Cliente:{self.cliente_id} Monto:{self.monto}>"
