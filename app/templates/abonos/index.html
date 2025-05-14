@@ -50,7 +50,7 @@
         <div class="col-md-6">
             <div class="card bg-success text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,.2f}".format(total_abonos) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(int(total_abonos)) }}</h3>
                     <p class="mb-0">Monto Total</p>
                 </div>
             </div>
@@ -92,7 +92,7 @@
                                         #{{ abono.venta_id }}
                                     </a>
                                 </td>
-                                <td>{{ "${:,.2f}".format(abono.monto) }}</td>
+                                <td>{{ "${:,}".format(int(abono.monto)) }}</td>
                                 <td>{{ abono.cobrador.nombre }}</td>
                                 <td>
                                     <div class="btn-group">
