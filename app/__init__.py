@@ -78,11 +78,11 @@ def create_app():
             
             # Crear configuración inicial
             config = Configuracion(
-    moneda='$',
-    iva=19,
-    porcentaje_comision=5,
-    periodo_comision='mensual'
-)
+                moneda='$',
+                iva=19,
+                porcentaje_comision=5,
+                periodo_comision='mensual'
+            )
             db.session.add(config)
             
             db.session.commit()
