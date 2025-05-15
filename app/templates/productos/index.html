@@ -48,7 +48,7 @@
         <div class="col-md-3">
             <div class="card bg-danger text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ productos|selectattr('esta_agotado')|list|length }}</h3>
+                    <h3 class="mb-0">{{ productos|selectattr('esta_agotado')|list|length|default(0) }}</h3>
                     <p class="mb-0">Productos Agotados</p>
                 </div>
             </div>
@@ -56,7 +56,7 @@
         <div class="col-md-3">
             <div class="card bg-warning text-dark h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ productos|rejectattr('esta_agotado')|selectattr('stock_bajo')|list|length }}</h3>
+                    <h3 class="mb-0">{{ productos|rejectattr('esta_agotado')|selectattr('stock_bajo')|list|length|default(0) }}</h3>
                     <p class="mb-0">Stock Bajo</p>
                 </div>
             </div>
@@ -64,7 +64,7 @@
         <div class="col-md-3">
             <div class="card bg-success text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,}".format(int(productos|sum(attribute='precio_costo')|float)) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(productos|sum(attribute='precio_compra')|default(0)|float) }}</h3>
                     <p class="mb-0">Valor Inventario (Costo)</p>
                 </div>
             </div>
@@ -97,8 +97,8 @@
                                 <td>{{ producto.codigo }}</td>
                                 <td>{{ producto.nombre }}</td>
                                 <td>{{ producto.unidad or 'Und.' }}</td>
-                                <td>{{ "${:,}".format(int(producto.precio_costo)) }}</td>
-                                <td>{{ "${:,}".format(int(producto.precio_venta)) }}</td>
+                                <td>{{ "${:,}".format(producto.precio_compra|default(0)) }}</td>
+                                <td>{{ "${:,}".format(producto.precio_venta|default(0)) }}</td>
                                 <td>
                                     {% if producto.esta_agotado() %}
                                     <span class="badge bg-danger">Agotado</span>
