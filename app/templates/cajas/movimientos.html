@@ -44,10 +44,10 @@
                     </p>
                 </div>
                 <div class="col-md-3">
-                    <p class="mb-0"><strong>Saldo Inicial:</strong> {{ "${:,}".format(int(caja.saldo_inicial)) }}</p>
+                    <p class="mb-0"><strong>Saldo Inicial:</strong> {{ "${:,}".format(caja.saldo_inicial) }}</p>
                 </div>
                 <div class="col-md-3">
-                    <p class="mb-0"><strong>Saldo Actual:</strong> <span class="fw-bold">{{ "${:,}".format(int(caja.saldo_actual)) }}</span></p>
+                    <p class="mb-0"><strong>Saldo Actual:</strong> <span class="fw-bold">{{ "${:,}".format(caja.saldo_actual) }}</span></p>
                 </div>
             </div>
         </div>
@@ -88,7 +88,7 @@
         <div class="col-md-4">
             <div class="card bg-success text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,}".format(int(total_entradas)) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(total_entradas) }}</h3>
                     <p class="mb-0">Total Entradas</p>
                 </div>
             </div>
@@ -96,7 +96,7 @@
         <div class="col-md-4">
             <div class="card bg-danger text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,}".format(int(total_salidas)) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(total_salidas) }}</h3>
                     <p class="mb-0">Total Salidas</p>
                 </div>
             </div>
@@ -104,7 +104,7 @@
         <div class="col-md-4">
             <div class="card bg-info text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,}".format(int(total_transferencias)) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(total_transferencias) }}</h3>
                     <p class="mb-0">Total Transferencias</p>
                 </div>
             </div>
@@ -142,7 +142,7 @@
                                     <span class="badge bg-info">Transferencia</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ "${:,}".format(int(movimiento.monto)) }}</td>
+                                <td>{{ "${:,}".format(movimiento.monto) }}</td>
                                 <td>{{ movimiento.concepto }}</td>
                                 <td>
                                     {% if movimiento.venta_id %}
