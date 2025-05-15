@@ -18,30 +18,30 @@
             <form method="GET" action="{{ url_for('ventas.index') }}" class="row g-3">
                 <div class="col-md-3">
                     <label class="form-label">Cliente</label>
-                    <input type="text" class="form-control" name="busqueda" placeholder="Buscar por cliente..." value="{{ busqueda }}">
+                    <input type="text" class="form-control" name="busqueda" placeholder="Buscar por cliente..." value="{{ busqueda|default('') }}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Desde</label>
-                    <input type="date" class="form-control" name="desde" value="{{ desde }}">
+                    <input type="date" class="form-control" name="desde" value="{{ desde|default('') }}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Hasta</label>
-                    <input type="date" class="form-control" name="hasta" value="{{ hasta }}">
+                    <input type="date" class="form-control" name="hasta" value="{{ hasta|default('') }}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Tipo</label>
                     <select class="form-select" name="tipo">
-                        <option value="" {% if tipo == '' %}selected{% endif %}>Todos</option>
-                        <option value="contado" {% if tipo == 'contado' %}selected{% endif %}>Contado</option>
-                        <option value="credito" {% if tipo == 'credito' %}selected{% endif %}>Crédito</option>
+                        <option value="" {% if tipo|default('') == '' %}selected{% endif %}>Todos</option>
+                        <option value="contado" {% if tipo|default('') == 'contado' %}selected{% endif %}>Contado</option>
+                        <option value="credito" {% if tipo|default('') == 'credito' %}selected{% endif %}>Crédito</option>
                     </select>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Estado</label>
                     <select class="form-select" name="estado">
-                        <option value="" {% if estado == '' %}selected{% endif %}>Todos</option>
-                        <option value="pagado" {% if estado == 'pagado' %}selected{% endif %}>Pagado</option>
-                        <option value="pendiente" {% if estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                        <option value="" {% if estado|default('') == '' %}selected{% endif %}>Todos</option>
+                        <option value="pagado" {% if estado|default('') == 'pagado' %}selected{% endif %}>Pagado</option>
+                        <option value="pendiente" {% if estado|default('') == 'pendiente' %}selected{% endif %}>Pendiente</option>
                     </select>
                 </div>
                 <div class="col-md-1 d-flex align-items-end">
@@ -66,7 +66,7 @@
         <div class="col-md-3">
             <div class="card bg-success text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,}".format(int(ventas|sum(attribute='total')|float)) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(ventas|sum(attribute='total')|default(0)|float) }}</h3>
                     <p class="mb-0">Monto Total</p>
                 </div>
             </div>
@@ -74,7 +74,7 @@
         <div class="col-md-3">
             <div class="card bg-warning text-dark h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ ventas|selectattr('tipo', 'equalto', 'credito')|list|length }}</h3>
+                    <h3 class="mb-0">{{ ventas|selectattr('tipo', 'equalto', 'credito')|list|length|default(0) }}</h3>
                     <p class="mb-0">Ventas a Crédito</p>
                 </div>
             </div>
@@ -82,7 +82,7 @@
         <div class="col-md-3">
             <div class="card bg-info text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,}".format(int(ventas|selectattr('tipo', 'equalto', 'credito')|sum(attribute='saldo_pendiente')|float)) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(ventas|selectattr('tipo', 'equalto', 'credito')|sum(attribute='saldo_pendiente')|default(0)|float) }}</h3>
                     <p class="mb-0">Saldo Pendiente</p>
                 </div>
             </div>
@@ -129,10 +129,10 @@
                                     <span class="badge bg-warning text-dark">Crédito</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ "${:,}".format(int(venta.total)) }}</td>
+                                <td>{{ "${:,}".format(venta.total|default(0)) }}</td>
                                 <td>
                                     {% if venta.tipo == 'credito' %}
-                                    {{ "${:,}".format(int(venta.saldo_pendiente)) }}
+                                    {{ "${:,}".format(venta.saldo_pendiente|default(0)) }}
                                     {% else %}
                                     -
                                     {% endif %}
