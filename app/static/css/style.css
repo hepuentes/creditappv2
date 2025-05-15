@@ -44,6 +44,8 @@ body {
     position: fixed;
     top: 10px;
     left: 10px;
+    z-index: 2001;
+    display: block !important; 
   }
 }
 
