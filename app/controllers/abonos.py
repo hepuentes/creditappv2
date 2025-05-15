@@ -22,8 +22,8 @@ def index():
 @cobrador_required
 def crear():
     form = AbonoForm()
-    # Modificar esta línea para usar CreditoVenta
-    clientes = Cliente.query.join(CreditoVenta).filter(CreditoVenta.estado == 'activo').all()
+    # Modificar esta línea para incluir todos los clientes o los que tienen ventas a crédito:
+    clientes = Cliente.query.all()  # Mostrar todos los clientes
     
     if form.validate_on_submit():
         # Crear un abono
