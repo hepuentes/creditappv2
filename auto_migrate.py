@@ -74,7 +74,7 @@ with app.app_context():
     except Exception as e:
         print(f"Error al reparar la tabla 'cajas': {e}")
     
-    # Punto 3: Verificar y corregir la tabla movimiento_caja
+    # Verificar y corregir la tabla movimiento_caja
     try:
         print("Verificando tabla 'movimiento_caja'...")
         if table_exists('movimiento_caja'):
@@ -84,14 +84,14 @@ with app.app_context():
                 # Verificar si falta la columna 'abono_id'
                 if 'abono_id' not in columns:
                     print("La columna 'abono_id' no existe en la tabla 'movimiento_caja'. Agregando...")
-                    connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN abono_id INTEGER REFERENCES abonos(id) ON DELETE SET NULL"))
+                    connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN abono_id INTEGER"))
                     print("Columna 'abono_id' agregada.")
         else:
             print("La tabla 'movimiento_caja' no existe. Será creada al ejecutar db.create_all().")
     except Exception as e:
         print(f"Error al reparar la tabla 'movimiento_caja': {e}")
     
-    # Paso 3: Asegurarse que todas las tablas estén creadas con el esquema correcto
+    # Asegurarse que todas las tablas estén creadas con el esquema correcto
     try:
         print("Aplicando esquema completo de la base de datos...")
         db.create_all()
@@ -99,15 +99,8 @@ with app.app_context():
     except Exception as e:
         print(f"Error al aplicar esquema: {e}")
     
-    # Punto 8: Mejorar el script para verificar y reparar relaciones
+    # Mejorar el script para verificar y reparar relaciones
     try:
-        # Habilitar la extensión 'postgis' si está disponible (opcional para manejar datos geoespaciales)
-        try:
-            with db.engine.connect() as connection:
-                connection.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
-        except Exception as e:
-            print(f"Nota: No se pudo habilitar la extensión PostGIS: {e}")
-        
         # Verificar y reparar relaciones en la base de datos
         print("Verificando y reparando relaciones en la base de datos...")
         
@@ -136,8 +129,9 @@ with app.app_context():
                 # Asegurar que las ventas tengan clientes válidos
                 connection.execute(text("UPDATE ventas SET cliente_id = NULL WHERE cliente_id NOT IN (SELECT id FROM clientes)"))
                 
-                # Asegurar que los abonos tengan ventas válidas
-                connection.execute(text("DELETE FROM abonos WHERE venta_id NOT IN (SELECT id FROM ventas) AND venta_id IS NOT NULL"))
+                # Asegurar que los abonos tengan créditos válidos
+                connection.execute(text("UPDATE abonos SET credito_id = NULL WHERE credito_id NOT IN (SELECT id FROM creditos) AND credito_id IS NOT NULL"))
+                connection.execute(text("UPDATE abonos SET credito_venta_id = NULL WHERE credito_venta_id NOT IN (SELECT id FROM creditos_venta) AND credito_venta_id IS NOT NULL"))
                 
                 # Asegurar que los movimientos de caja tengan cajas válidas
                 connection.execute(text("DELETE FROM movimiento_caja WHERE caja_id NOT IN (SELECT id FROM cajas)"))
