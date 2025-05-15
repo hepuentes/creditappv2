@@ -77,17 +77,17 @@ def detalle(id):
     creditos = cliente.creditos
     
     # Recopilar abonos a través de las ventas
-    abonos = []
+    abonos_cliente = []
     for venta in ventas:
         if hasattr(venta, 'abonos') and venta.abonos:
-            abonos.extend(venta.abonos)
+            abonos_cliente.extend(venta.abonos)
             
     return render_template(
         'clientes/detalle.html',
         cliente=cliente,
         ventas=ventas,
         creditos=creditos,
-        abonos=abonos
+        abonos_cliente=abonos_cliente
     )
 
 @clientes_bp.route('/<int:id>/historial/pdf')
