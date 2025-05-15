@@ -4,10 +4,10 @@ import shutil
 import sqlalchemy
 from sqlalchemy import text, inspect
 from app import create_app, db
-from flask_migrate import Migrate, init, stamp
+from flask_migrate import Migrate, init, stamp, migrate
 
 app = create_app()
-migrate = Migrate(app, db)
+migrate_obj = Migrate(app, db)
 
 with app.app_context():
     print("== INICIANDO PROCESO DE REPARACIÓN DE BASE DE DATOS ==")
@@ -99,8 +99,19 @@ with app.app_context():
             
             # Inicializar migraciones desde cero
             init()
-            stamp('head')
-            print("Sistema de migraciones inicializado correctamente.")
+            
+            # En lugar de stamp('head'), hacer una migración inicial y luego marcarla
+            try:
+                print("Creando una migración inicial...")
+                migrate(message="Initial migration")
+                
+                # Ahora sí podemos usar stamp head ya que existe una revisión
+                print("Marcando la base de datos como actualizada...")
+                stamp("head")
+                print("Base de datos marcada correctamente.")
+            except Exception as e:
+                print(f"Error al crear/marcar migraciones: {e}")
+                print("Continuando sin migraciones...")
     except Exception as e:
         print(f"Error al verificar/inicializar migraciones: {e}")
     
