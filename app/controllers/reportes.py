@@ -36,8 +36,8 @@ def comisiones():
 
         # Consulta de comisiones
         query = Comision.query.filter(
-            Comision.fecha >= fecha_inicio,
-            Comision.fecha <= fecha_fin
+            Comision.fecha_generacion >= fecha_inicio,  # Cambiado de fecha a fecha_generacion
+            Comision.fecha_generacion <= fecha_fin      # Cambiado de fecha a fecha_generacion
         )
 
         if usuario_id:
@@ -96,7 +96,7 @@ def exportar_csv_comisiones(comisiones, fecha_inicio, fecha_fin):
     for comision in comisiones:
         writer.writerow([
             comision.id,
-            comision.fecha.strftime('%d/%m/%Y %H:%M'),
+            comision.fecha_generacion.strftime('%d/%m/%Y %H:%M'),  # Cambiado de fecha a fecha_generacion
             comision.usuario.nombre,
             comision.monto_base,
             f"{comision.porcentaje}%",
