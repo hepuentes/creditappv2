@@ -194,11 +194,14 @@
                     </thead>
                     <tbody>
                         {% set abonos_cliente = [] %}
-                        {% for venta in cliente.ventas %}
-                            {% for abono in venta.abonos %}
-                                {% do abonos_cliente.append(abono) %}
-                            {% endfor %}
-                        {% endfor %}
+                        {% set abonos_cliente = [] %}
+{% for venta in cliente.ventas %}
+    {% if venta.abonos %}
+        {% for abono in venta.abonos %}
+            {% set abonos_cliente = abonos_cliente + [abono] %}
+        {% endfor %}
+    {% endif %}
+{% endfor %}
 
                         {% if abonos_cliente %}
                             {% for abono in abonos_cliente|sort(attribute='fecha', reverse=True) %}
