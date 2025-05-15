@@ -41,38 +41,47 @@ def calcular_comision(monto, usuario_id):
 
 def get_comisiones_periodo(usuario_id=None, fecha_inicio=None, fecha_fin=None):
     """Obtiene las comisiones para un período determinado"""
-    if not fecha_inicio:
-        # Si no se especifica fecha, tomamos el mes actual o quincena según configuración
-        config = Configuracion.query.first()
-        periodo = config.periodo_comision if config else 'mensual'
-        
-        today = datetime.now()
-        if periodo == 'mensual':
-            fecha_inicio = datetime(today.year, today.month, 1)
-            if today.month == 12:
-                fecha_fin = datetime(today.year + 1, 1, 1) - timedelta(days=1)
-            else:
-                fecha_fin = datetime(today.year, today.month + 1, 1) - timedelta(days=1)
-        else:  # quincenal
-            if today.day <= 15:
+    try:
+        if not fecha_inicio:
+            # Si no se especifica fecha, tomamos el mes actual o quincena según configuración
+            try:
+                config = Configuracion.query.first()
+                periodo = config.periodo_comision if config else 'mensual'
+            except Exception:
+                # Si hay error al consultar la configuración, usar valor por defecto
+                periodo = 'mensual'
+            
+            today = datetime.now()
+            if periodo == 'mensual':
                 fecha_inicio = datetime(today.year, today.month, 1)
-                fecha_fin = datetime(today.year, today.month, 15)
-            else:
-                fecha_inicio = datetime(today.year, today.month, 16)
                 if today.month == 12:
                     fecha_fin = datetime(today.year + 1, 1, 1) - timedelta(days=1)
                 else:
                     fecha_fin = datetime(today.year, today.month + 1, 1) - timedelta(days=1)
-    
-    query = Comision.query.filter(
-        Comision.fecha_generacion >= fecha_inicio,  # Cambiado de fecha a fecha_generacion
-        Comision.fecha_generacion <= fecha_fin      # Cambiado de fecha a fecha_generacion
-    )
-    
-    if usuario_id:
-        query = query.filter_by(usuario_id=usuario_id)
-    
-    return query.all()
+            else:  # quincenal
+                if today.day <= 15:
+                    fecha_inicio = datetime(today.year, today.month, 1)
+                    fecha_fin = datetime(today.year, today.month, 15)
+                else:
+                    fecha_inicio = datetime(today.year, today.month, 16)
+                    if today.month == 12:
+                        fecha_fin = datetime(today.year + 1, 1, 1) - timedelta(days=1)
+                    else:
+                        fecha_fin = datetime(today.year, today.month + 1, 1) - timedelta(days=1)
+        
+        query = Comision.query.filter(
+            Comision.fecha_generacion >= fecha_inicio,
+            Comision.fecha_generacion <= fecha_fin
+        )
+        
+        if usuario_id:
+            query = query.filter_by(usuario_id=usuario_id)
+        
+        return query.all()
+    except Exception as e:
+        print(f"Error en get_comisiones_periodo: {e}")
+        # Devolver una lista vacía en caso de error
+        return []
 
 def registrar_movimiento_caja(caja_id, tipo, monto, concepto=None, venta_id=None, abono_id=None, caja_destino_id=None):
     """Registra un movimiento en caja y actualiza saldos"""
