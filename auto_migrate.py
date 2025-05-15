@@ -3,6 +3,7 @@ import os
 import shutil
 from app import create_app, db
 from flask_migrate import Migrate, upgrade, init, migrate, stamp
+from sqlalchemy import text
 
 app = create_app()
 migrate_obj = Migrate(app, db)
@@ -60,3 +61,28 @@ with app.app_context():
             stamp('head')
             
             print("¡Migraciones reiniciadas correctamente!")
+    
+    # Verificar si la columna 'tipo' existe en la tabla 'cajas'
+    # Esta parte solucionará específicamente el problema actual
+    try:
+        # Intentar agregar la columna 'tipo' a la tabla 'cajas'
+        print("Verificando si es necesario agregar la columna 'tipo' a la tabla 'cajas'...")
+        
+        # Primero verificamos si la columna ya existe
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        columns = [column['name'] for column in inspector.get_columns('cajas')]
+        
+        if 'tipo' not in columns:
+            print("La columna 'tipo' no existe. Intentando agregarla...")
+            
+            # Intentamos agregar la columna con un valor predeterminado 'efectivo'
+            with db.engine.begin() as connection:
+                connection.execute(text("ALTER TABLE cajas ADD COLUMN tipo VARCHAR(50) DEFAULT 'efectivo' NOT NULL"))
+            
+            print("Columna 'tipo' agregada exitosamente.")
+        else:
+            print("La columna 'tipo' ya existe. No se requiere migración.")
+    
+    except Exception as column_error:
+        print(f"Error al verificar/agregar la columna 'tipo': {column_error}")
