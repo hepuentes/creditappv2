@@ -56,15 +56,30 @@
                         <div class="mb-3">
                             {{ form.tipo.label(class="form-label") }}
                             {% if form.tipo.errors %}
-                                {{ form.tipo(class="form-select is-invalid") }}
+                                {{ form.tipo(class="form-select is-invalid", id="tipo_venta") }}
                                 <div class="invalid-feedback">
                                     {% for error in form.tipo.errors %}
                                         {{ error }}
                                     {% endfor %}
                                 </div>
                             {% else %}
-                                {{ form.tipo(class="form-select") }}
+                                {{ form.tipo(class="form-select", id="tipo_venta") }}
                             {% endif %}
+                        </div>
+                        
+                        <!-- Sección adicional para créditos (inicialmente oculta) -->
+                        <div id="seccion_credito" style="display: none;" class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Frecuencia de pago</label>
+                                <select class="form-select" id="frecuencia_pago">
+                                    <option value="quincenal">Quincenal</option>
+                                    <option value="mensual">Mensual</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Número de cuotas</label>
+                                <input type="number" class="form-control" id="numero_cuotas" min="1" value="1">
+                            </div>
                         </div>
                         
                         {{ form.productos(id="productos_json") }}
@@ -93,6 +108,24 @@
                                     </tr>
                                 </tfoot>
                             </table>
+                        </div>
+                        
+                        <!-- Resumen de venta a crédito (inicialmente oculto) -->
+                        <div id="resumen_credito" class="mt-4" style="display: none;">
+                            <h5 class="mb-3">Resumen de la venta</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Cliente:</strong> <span id="resumen_cliente"></span></p>
+                                    <p><strong>Frecuencia de pago:</strong> <span id="resumen_frecuencia"></span></p>
+                                    <p><strong>Valor de cada cuota:</strong> <span id="resumen_valor_cuota"></span></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Tipo de venta:</strong> <span id="resumen_tipo">Crédito</span></p>
+                                    <p><strong>Número de cuotas:</strong> <span id="resumen_cuotas"></span></p>
+                                    <p><strong>Fecha primer pago:</strong> <span id="resumen_fecha"></span></p>
+                                </div>
+                            </div>
+                            <p class="fw-bold mt-2">Total de la venta: <span id="resumen_total"></span></p>
                         </div>
                         
                         <div class="d-flex justify-content-end mt-4">
@@ -156,43 +189,97 @@
         const totalVenta = document.getElementById('total-venta');
         const buscarInput = document.getElementById('buscar-producto');
         const ventaForm = document.getElementById('ventaForm');
+        const tipoVenta = document.getElementById('tipo_venta');
+        const seccionCredito = document.getElementById('seccion_credito');
+        const resumenCredito = document.getElementById('resumen_credito');
+        const frecuenciaPago = document.getElementById('frecuencia_pago');
+        const numeroCuotas = document.getElementById('numero_cuotas');
+        
+        // Mostrar/ocultar opciones de crédito según el tipo de venta
+        if (tipoVenta) {
+            tipoVenta.addEventListener('change', function() {
+                if (this.value === 'credito') {
+                    seccionCredito.style.display = 'flex';
+                    actualizarResumenCredito();
+                } else {
+                    seccionCredito.style.display = 'none';
+                    resumenCredito.style.display = 'none';
+                }
+            });
+        }
+        
+        // Actualizar resumen de crédito cuando cambian los valores
+        function actualizarResumenCredito() {
+            if (productosSeleccionados.length === 0) return;
+            
+            const clienteSelect = document.querySelector('[name="cliente"]');
+            const clienteText = clienteSelect.options[clienteSelect.selectedIndex].text;
+            const frecuenciaText = frecuenciaPago.options[frecuenciaPago.selectedIndex].text;
+            const cuotas = parseInt(numeroCuotas.value);
+            
+            // Calcular fecha del primer pago (30 días desde hoy si es mensual, 15 si es quincenal)
+            const hoy = new Date();
+            const diasPlazo = frecuenciaPago.value === 'mensual' ? 30 : 15;
+            const fechaPago = new Date(hoy.getTime() + (diasPlazo * 24 * 60 * 60 * 1000));
+            const fechaFormateada = `${fechaPago.getDate()}/${fechaPago.getMonth() + 1}/${fechaPago.getFullYear()}`;
+            
+            // Calcular valor de la cuota
+            const totalValor = productosSeleccionados.reduce((acc, prod) => acc + (prod.precio * prod.cantidad), 0);
+            const valorCuota = totalValor / cuotas;
+            
+            // Actualizar elementos del resumen
+            document.getElementById('resumen_cliente').textContent = clienteText;
+            document.getElementById('resumen_frecuencia').textContent = frecuenciaText;
+            document.getElementById('resumen_valor_cuota').textContent = `$${valorCuota.toLocaleString('es-CO')}`;
+            document.getElementById('resumen_cuotas').textContent = cuotas;
+            document.getElementById('resumen_fecha').textContent = fechaFormateada;
+            document.getElementById('resumen_total').textContent = `$${totalValor.toLocaleString('es-CO')}`;
+            
+            resumenCredito.style.display = 'block';
+        }
+        
+        // Actualizar resumen cuando cambian los valores
+        if (frecuenciaPago) frecuenciaPago.addEventListener('change', actualizarResumenCredito);
+        if (numeroCuotas) numeroCuotas.addEventListener('input', actualizarResumenCredito);
         
         // Evento para agregar productos al hacer clic
-        productosContainer.addEventListener('click', function(e) {
-            const item = e.target.closest('.producto-item');
-            if (item) {
-                const id = parseInt(item.dataset.id);
-                const nombre = item.dataset.nombre;
-                const precio = parseFloat(item.dataset.precio);
-                const stock = parseInt(item.dataset.stock);
-                
-                // Verificar si ya existe en la lista
-                const productoExistente = productosSeleccionados.find(p => p.id === id);
-                
-                if (productoExistente) {
-                    // Si ya existe, incrementar cantidad si hay stock disponible
-                    if (productoExistente.cantidad < stock) {
-                        productoExistente.cantidad++;
-                        actualizarTabla();
+        if (productosContainer) {
+            productosContainer.addEventListener('click', function(e) {
+                const item = e.target.closest('.producto-item');
+                if (item) {
+                    const id = parseInt(item.dataset.id);
+                    const nombre = item.dataset.nombre;
+                    const precio = parseFloat(item.dataset.precio);
+                    const stock = parseInt(item.dataset.stock);
+                    
+                    // Verificar si ya existe en la lista
+                    const productoExistente = productosSeleccionados.find(p => p.id === id);
+                    
+                    if (productoExistente) {
+                        // Si ya existe, incrementar cantidad si hay stock disponible
+                        if (productoExistente.cantidad < stock) {
+                            productoExistente.cantidad++;
+                            actualizarTabla();
+                        } else {
+                            alert('No hay más stock disponible para este producto');
+                        }
                     } else {
-                        alert('No hay más stock disponible para este producto');
-                    }
-                } else {
-                    // Si no existe, agregarlo
-                    if (stock > 0) {
-                        productosSeleccionados.push({
-                            id: id,
-                            nombre: nombre,
-                            precio: precio,
-                            cantidad: 1
-                        });
-                        actualizarTabla();
-                    } else {
-                        alert('Este producto no tiene stock disponible');
+                        // Si no existe, agregarlo
+                        if (stock > 0) {
+                            productosSeleccionados.push({
+                                id: id,
+                                nombre: nombre,
+                                precio: precio,
+                                cantidad: 1
+                            });
+                            actualizarTabla();
+                        } else {
+                            alert('Este producto no tiene stock disponible');
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
         
         // Función para actualizar la tabla de productos seleccionados
         function actualizarTabla() {
@@ -233,6 +320,11 @@
             
             // Agregar eventos a los nuevos elementos
             agregarEventosTabla();
+            
+            // Si es venta a crédito, actualizar resumen
+            if (tipoVenta && tipoVenta.value === 'credito') {
+                actualizarResumenCredito();
+            }
         }
         
         // Agregar eventos a los elementos de la tabla
@@ -261,25 +353,29 @@
         }
         
         // Buscador de productos
-        buscarInput.addEventListener('input', function() {
-            const busqueda = this.value.toLowerCase();
-            document.querySelectorAll('.producto-item').forEach(item => {
-                const nombre = item.dataset.nombre.toLowerCase();
-                if (nombre.includes(busqueda)) {
-                    item.style.display = 'block';
-                } else {
-                    item.style.display = 'none';
-                }
+        if (buscarInput) {
+            buscarInput.addEventListener('input', function() {
+                const busqueda = this.value.toLowerCase();
+                document.querySelectorAll('.producto-item').forEach(item => {
+                    const nombre = item.dataset.nombre.toLowerCase();
+                    if (nombre.includes(busqueda)) {
+                        item.style.display = 'block';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
             });
-        });
+        }
         
         // Validar formulario antes de enviar
-        ventaForm.addEventListener('submit', function(e) {
-            if (productosSeleccionados.length === 0) {
-                e.preventDefault();
-                alert('Debe seleccionar al menos un producto para crear la venta');
-            }
-        });
+        if (ventaForm) {
+            ventaForm.addEventListener('submit', function(e) {
+                if (productosSeleccionados.length === 0) {
+                    e.preventDefault();
+                    alert('Debe seleccionar al menos un producto para crear la venta');
+                }
+            });
+        }
     });
 </script>
 {% endblock %}
