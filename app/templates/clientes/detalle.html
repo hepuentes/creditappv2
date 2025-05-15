@@ -1,6 +1,66 @@
-/div>
+{% extends "base.html" %}
+
+{% block title %}{{ cliente.nombre }} - CreditApp{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Detalle de Cliente</h1>
+        <div>
+            <a href="{{ url_for('clientes.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+
+    <!-- Información del cliente -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Información Personal</h5>
                 </div>
-                {% endif %}
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th style="width: 150px">Nombre:</th>
+                            <td>{{ cliente.nombre }}</td>
+                        </tr>
+                        <tr>
+                            <th>Cédula:</th>
+                            <td>{{ cliente.cedula }}</td>
+                        </tr>
+                        <tr>
+                            <th>Teléfono:</th>
+                            <td>{{ cliente.telefono or 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Email:</th>
+                            <td>{{ cliente.email or 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Dirección:</th>
+                            <td>{{ cliente.direccion or 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Fecha Registro:</th>
+                            <td>{{ cliente.fecha_registro.strftime('%d/%m/%Y') }}</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="card-footer">
+                    <div class="btn-group">
+                        <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn btn-warning">
+                            <i class="fas fa-edit"></i> Editar
+                        </a>
+                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#eliminarModal">
+                            <i class="fas fa-trash"></i> Eliminar
+                        </button>
+                        <a href="{{ url_for('clientes.historial_pdf', id=cliente.id) }}" target="_blank" class="btn btn-secondary">
+                            <i class="fas fa-file-pdf"></i> Historial PDF
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
 
