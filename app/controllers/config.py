@@ -25,7 +25,7 @@ def editar():
         config.direccion = form.direccion.data
         config.telefono = form.telefono.data
         config.moneda = form.moneda.data
-        config.iva = form.iva.data
+        config.iva = form.iva.data  # Asegura que acepte 0
         config.porcentaje_comision = form.porcentaje_comision.data
         config.periodo_comision = form.periodo_comision.data
         config.min_password = form.min_password.data
