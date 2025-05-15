@@ -66,29 +66,51 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }, 5000);
-});
-
-// Recalcula subtotal y total cuando cambie cantidad
-$(document).on('input', '.cantidad-input', function() {
-    const $tr = $(this).closest('tr');
-    const precio = parseFloat($tr.find('td:nth-child(4)').text());
-    const qty = parseInt($(this).val());
-    const sub = precio * qty;
-    $tr.find('.subtotal').text(sub.toFixed(0));
-    actualizarTotal();
-});
-
-// Quitar producto
-$(document).on('click', '.quitar-producto', function() {
-    $(this).closest('tr').remove();
-    actualizarTotal();
-});
-
-// Función para actualizar total - modificada para eliminar decimales
-function actualizarTotal() {
+  
+  // Función nativa para actualizar total (reemplaza la función jQuery)
+  window.actualizarTotal = function() {
+    const subtotales = document.querySelectorAll('#tabla-productos .subtotal');
     let suma = 0;
-    $('#tabla-productos .subtotal').each(function() {
-        suma += parseFloat($(this).text());
+    
+    subtotales.forEach(subtotal => {
+      suma += parseFloat(subtotal.textContent.replace(/,/g, '')) || 0;
     });
-    $('#total-venta').text('$' + suma.toFixed(0));
-}
+    
+    const totalVenta = document.getElementById('total-venta');
+    if (totalVenta) {
+      totalVenta.textContent = '$' + suma.toLocaleString('es-CO');
+    }
+  };
+  
+  // Eventos nativos para cantidades y eliminación (reemplazan los eventos jQuery)
+  document.addEventListener('input', function(e) {
+    if (e.target.classList.contains('cantidad-input')) {
+      const tr = e.target.closest('tr');
+      if (!tr) return;
+      
+      const precio = parseFloat(tr.querySelector('td:nth-child(4)').textContent.replace(/,/g, '')) || 0;
+      const cantidad = parseInt(e.target.value) || 0;
+      const subtotal = tr.querySelector('.subtotal');
+      
+      if (subtotal) {
+        subtotal.textContent = (precio * cantidad).toLocaleString('es-CO');
+        window.actualizarTotal();
+      }
+    }
+  });
+  
+  document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('quitar-producto') || 
+        e.target.closest('.quitar-producto') || 
+        e.target.classList.contains('eliminar-btn') || 
+        e.target.closest('.eliminar-btn')) {
+      
+      const tr = e.target.closest('tr');
+      if (tr) {
+        tr.remove();
+        window.actualizarTotal();
+      }
+    }
+  });
+});
+
