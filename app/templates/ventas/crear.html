@@ -128,7 +128,7 @@
                                   <small class="text-muted">{{ prod.codigo }}</small>
                                 </div>
                                 <div class="text-end">
-                                  <span class="badge bg-primary">{{ "${:,}".format(int(prod.precio_venta)) }}</span><br>
+                                  <span class="badge bg-primary">{{ "${:,}".format(prod.precio_venta|float) }}</span><br>
                                   <small class="text-muted">Stock: {{ prod.stock }}</small>
                                 </div>
                               </div>
