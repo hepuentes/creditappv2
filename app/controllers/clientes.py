@@ -76,7 +76,7 @@ def detalle(id):
     ventas = cliente.ventas
     creditos = cliente.creditos
     
-    # En lugar de cliente.abonos, debemos recopilar abonos de las ventas
+    # Recopilar abonos a través de las ventas
     abonos = []
     for venta in ventas:
         if hasattr(venta, 'abonos'):
