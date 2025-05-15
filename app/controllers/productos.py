@@ -52,3 +52,17 @@ def editar(id):
         flash('Producto actualizado', 'success')
         return redirect(url_for('productos.index'))
     return render_template('productos/crear.html', form=form)
+
+@productos_bp.route('/<int:id>/eliminar', methods=['POST'])
+@login_required
+@vendedor_required
+def eliminar(id):
+    producto = Producto.query.get_or_404(id)
+    try:
+        db.session.delete(producto)
+        db.session.commit()
+        flash('Producto eliminado exitosamente', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error al eliminar el producto: {str(e)}', 'danger')
+    return redirect(url_for('productos.index'))
