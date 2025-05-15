@@ -69,13 +69,14 @@
                         
                         <!-- Sección adicional para créditos (inicialmente oculta) -->
                         <div id="seccion_credito" style="display: none;" class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Frecuencia de pago</label>
-                                <select class="form-select" id="frecuencia_pago">
-                                    <option value="quincenal">Quincenal</option>
-                                    <option value="mensual">Mensual</option>
-                                </select>
-                            </div>
+    <div class="col-md-6">
+        <label class="form-label">Frecuencia de pago</label>
+        <select class="form-select" id="frecuencia_pago">
+            <option value="semanal">Semanal</option>
+            <option value="quincenal">Quincenal</option>
+            <option value="mensual">Mensual</option>
+        </select>
+    </div>
                             <div class="col-md-6">
                                 <label class="form-label">Número de cuotas</label>
                                 <input type="number" class="form-control" id="numero_cuotas" min="1" value="1">
@@ -282,31 +283,31 @@
         }
         
         // Función para actualizar la tabla de productos seleccionados
-        function actualizarTabla() {
-            // Limpiar tabla
-            tablaProductos.innerHTML = '';
-            
-            // Agregar cada producto a la tabla
-            productosSeleccionados.forEach((producto, index) => {
-                const subtotal = producto.precio * producto.cantidad;
-                
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>
-                        <input type="number" class="form-control form-control-sm cantidad-input" 
-                               value="${producto.cantidad}" min="1" 
-                               data-index="${index}">
-                    </td>
-                    <td>${producto.id}</td>
-                    <td>${producto.nombre}</td>
-                    <td>${producto.precio.toLocaleString('es-CO')}</td>
-                    <td>${subtotal.toLocaleString('es-CO')}</td>
-                    <td>
-                        <button type="button" class="btn btn-sm btn-danger eliminar-btn" data-index="${index}">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                `;
+function actualizarTabla() {
+    // Limpiar tabla
+    tablaProductos.innerHTML = '';
+    
+    // Agregar cada producto a la tabla
+    productosSeleccionados.forEach((producto, index) => {
+        const subtotal = producto.precio * producto.cantidad;
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${producto.id}</td>
+            <td>${producto.nombre}</td>
+            <td>
+                <input type="number" class="form-control form-control-sm cantidad-input" 
+                       value="${producto.cantidad}" min="1" 
+                       data-index="${index}">
+            </td>
+            <td>${producto.precio.toLocaleString('es-CO')}</td>
+            <td>${subtotal.toLocaleString('es-CO')}</td>
+            <td>
+                <button type="button" class="btn btn-sm btn-danger eliminar-btn" data-index="${index}">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
                 
                 tablaProductos.appendChild(tr);
             });
