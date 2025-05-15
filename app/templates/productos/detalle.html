@@ -46,7 +46,7 @@
                             <table class="table table-borderless">
                                 <tr>
                                     <th style="width: 170px">Precio de Costo:</th>
-                                    <td>{{ "${:,}".format(producto.precio_costo) }}</td>
+                                    <td>{{ "${:,}".format(producto.precio_compra) }}</td>
                                 </tr>
                                 <tr>
                                     <th>Precio de Venta:</th>
@@ -54,7 +54,7 @@
                                 </tr>
                                 <tr>
                                     <th>Margen:</th>
-                                    <td>{{ "{:.1f}%".format(((producto.precio_venta - producto.precio_costo) / producto.precio_costo) * 100) }}</td>
+                                    <td>{{ "${:,}".format(((producto.precio_venta - producto.precio_costo) / producto.precio_costo) * 100) }}</td>
                                 </tr>
                                 <tr>
                                     <th>Fecha Registro:</th>
