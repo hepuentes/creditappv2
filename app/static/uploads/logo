@@ -1,1 +1,12 @@
 #uploads
+@ventas_bp.route('/crear', methods=['GET','POST'])
+@login_required
+@vendedor_required
+def crear():
+    form = VentaForm()
+    
+    # Cargar opciones para los select
+    clientes = Cliente.query.all()
+    form.cliente.choices = [(c.id, f"{c.nombre} - {c.cedula}") for c in clientes]
+    
+    cajas = Caja.query.all()
