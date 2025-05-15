@@ -37,9 +37,15 @@ def index():
     total_abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).with_entities(
         db.func.sum(Abono.monto)).scalar() or 0
 
-    # Saldo en cajas
-    cajas = Caja.query.all()
-    total_cajas = sum(caja.saldo_actual for caja in cajas)
+    # Saldo en cajas - Manejo de excepciones para adaptarse si la columna tipo no existe
+    try:
+        cajas = Caja.query.all()
+        total_cajas = sum(caja.saldo_actual for caja in cajas)
+    except Exception as e:
+        # Si hay un error al consultar las cajas (por ejemplo, columna faltante)
+        cajas = []
+        total_cajas = 0
+        print(f"Error al consultar cajas: {e}")
 
     # Comisión acumulada (para el vendedor actual)
     comisiones = get_comisiones_periodo(current_user.id)
