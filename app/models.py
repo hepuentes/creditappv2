@@ -131,7 +131,7 @@ class Caja(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(100), nullable=False)
-    tipo = db.Column(db.String(50), nullable=False)  # Agregar este campo
+    tipo = db.Column(db.String(50), nullable=False)  # Campo agregado
     saldo_inicial = db.Column(db.Integer, nullable=False, default=0)
     saldo_actual = db.Column(db.Integer, nullable=False, default=0)
     fecha_apertura = db.Column(db.DateTime, default=datetime.utcnow)
