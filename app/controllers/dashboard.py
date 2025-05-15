@@ -10,57 +10,68 @@ dashboard_bp = Blueprint('dashboard', __name__)
 @dashboard_bp.route('/')
 @login_required
 def index():
-    # Obtener la fecha actual
-    now = datetime.now()
-    primer_dia_mes = datetime(now.year, now.month, 1)
-
-    # Total de clientes
-    total_clientes = Cliente.query.count()
-
-    # Total de productos
-    total_productos = Producto.query.count()
-    productos_agotados = Producto.query.filter(Producto.stock <= 0).count()
-    productos_stock_bajo = Producto.query.filter(Producto.stock <= Producto.stock_minimo, Producto.stock > 0).count()
-
-    # Ventas del mes
-    ventas_mes = Venta.query.filter(Venta.fecha >= primer_dia_mes).count()
-    total_ventas_mes = Venta.query.filter(Venta.fecha >= primer_dia_mes).with_entities(
-        db.func.sum(Venta.total)).scalar() or 0
-
-    # Créditos activos
-    creditos_activos = Venta.query.filter(Venta.tipo == 'credito', Venta.saldo_pendiente > 0).count()
-    total_creditos = Venta.query.filter(Venta.tipo == 'credito', Venta.saldo_pendiente > 0).with_entities(
-        db.func.sum(Venta.saldo_pendiente)).scalar() or 0
-
-    # Abonos del mes
-    abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).count()
-    total_abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).with_entities(
-        db.func.sum(Abono.monto)).scalar() or 0
-
-    # Saldo en cajas - Manejo de excepciones para adaptarse si la columna tipo no existe
     try:
-        cajas = Caja.query.all()
-        total_cajas = sum(caja.saldo_actual for caja in cajas)
+        # Obtener la fecha actual
+        now = datetime.now()
+        primer_dia_mes = datetime(now.year, now.month, 1)
+
+        # Total de clientes
+        total_clientes = Cliente.query.count()
+
+        # Total de productos
+        total_productos = Producto.query.count()
+        productos_agotados = Producto.query.filter(Producto.stock <= 0).count()
+        productos_stock_bajo = Producto.query.filter(Producto.stock <= Producto.stock_minimo, Producto.stock > 0).count()
+
+        # Ventas del mes
+        ventas_mes = Venta.query.filter(Venta.fecha >= primer_dia_mes).count()
+        total_ventas_mes = Venta.query.filter(Venta.fecha >= primer_dia_mes).with_entities(
+            db.func.sum(Venta.total)).scalar() or 0
+
+        # Créditos activos
+        creditos_activos = Venta.query.filter(Venta.tipo == 'credito', Venta.saldo_pendiente > 0).count()
+        total_creditos = Venta.query.filter(Venta.tipo == 'credito', Venta.saldo_pendiente > 0).with_entities(
+            db.func.sum(Venta.saldo_pendiente)).scalar() or 0
+
+        # Abonos del mes
+        abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).count()
+        total_abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).with_entities(
+            db.func.sum(Abono.monto)).scalar() or 0
+
+        # Saldo en cajas
+        try:
+            cajas = Caja.query.all()
+            total_cajas = sum(caja.saldo_actual for caja in cajas)
+        except Exception as e:
+            print(f"Error al consultar cajas: {e}")
+            cajas = []
+            total_cajas = 0
+
+        # Comisión acumulada (para el vendedor actual)
+        try:
+            comisiones = get_comisiones_periodo(current_user.id)
+            total_comision = sum(comision.monto_comision for comision in comisiones)
+        except Exception as e:
+            print(f"Error al consultar comisiones: {e}")
+            comisiones = []
+            total_comision = 0
+
+        return render_template('dashboard/index.html',
+                            total_clientes=total_clientes,
+                            total_productos=total_productos,
+                            productos_agotados=productos_agotados,
+                            productos_stock_bajo=productos_stock_bajo,
+                            ventas_mes=ventas_mes,
+                            total_ventas_mes=format_currency(total_ventas_mes),
+                            creditos_activos=creditos_activos,
+                            total_creditos=format_currency(total_creditos),
+                            abonos_mes=abonos_mes,
+                            total_abonos_mes=format_currency(total_abonos_mes),
+                            total_cajas=format_currency(total_cajas),
+                            total_comision=format_currency(total_comision))
     except Exception as e:
-        # Si hay un error al consultar las cajas (por ejemplo, columna faltante)
-        cajas = []
-        total_cajas = 0
-        print(f"Error al consultar cajas: {e}")
-
-    # Comisión acumulada (para el vendedor actual)
-    comisiones = get_comisiones_periodo(current_user.id)
-    total_comision = sum(comision.monto_comision for comision in comisiones)
-
-    return render_template('dashboard/index.html',
-                           total_clientes=total_clientes,
-                           total_productos=total_productos,
-                           productos_agotados=productos_agotados,
-                           productos_stock_bajo=productos_stock_bajo,
-                           ventas_mes=ventas_mes,
-                           total_ventas_mes=format_currency(total_ventas_mes),
-                           creditos_activos=creditos_activos,
-                           total_creditos=format_currency(total_creditos),
-                           abonos_mes=abonos_mes,
-                           total_abonos_mes=format_currency(total_abonos_mes),
-                           total_cajas=format_currency(total_cajas),
-                           total_comision=format_currency(total_comision))
+        # Si ocurre cualquier error, mostrar una página alternativa
+        print(f"Error general en dashboard: {e}")
+        return render_template('error.html', 
+                               mensaje="Lo sentimos, hubo un problema al cargar el dashboard. Estamos trabajando para solucionarlo.",
+                               error=str(e))
