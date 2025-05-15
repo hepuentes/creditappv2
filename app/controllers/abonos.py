@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response, jsonify
 from flask_login import login_required, current_user
 from app import db
-from app.models import Abono, Cliente, Credito, CreditoVenta
+from app.models import Abono, Cliente, Credito, CreditoVenta, Venta
 from app.forms import AbonoForm
 from app.decorators import cobrador_required
 from app.utils import registrar_movimiento_caja, calcular_comision
