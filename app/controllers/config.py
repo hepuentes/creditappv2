@@ -18,11 +18,11 @@ def editar():
     
     if form.validate_on_submit():
         # Asegurar que IVA pueda ser 0
-        if form.iva.data is not None and form.iva.data < 0:
-            form.iva.data = 0
+        if form.iva.data is not None:
+            config.iva = form.iva.data
             
         # Procesar logo si se subió uno nuevo
-        logo = request.files.get('logo')
+        logo = form.logo.data
         if logo and logo.filename:
             # Validar tipo de archivo
             if logo.filename.split('.')[-1].lower() not in ['jpg', 'jpeg', 'png']:
@@ -34,13 +34,23 @@ def editar():
             logo.save(logo_path)
             config.logo = os.path.basename(logo_path)
             
-        # Actualizar resto de campos
+        # Actualizar resto de campos sin sobrescribir logo
         form.populate_obj(config)
+        if not logo or not logo.filename:
+            # Si no se subió un nuevo logo, restaurar el antiguo
+            logo_original = db.session.query(Configuracion.logo).filter_by(id=config.id).scalar()
+            if logo_original:
+                config.logo = logo_original
         
         # Guardar cambios
-        db.session.add(config)
-        db.session.commit()
-        flash('Configuración actualizada exitosamente', 'success')
+        try:
+            db.session.add(config)
+            db.session.commit()
+            flash('Configuración actualizada exitosamente', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al actualizar la configuración: {str(e)}', 'danger')
+            
         return redirect(url_for('config.editar'))
         
     return render_template('config/index.html', form=form, config=config)
