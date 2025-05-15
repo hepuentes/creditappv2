@@ -21,7 +21,17 @@ def index():
 @vendedor_required
 def crear():
     form = VentaForm()
+    
+    # Cargar opciones para los select
+    clientes = Cliente.query.all()
+    form.cliente.choices = [(c.id, f"{c.nombre} - {c.cedula}") for c in clientes]
+    
+    cajas = Caja.query.all()
+    form.caja.choices = [(c.id, c.nombre) for c in cajas]
+    
+    # Productos disponibles
     productos = Producto.query.filter(Producto.stock > 0).all()
+    
     if form.validate_on_submit():
         # Crear venta
         venta = Venta(
