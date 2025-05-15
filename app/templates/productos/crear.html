@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ titulo }} - CreditApp{% endblock %}
+{% block title %}{{ titulo|default('Nuevo Producto') }} - CreditApp{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -8,7 +8,7 @@
         <div class="col-md-8 mx-auto">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">{{ titulo }}</h5>
+                    <h5 class="mb-0">{{ titulo|default('Nuevo Producto') }}</h5>
                 </div>
                 <div class="card-body">
                     <form method="POST" novalidate>
@@ -60,18 +60,18 @@
 
                         <div class="row mb-3">
                             <div class="col-md-4">
-                                {{ form.precio_costo.label(class="form-label") }}
+                                {{ form.precio_compra.label(class="form-label") }}
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
-                                    {% if form.precio_costo.errors %}
-                                        {{ form.precio_costo(class="form-control is-invalid numeric-only") }}
+                                    {% if form.precio_compra.errors %}
+                                        {{ form.precio_compra(class="form-control is-invalid numeric-only") }}
                                         <div class="invalid-feedback">
-                                            {% for error in form.precio_costo.errors %}
+                                            {% for error in form.precio_compra.errors %}
                                                 {{ error }}
                                             {% endfor %}
                                         </div>
                                     {% else %}
-                                        {{ form.precio_costo(class="form-control numeric-only") }}
+                                        {{ form.precio_compra(class="form-control numeric-only") }}
                                     {% endif %}
                                 </div>
                             </div>
@@ -154,12 +154,12 @@
 <script>
     // Calcular precio de venta automáticamente (30% de margen)
     document.addEventListener('DOMContentLoaded', function() {
-        const precioCosto = document.getElementById('precio_costo');
+        const precioCompra = document.getElementById('precio_compra');
         const precioVenta = document.getElementById('precio_venta');
 
-        precioCosto.addEventListener('change', function() {
-            if (precioCosto.value && (!precioVenta.value || precioVenta.value == '0')) {
-                const costo = parseFloat(precioCosto.value);
+        precioCompra.addEventListener('change', function() {
+            if (precioCompra.value && (!precioVenta.value || precioVenta.value == '0')) {
+                const costo = parseFloat(precioCompra.value);
                 const margen = 0.30; // 30% de margen
                 const venta = costo * (1 + margen);
                 precioVenta.value = venta.toFixed(2);
