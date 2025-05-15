@@ -23,7 +23,7 @@
                     <!-- Información actual de la caja -->
                     <div class="alert alert-info mb-4">
                         <p class="mb-0"><strong>Caja:</strong> {{ caja.nombre }} ({{ caja.tipo }})</p>
-                        <p class="mb-0"><strong>Saldo Actual:</strong> {{ "${:,}".format(int(caja.saldo_actual)) }}</p>
+                        <p class="mb-0"><strong>Saldo Actual:</strong> {{ "${:,}".format(caja.saldo_actual) }}</p>
                     </div>
 
                     <form method="POST">
@@ -59,7 +59,7 @@
                                 {% endif %}
                             </div>
                             {% if form.tipo.data == 'salida' or form.tipo.data == 'transferencia' %}
-                            <div class="form-text text-danger">El monto no puede ser mayor al saldo actual ({{ "${:,}".format(int(caja.saldo_actual)) }}).</div>
+                            <div class="form-text text-danger">El monto no puede ser mayor al saldo actual ({{ "${:,}".format(caja.saldo_actual) }}).</div>
                             {% endif %}
                         </div>
 
