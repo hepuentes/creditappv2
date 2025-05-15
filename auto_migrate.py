@@ -3,11 +3,14 @@ import os
 import shutil
 from sqlalchemy import text, inspect
 from app import create_app, db
+from app.models import (Usuario, Cliente, Venta, Credito, Abono, Caja, 
+                        MovimientoCaja, CreditoVenta, DetalleVenta, 
+                        Comision, Configuracion, Producto)
 
 app = create_app()
 
 with app.app_context():
-    print("== INICIANDO REPARACIÓN DE BASE DE DATOS (SIN MIGRACIONES) ==")
+    print("== INICIANDO PROCESO DE REPARACIÓN DE BASE DE DATOS ==")
     
     # Función para verificar si una tabla existe
     def table_exists(table_name):
@@ -70,23 +73,23 @@ with app.app_context():
             print("La tabla 'cajas' no existe. Será creada al ejecutar db.create_all().")
     except Exception as e:
         print(f"Error al reparar la tabla 'cajas': {e}")
-        
-   # verifica la tabla 'cajas', agrega esto
-try:
-    print("Verificando tabla 'movimiento_caja'...")
-    if table_exists('movimiento_caja'):
-        columns = get_columns('movimiento_caja')
-        
-        with db.engine.begin() as connection:
-            # Verificar si falta la columna 'abono_id'
-            if 'abono_id' not in columns:
-                print("La columna 'abono_id' no existe en la tabla 'movimiento_caja'. Agregando...")
-                connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN abono_id INTEGER REFERENCES abonos(id) ON DELETE SET NULL"))
-                print("Columna 'abono_id' agregada.")
-    else:
-        print("La tabla 'movimiento_caja' no existe. Será creada al ejecutar db.create_all().")
-except Exception as e:
-    print(f"Error al reparar la tabla 'movimiento_caja': {e}") 
+    
+    # Punto 3: Verificar y corregir la tabla movimiento_caja
+    try:
+        print("Verificando tabla 'movimiento_caja'...")
+        if table_exists('movimiento_caja'):
+            columns = get_columns('movimiento_caja')
+            
+            with db.engine.begin() as connection:
+                # Verificar si falta la columna 'abono_id'
+                if 'abono_id' not in columns:
+                    print("La columna 'abono_id' no existe en la tabla 'movimiento_caja'. Agregando...")
+                    connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN abono_id INTEGER REFERENCES abonos(id) ON DELETE SET NULL"))
+                    print("Columna 'abono_id' agregada.")
+        else:
+            print("La tabla 'movimiento_caja' no existe. Será creada al ejecutar db.create_all().")
+    except Exception as e:
+        print(f"Error al reparar la tabla 'movimiento_caja': {e}")
     
     # Paso 3: Asegurarse que todas las tablas estén creadas con el esquema correcto
     try:
@@ -95,5 +98,55 @@ except Exception as e:
         print("Esquema aplicado correctamente.")
     except Exception as e:
         print(f"Error al aplicar esquema: {e}")
+    
+    # Punto 8: Mejorar el script para verificar y reparar relaciones
+    try:
+        # Habilitar la extensión 'postgis' si está disponible (opcional para manejar datos geoespaciales)
+        try:
+            with db.engine.connect() as connection:
+                connection.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+        except Exception as e:
+            print(f"Nota: No se pudo habilitar la extensión PostGIS: {e}")
+        
+        # Verificar y reparar relaciones en la base de datos
+        print("Verificando y reparando relaciones en la base de datos...")
+        
+        # Verificar restricciones y claves foráneas
+        for model_class in [Usuario, Cliente, Venta, Credito, Abono, Caja, MovimientoCaja, CreditoVenta, DetalleVenta, Comision, Configuracion, Producto]:
+            try:
+                table_name = model_class.__tablename__
+                print(f"  Verificando tabla {table_name}...")
+                
+                # Actualizar secuencias si es necesario
+                try:
+                    with db.engine.connect() as connection:
+                        connection.execute(text(f"SELECT setval(pg_get_serial_sequence('{table_name}', 'id'), COALESCE((SELECT MAX(id) FROM {table_name}), 1), false)"))
+                    print(f"  Secuencia para {table_name} actualizada.")
+                except Exception as seq_error:
+                    print(f"  Nota: No se pudo actualizar la secuencia para {table_name}: {seq_error}")
+                
+                print(f"  Tabla {table_name} verificada.")
+            except Exception as e:
+                print(f"  Error al verificar/reparar tabla {table_name}: {e}")
+        
+        # Verificar relaciones específicas entre tablas
+        try:
+            print("Verificando relaciones entre tablas...")
+            with db.engine.begin() as connection:
+                # Asegurar que las ventas tengan clientes válidos
+                connection.execute(text("UPDATE ventas SET cliente_id = NULL WHERE cliente_id NOT IN (SELECT id FROM clientes)"))
+                
+                # Asegurar que los abonos tengan ventas válidas
+                connection.execute(text("DELETE FROM abonos WHERE venta_id NOT IN (SELECT id FROM ventas) AND venta_id IS NOT NULL"))
+                
+                # Asegurar que los movimientos de caja tengan cajas válidas
+                connection.execute(text("DELETE FROM movimiento_caja WHERE caja_id NOT IN (SELECT id FROM cajas)"))
+            print("Relaciones entre tablas verificadas y reparadas.")
+        except Exception as e:
+            print(f"Error al verificar relaciones entre tablas: {e}")
+        
+        print("Verificación y reparación de relaciones completadas.")
+    except Exception as e:
+        print(f"Error general al reparar relaciones: {e}")
     
     print("== PROCESO DE REPARACIÓN DE BASE DE DATOS COMPLETADO ==")
