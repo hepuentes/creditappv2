@@ -17,9 +17,18 @@ def editar():
     form = ConfiguracionForm(obj=config)
     
     if form.validate_on_submit():
-        # Asegurar que IVA pueda ser 0
-        if form.iva.data is not None:
-            config.iva = form.iva.data
+        # Primero capturamos los valores del formulario pero sin sobrescribir el logo
+        old_logo = config.logo
+        
+        # Actualizamos los campos simples
+        config.nombre_empresa = form.nombre_empresa.data
+        config.direccion = form.direccion.data
+        config.telefono = form.telefono.data
+        config.moneda = form.moneda.data
+        config.iva = form.iva.data
+        config.porcentaje_comision = form.porcentaje_comision.data
+        config.periodo_comision = form.periodo_comision.data
+        config.min_password = form.min_password.data
             
         # Procesar logo si se subió uno nuevo
         logo = form.logo.data
@@ -33,18 +42,12 @@ def editar():
             logo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], 'logo_' + secure_filename(logo.filename))
             logo.save(logo_path)
             config.logo = os.path.basename(logo_path)
-            
-        # Actualizar resto de campos sin sobrescribir logo
-        form.populate_obj(config)
-        if not logo or not logo.filename:
-            # Si no se subió un nuevo logo, restaurar el antiguo
-            logo_original = db.session.query(Configuracion.logo).filter_by(id=config.id).scalar()
-            if logo_original:
-                config.logo = logo_original
+        else:
+            # Si no se subió un nuevo logo, mantener el anterior
+            config.logo = old_logo
         
         # Guardar cambios
         try:
-            db.session.add(config)
             db.session.commit()
             flash('Configuración actualizada exitosamente', 'success')
         except Exception as e:
