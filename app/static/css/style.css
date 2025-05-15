@@ -28,24 +28,44 @@ body {
 
 /* Mejoras para el menú lateral */
 #content.expanded {
-  width: 100%;
-  margin-left: 0;
+  width: 100% !important;
+  margin-left: 0 !important;
 }
 
 /* Asegurar que el botón hamburguesa siempre sea visible */
 .navbar-toggler {
   display: block !important;
-  z-index: 2000;
+  z-index: 2001 !important;
 }
 
 /* Para dispositivos móviles */
 @media (max-width: 767.98px) {
   .navbar-toggler {
-    position: fixed;
-    top: 10px;
-    left: 10px;
+    position: fixed !important;
+    top: 10px !important;
+    left: 10px !important;
     z-index: 2001;
     display: block !important; 
+  }
+  
+  .sidebar {
+    margin-left: -250px !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+    z-index: 1000 !important;
+    transition: all 0.3s !important;
+  }
+  
+  .sidebar.active {
+    margin-left: 0 !important;
+    transform: translateX(0) !important;
+  }
+  
+  #content {
+    width: 100% !important;
+    margin-left: 0 !important;
   }
 }
 
