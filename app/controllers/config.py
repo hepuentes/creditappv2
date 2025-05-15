@@ -1,3 +1,13 @@
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
+from flask_login import login_required
+from app import db
+from app.models import Configuracion
+from app.forms import ConfiguracionForm
+from app.decorators import admin_required
+from werkzeug.utils import secure_filename
+import os
+
+config_bp = Blueprint('config', __name__, url_prefix='/config')
 
 @config_bp.route('/', methods=['GET','POST'])
 @login_required
