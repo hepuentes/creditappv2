@@ -49,10 +49,10 @@
                                 <span class="badge bg-danger">Pendiente</span>
                                 {% endif %}
                             </p>
-                            <p><strong>Total:</strong> <span class="fw-bold">{{ "${:,}".format(int(venta.total)) }}</span></p>
+                            <p><strong>Total:</strong> <span class="fw-bold">{{ "${:,}".format(venta.total) }}</span></p>
                             {% if venta.tipo == 'credito' %}
                             <p><strong>Saldo Pendiente:</strong> <span class="fw-bold {% if venta.saldo_pendiente > 0 %}text-danger{% else %}text-success{% endif %}">
-                                {{ "${:,}".format(int(venta.saldo_pendiente)) }}
+                                {{ "${:,}".format(venta.saldo_pendiente) }}
                             </span></p>
                             {% endif %}
                         </div>
@@ -135,15 +135,15 @@
                                 <small class="text-muted d-block">{{ detalle.producto.unidad or 'Und.' }}</small>
                             </td>
                             <td class="text-center">{{ detalle.cantidad }}</td>
-                            <td class="text-end">{{ "${:,}".format(int(detalle.precio_unitario)) }}</td>
-                            <td class="text-end">{{ "${:,}".format(int(detalle.subtotal)) }}</td>
+                            <td class="text-end">{{ "${:,}".format(detalle.precio_unitario) }}</td>
+                            <td class="text-end">{{ "${:,}".format(detalle.subtotal) }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot class="table-light">
                         <tr>
                             <th colspan="4" class="text-end">Total:</th>
-                            <th class="text-end">{{ "${:,}".format(int(venta.total)) }}</th>
+                            <th class="text-end">{{ "${:,}".format(venta.total) }}</th>
                         </tr>
                     </tfoot>
                 </table>
@@ -174,7 +174,7 @@
                             {% for abono in venta.abonos|sort(attribute='fecha', reverse=True) %}
                             <tr>
                                 <td>{{ abono.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
-                                <td>{{ "${:,}".format(int(abono.monto)) }}</td>
+                                <td>{{ "${:,}".format(abono.monto) }}</td>
                                 <td>{{ abono.cobrador.nombre }}</td>
                                 <td>{{ abono.notas or 'N/A' }}</td>
                                 <td>
@@ -196,13 +196,13 @@
                     <tfoot class="table-light">
                         <tr>
                             <th class="text-end">Total Abonado:</th>
-                            <th>{{ "${:,}".format(int(venta.total - venta.saldo_pendiente)) }}</th>
+                            <th>{{ "${:,}".format(venta.total - venta.saldo_pendiente) }}</th>
                             <th colspan="3"></th>
                         </tr>
                         <tr>
                             <th class="text-end">Saldo Pendiente:</th>
                             <th class="{% if venta.saldo_pendiente > 0 %}text-danger{% else %}text-success{% endif %}">
-                                {{ "${:,}".format(int(venta.saldo_pendiente)) }}
+                                {{ "${:,}".format(venta.saldo_pendiente) }}
                             </th>
                             <th colspan="3"></th>
                         </tr>
