@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response
 from flask_login import login_required, current_user
 from app import db
-from app.models import Venta, DetalleVenta, Producto
+from app.models import Venta, DetalleVenta, Producto, Cliente, Caja  # Añadimos Cliente y Caja
 from app.forms import VentaForm
 from app.decorators import vendedor_required
 from app.pdf.venta import generar_pdf_venta
