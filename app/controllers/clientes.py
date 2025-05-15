@@ -75,7 +75,13 @@ def detalle(id):
     # Usamos las relaciones definidas en el modelo
     ventas = cliente.ventas
     creditos = cliente.creditos
-    abonos = cliente.abonos
+    
+    # En lugar de cliente.abonos, debemos recopilar abonos de las ventas
+    abonos = []
+    for venta in ventas:
+        if hasattr(venta, 'abonos'):
+            abonos.extend(venta.abonos)
+            
     return render_template(
         'clientes/detalle.html',
         cliente=cliente,
