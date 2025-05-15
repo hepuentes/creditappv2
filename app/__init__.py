@@ -22,9 +22,13 @@ def create_app():
     app.config.from_object('app.config.Config')
 
     # Asegurar que existan los directorios necesarios
-    uploads_dir = os.path.join(app.static_folder, 'uploads')
-    if not os.path.exists(uploads_dir):
-        os.makedirs(uploads_dir)
+    static_dir = app.static_folder
+    css_dir = os.path.join(static_dir, 'css')
+    uploads_dir = os.path.join(static_dir, 'uploads')
+    
+    for directory in [static_dir, css_dir, uploads_dir]:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
     
     # Inicializar extensiones con la app
     db.init_app(app)
