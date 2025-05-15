@@ -1,8 +1,8 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app import db
 from app.models import Caja, MovimientoCaja
-from app.forms import MovimientoCajaForm
+from app.forms import MovimientoCajaForm, CajaForm
 from app.decorators import (vendedor_required, cobrador_required)
 
 cajas_bp = Blueprint('cajas', __name__, url_prefix='/cajas')
@@ -11,29 +11,139 @@ cajas_bp = Blueprint('cajas', __name__, url_prefix='/cajas')
 @login_required
 def index():
     cajas = Caja.query.all()
-    return render_template('cajas/index.html', cajas=cajas)
+    
+    # Calcular totales por tipo
+    total_efectivo = sum(c.saldo_actual for c in cajas if c.tipo == 'efectivo')
+    total_nequi = sum(c.saldo_actual for c in cajas if c.tipo == 'nequi')
+    total_daviplata = sum(c.saldo_actual for c in cajas if c.tipo == 'daviplata')
+    total_transferencia = sum(c.saldo_actual for c in cajas if c.tipo == 'transferencia')
+    total_general = sum(c.saldo_actual for c in cajas)
+    
+    return render_template('cajas/index.html', cajas=cajas,
+                          total_efectivo=total_efectivo,
+                          total_nequi=total_nequi,
+                          total_daviplata=total_daviplata,
+                          total_transferencia=total_transferencia,
+                          total_general=total_general)
+
+@cajas_bp.route('/crear', methods=['GET', 'POST'])
+@login_required
+def crear():
+    form = CajaForm()
+    if form.validate_on_submit():
+        caja = Caja(
+            nombre=form.nombre.data,
+            tipo=form.tipo.data,
+            saldo_inicial=form.saldo_inicial.data,
+            saldo_actual=form.saldo_inicial.data,
+            fecha_apertura=datetime.now()
+        )
+        db.session.add(caja)
+        db.session.commit()
+        flash('Caja creada exitosamente', 'success')
+        return redirect(url_for('cajas.index'))
+    return render_template('cajas/crear.html', form=form)
 
 @cajas_bp.route('/<int:id>/movimientos')
 @login_required
 def movimientos(id):
     caja = Caja.query.get_or_404(id)
-    return render_template('cajas/movimientos.html', caja=caja, movimientos=caja.movimientos)
+    
+    # Filtrar movimientos por fecha si hay parámetros
+    desde = request.args.get('desde')
+    hasta = request.args.get('hasta')
+    tipo = request.args.get('tipo')
+    
+    query = MovimientoCaja.query.filter_by(caja_id=id)
+    
+    if desde:
+        desde_dt = datetime.strptime(desde, '%Y-%m-%d')
+        query = query.filter(MovimientoCaja.fecha >= desde_dt)
+    
+    if hasta:
+        hasta_dt = datetime.strptime(hasta, '%Y-%m-%d')
+        query = query.filter(MovimientoCaja.fecha <= hasta_dt)
+    
+    if tipo:
+        query = query.filter_by(tipo=tipo)
+    
+    movimientos = query.order_by(MovimientoCaja.fecha.desc()).all()
+    
+    # Calcular totales
+    total_entradas = sum(m.monto for m in movimientos if m.tipo == 'entrada')
+    total_salidas = sum(m.monto for m in movimientos if m.tipo == 'salida')
+    total_transferencias = sum(m.monto for m in movimientos if m.tipo == 'transferencia')
+    
+    return render_template('cajas/movimientos.html', 
+                           caja=caja, 
+                           movimientos=movimientos,
+                           desde=desde,
+                           hasta=hasta,
+                           tipo=tipo,
+                           total_entradas=total_entradas,
+                           total_salidas=total_salidas,
+                           total_transferencias=total_transferencias)
 
 @cajas_bp.route('/<int:id>/nuevo-movimiento', methods=['GET','POST'])
 @login_required
 def nuevo_movimiento(id):
     caja = Caja.query.get_or_404(id)
     form = MovimientoCajaForm()
+    
+    # Establecer tipo por defecto si viene en la URL
+    tipo_param = request.args.get('tipo')
+    if tipo_param and request.method == 'GET':
+        form.tipo.data = tipo_param
+    
+    # Cargar cajas para transferencias
     from app.models import Caja as CajaModel
-    form.caja_destino_id.choices = [('', 'Ninguna')] + [(c.id, c.nombre) for c in CajaModel.query.all()]
+    form.caja_destino_id.choices = [('', 'Ninguna')] + [(c.id, c.nombre) for c in CajaModel.query.filter(CajaModel.id != id).all()]
+    
     if form.validate_on_submit():
-        mov = MovimientoCaja(tipo=form.tipo.data,
-                             monto=form.monto.data,
-                             concepto=form.concepto.data,
-                             caja_id=caja.id,
-                             caja_destino_id=form.caja_destino_id.data)
+        # Validar montos
+        monto = form.monto.data
+        if (form.tipo.data == 'salida' or form.tipo.data == 'transferencia') and monto > caja.saldo_actual:
+            flash(f"El monto no puede ser mayor al saldo actual (${caja.saldo_actual:,.2f})", 'danger')
+            return render_template('cajas/nuevo_movimiento.html', form=form, caja=caja)
+        
+        # Crear el movimiento
+        mov = MovimientoCaja(
+            tipo=form.tipo.data,
+            monto=monto,
+            concepto=form.concepto.data,
+            caja_id=caja.id,
+            caja_destino_id=form.caja_destino_id.data if form.tipo.data == 'transferencia' else None
+        )
+        
+        # Actualizar saldos
+        if form.tipo.data == 'entrada':
+            caja.saldo_actual += monto
+        elif form.tipo.data == 'salida':
+            caja.saldo_actual -= monto
+        elif form.tipo.data == 'transferencia' and form.caja_destino_id.data:
+            caja.saldo_actual -= monto
+            caja_destino = CajaModel.query.get(form.caja_destino_id.data)
+            caja_destino.saldo_actual += monto
+            
+            # Crear movimiento en la caja destino
+            mov_destino = MovimientoCaja(
+                tipo='entrada',
+                monto=monto,
+                concepto=f"Transferencia desde {caja.nombre}",
+                caja_id=caja_destino.id,
+                caja_destino_id=caja.id
+            )
+            db.session.add(mov_destino)
+        
         db.session.add(mov)
         db.session.commit()
-        flash('Movimiento registrado', 'success')
+        flash('Movimiento registrado exitosamente', 'success')
         return redirect(url_for('cajas.movimientos', id=id))
+    
     return render_template('cajas/nuevo_movimiento.html', form=form, caja=caja)
+
+@cajas_bp.route('/<int:id>/detalle')
+@login_required
+def detalle(id):
+    caja = Caja.query.get_or_404(id)
+    return render_template('cajas/detalle.html', caja=caja)
