@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response
 from flask_login import login_required, current_user
 from app import db
-from app.models import Abono, Cliente, Credito
+from app.models import Abono, Cliente, Credito, CreditoVenta
 from app.forms import AbonoForm
 from app.decorators import cobrador_required
 from app.utils import registrar_movimiento_caja, calcular_comision
@@ -48,8 +48,7 @@ def crear():
         db.session.commit()
 
         # Generar comisión si aplica
-        comision = calcular_comision(abono.monto)
-        # (lógica para guardar comisión puede ir aquí)
+        comision = calcular_comision(abono.monto, current_user.id)
 
         # Generar PDF para compartir
         pdf_bytes = generar_pdf_abono(abono)
@@ -59,3 +58,43 @@ def crear():
         return response
 
     return render_template('abonos/crear.html', form=form, clientes=clientes)
+
+@abonos_bp.route('/detalle/<int:id>')
+@login_required
+@cobrador_required
+def detalle(id):
+    abono = Abono.query.get_or_404(id)
+    return render_template('abonos/detalle.html', abono=abono)
+
+@abonos_bp.route('/pdf/<int:id>')
+@login_required
+def pdf(id):
+    abono = Abono.query.get_or_404(id)
+    pdf_bytes = generar_pdf_abono(abono)
+    
+    response = make_response(pdf_bytes)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'inline; filename=abono_{abono.id}.pdf'
+    
+    return response
+
+@abonos_bp.route('/cargar-ventas/<int:cliente_id>')
+@login_required
+@cobrador_required
+def cargar_ventas(cliente_id):
+    # Cargar ventas a crédito con saldo pendiente
+    ventas = Venta.query.filter(
+        Venta.cliente_id == cliente_id,
+        Venta.tipo == 'credito',
+        Venta.saldo_pendiente > 0
+    ).all()
+    
+    # Preparar datos para la respuesta JSON
+    ventas_json = []
+    for v in ventas:
+        ventas_json.append({
+            'id': v.id,
+            'texto': f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.2f}"
+        })
+    
+    return jsonify(ventas_json)
