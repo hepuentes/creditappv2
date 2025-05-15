@@ -142,7 +142,8 @@
                     </thead>
                     <tbody>
                         {% if usuario.ventas %}
-                            {% for venta in usuario.ventas|sort(attribute='fecha', reverse=True)[:5] %}
+                            {% set ventas_recientes = usuario.ventas|sort(attribute='fecha', reverse=True) %}
+{% for venta in ventas_recientes[:5] %}
                             <tr>
                                 <td>{{ venta.id }}</td>
                                 <td>{{ venta.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
