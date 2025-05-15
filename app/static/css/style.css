@@ -26,6 +26,67 @@ body {
     min-height: 100vh;
 }
 
+/* Mejoras para el menú lateral */
+#content.expanded {
+  width: 100%;
+  margin-left: 0;
+}
+
+/* Asegurar que el botón hamburguesa siempre sea visible */
+.navbar-toggler {
+  display: block !important;
+  z-index: 2000;
+}
+
+/* Para dispositivos móviles */
+@media (max-width: 767.98px) {
+  .navbar-toggler {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+  }
+}
+
+/* Mejoras adicionales */
+.form-text {
+  font-size: 0.85rem;
+}
+
+.form-control.is-invalid, .form-select.is-invalid {
+  background-position: right calc(0.375em + 0.55rem) center;
+}
+
+.numeric-only::-webkit-inner-spin-button, 
+.numeric-only::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+.numeric-only {
+  -moz-appearance: textfield;
+}
+
+/* Estilos para tarjetas en el dashboard */
+.card-dashboard .card-icon {
+  font-size: 2.5rem;
+  margin-bottom: 15px;
+}
+
+.card-dashboard .card-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.card-dashboard .card-label {
+  font-size: 1rem;
+  color: #6c757d;
+}
+
+/* Botones de acción más compactos en tablas */
+.btn-group .btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
 /* Sidebar Styles */
 .sidebar {
     min-width: var(--sidebar-width);
