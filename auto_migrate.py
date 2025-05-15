@@ -1,6 +1,7 @@
 # auto_migrate.py
 import os
 import shutil
+import datetime 
 import sqlalchemy
 from sqlalchemy import text, inspect
 from app import create_app, db
