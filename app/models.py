@@ -75,12 +75,17 @@ class Venta(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
+    # Añadir esta línea:
+    vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     total = db.Column(db.Integer, nullable=False)
     tipo = db.Column(db.String(20), nullable=False)  # 'contado' o 'credito'
     saldo_pendiente = db.Column(db.Integer, nullable=True)  # sólo para crédito
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # relaciones...
+    # relación:
+    vendedor = db.relationship('Usuario', foreign_keys=[vendedor_id], backref='ventas_realizadas')
+    
+    # relacion
     productos = db.relationship('DetalleVenta', backref='venta', lazy=True, cascade='all, delete-orphan')
 
 
