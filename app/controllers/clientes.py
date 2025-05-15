@@ -79,7 +79,7 @@ def detalle(id):
     # Recopilar abonos a través de las ventas
     abonos = []
     for venta in ventas:
-        if hasattr(venta, 'abonos'):
+        if hasattr(venta, 'abonos') and venta.abonos:
             abonos.extend(venta.abonos)
             
     return render_template(
