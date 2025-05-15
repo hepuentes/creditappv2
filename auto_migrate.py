@@ -73,6 +73,23 @@ with app.app_context():
             print("La tabla 'cajas' no existe. Será creada al ejecutar db.create_all().")
     except Exception as e:
         print(f"Error al reparar la tabla 'cajas': {e}")
+
+    # verifica la tabla 'cajas', agrega esto
+try:
+    print("Verificando tabla 'movimiento_caja'...")
+    if table_exists('movimiento_caja'):
+        columns = get_columns('movimiento_caja')
+        
+        with db.engine.begin() as connection:
+            # Verificar si falta la columna 'abono_id'
+            if 'abono_id' not in columns:
+                print("La columna 'abono_id' no existe en la tabla 'movimiento_caja'. Agregando...")
+                connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN abono_id INTEGER REFERENCES abonos(id) ON DELETE SET NULL"))
+                print("Columna 'abono_id' agregada.")
+    else:
+        print("La tabla 'movimiento_caja' no existe. Será creada al ejecutar db.create_all().")
+except Exception as e:
+    print(f"Error al reparar la tabla 'movimiento_caja': {e}")
     
     # Paso 3: Intentar aplicar el esquema completo de la base de datos
     try:
