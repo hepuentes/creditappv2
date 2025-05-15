@@ -1,19 +1,23 @@
 // main.js
 document.addEventListener('DOMContentLoaded', () => {
-  // Corrección para el botón hamburguesa - este es el código nuevo
+  // Corrección para el botón hamburguesa
   const sidebarToggleBtns = document.querySelectorAll('#sidebarCollapse, .navbar-toggler');
   const sidebar = document.getElementById('sidebar');
   const mainContent = document.getElementById('content');
   
-  sidebarToggleBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      sidebar.classList.toggle('active');
-      mainContent.classList.toggle('expanded');
-      
-      // Esta línea asegura que el botón hamburguesa permanezca visible
-      document.querySelector('.navbar-toggler').style.display = 'block';
+  if (sidebarToggleBtns.length > 0 && sidebar && mainContent) {
+    sidebarToggleBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        sidebar.classList.toggle('active');
+        mainContent.classList.toggle('expanded');
+        
+        // Esta línea asegura que el botón hamburguesa permanezca visible
+        if (document.querySelector('.navbar-toggler')) {
+          document.querySelector('.navbar-toggler').style.display = 'block';
+        }
+      });
     });
-  });
+  }
 
   // Cerrar menú al hacer clic en un enlace en pantallas pequeñas
   const sidebarLinks = document.querySelectorAll('#sidebar a');
