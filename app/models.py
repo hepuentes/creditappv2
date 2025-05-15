@@ -131,10 +131,30 @@ class Caja(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(100), nullable=False)
-    saldo_inicial = db.Column(db.Integer, nullable=False, default=0)  # Cambiado a entero
+    tipo = db.Column(db.String(50), nullable=False)  # Agregar este campo
+    saldo_inicial = db.Column(db.Integer, nullable=False, default=0)
+    saldo_actual = db.Column(db.Integer, nullable=False, default=0)
     fecha_apertura = db.Column(db.DateTime, default=datetime.utcnow)
 
     movimientos = db.relationship('MovimientoCaja', backref='caja', lazy=True, cascade='all, delete-orphan')
+
+
+class MovimientoCaja(db.Model):
+    __tablename__ = 'movimiento_caja'
+
+    id = db.Column(db.Integer, primary_key=True)
+    caja_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=False)
+    tipo = db.Column(db.String(20), nullable=False)  # 'ingreso' o 'egreso' o 'transferencia'
+    monto = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    fecha = db.Column(db.DateTime, default=datetime.utcnow)
+    descripcion = db.Column(db.String(200), nullable=True)
+    
+    # relación 
+    abono_id = db.Column(db.Integer, db.ForeignKey('abonos.id'), nullable=True)
+    abono = db.relationship('Abono', backref='movimiento', foreign_keys=[abono_id])
+
+    def __repr__(self):
+        return f"<MovimientoCaja #{self.id} Tipo:{self.tipo} Monto:{self.monto}>"
 
 
 # CreditoVenta
@@ -202,27 +222,7 @@ class Configuracion(db.Model):
     min_password = db.Column(db.Integer, nullable=False, default=6)
 
 
-class MovimientoCaja(db.Model):
-    __tablename__ = 'movimiento_caja'
-
-    id = db.Column(db.Integer, primary_key=True)
-    caja_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=False)
-    tipo = db.Column(db.String(20), nullable=False)  # 'ingreso' o 'egreso' o 'transferencia'
-    monto = db.Column(db.Integer, nullable=False)  # Cambiado a entero
-    fecha = db.Column(db.DateTime, default=datetime.utcnow)
-    descripcion = db.Column(db.String(200), nullable=True)
-    # Eliminamos la relación incorrecta que causa conflictos
-    # abonos = db.relationship('Abono', backref='credito', lazy=True)
-    
-    # Podemos agregar una relación correcta si es necesario:
-    # abono_id = db.Column(db.Integer, db.ForeignKey('abonos.id'), nullable=True)
-    # abono = db.relationship('Abono', backref='movimiento', foreign_keys=[abono_id])
-
-    def __repr__(self):
-        return f"<MovimientoCaja #{self.id} Tipo:{self.tipo} Monto:{self.monto}>"
-
-
-# Falta definir la clase Producto
+#clase Producto
 class Producto(db.Model):
     __tablename__ = 'productos'
 
