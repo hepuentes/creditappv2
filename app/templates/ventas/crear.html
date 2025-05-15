@@ -1,25 +1,285 @@
 {% extends 'base.html' %}
+
+{% block title %}Nueva Venta - CreditApp{% endblock %}
+
 {% block content %}
-<h2>Nueva Venta</h2>
-<form method="POST">
-  {{ form.hidden_tag() }}
-  <div class="mb-3">
-    {{ form.cliente.label }} {{ form.cliente(class='form-select') }}
-  </div>
-  <div class="mb-3">
-    {{ form.caja.label }} {{ form.caja(class='form-select') }}
-  </div>
-  <h4>Selecciona Productos</h4>
-  <div class="row">
-    {% for prod in productos %}
-      <div class="col-md-4 mb-2 producto-item" data-id="{{ prod.id }}" data-precio="{{ prod.precio_venta }}">
-        <div class="card p-2">
-          <h5 class="card-title">{{ prod.nombre }}</h5>
-          <p class="card-text">Stock: {{ prod.stock }} | ${{ prod.precio_venta }}</p>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Nueva Venta</h1>
+        <div>
+            <a href="{{ url_for('ventas.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
         </div>
-      </div>
-    {% endfor %}
-  </div>
-  <button type="submit" class="btn btn-success">Confirmar Venta</button>
-</form>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Datos de la Venta</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="ventaForm">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                {{ form.cliente.label(class="form-label") }}
+                                {% if form.cliente.errors %}
+                                    {{ form.cliente(class="form-select is-invalid") }}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.cliente.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    {{ form.cliente(class="form-select") }}
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                {{ form.caja.label(class="form-label") }}
+                                {% if form.caja.errors %}
+                                    {{ form.caja(class="form-select is-invalid") }}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.caja.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    {{ form.caja(class="form-select") }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            {{ form.tipo.label(class="form-label") }}
+                            {% if form.tipo.errors %}
+                                {{ form.tipo(class="form-select is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.tipo.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.tipo(class="form-select") }}
+                            {% endif %}
+                        </div>
+                        
+                        {{ form.productos(id="productos_json") }}
+                        
+                        <!-- Tabla de productos seleccionados -->
+                        <div class="table-responsive mt-4">
+                            <table class="table table-striped" id="tabla-productos">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Cantidad</th>
+                                        <th>Código</th>
+                                        <th>Producto</th>
+                                        <th>Precio</th>
+                                        <th>Subtotal</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Aquí se agregarán los productos seleccionados -->
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <th colspan="4" class="text-end">Total:</th>
+                                        <th id="total-venta">$0</th>
+                                        <th></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        
+                        <div class="d-flex justify-content-end mt-4">
+                            <a href="{{ url_for('ventas.index') }}" class="btn btn-secondary me-2">Cancelar</a>
+                            <button type="submit" class="btn btn-success" id="btnConfirmar">
+                                <i class="fas fa-check"></i> Confirmar Venta
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Productos Disponibles</h5>
+                    <div class="input-group mt-2">
+                        <input type="text" class="form-control" id="buscar-producto" placeholder="Buscar producto...">
+                        <button class="btn btn-outline-primary" type="button" id="btn-buscar">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
+                    <div class="row m-2" id="productos-container">
+                        {% for prod in productos %}
+                          <div class="col-12 mb-2 producto-item" data-id="{{ prod.id }}" data-nombre="{{ prod.nombre }}" data-precio="{{ prod.precio_venta }}" data-stock="{{ prod.stock }}">
+                            <div class="card p-2">
+                              <div class="d-flex justify-content-between">
+                                <div>
+                                  <h6 class="card-title mb-0">{{ prod.nombre }}</h6>
+                                  <small class="text-muted">{{ prod.codigo }}</small>
+                                </div>
+                                <div class="text-end">
+                                  <span class="badge bg-primary">{{ "${:,}".format(int(prod.precio_venta)) }}</span><br>
+                                  <small class="text-muted">Stock: {{ prod.stock }}</small>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Variables globales para almacenar datos
+        let productosSeleccionados = [];
+        
+        // Elementos del DOM
+        const productosContainer = document.getElementById('productos-container');
+        const tablaProductos = document.getElementById('tabla-productos').getElementsByTagName('tbody')[0];
+        const productosJsonInput = document.getElementById('productos_json');
+        const totalVenta = document.getElementById('total-venta');
+        const buscarInput = document.getElementById('buscar-producto');
+        const ventaForm = document.getElementById('ventaForm');
+        
+        // Evento para agregar productos al hacer clic
+        productosContainer.addEventListener('click', function(e) {
+            const item = e.target.closest('.producto-item');
+            if (item) {
+                const id = parseInt(item.dataset.id);
+                const nombre = item.dataset.nombre;
+                const precio = parseFloat(item.dataset.precio);
+                const stock = parseInt(item.dataset.stock);
+                
+                // Verificar si ya existe en la lista
+                const productoExistente = productosSeleccionados.find(p => p.id === id);
+                
+                if (productoExistente) {
+                    // Si ya existe, incrementar cantidad si hay stock disponible
+                    if (productoExistente.cantidad < stock) {
+                        productoExistente.cantidad++;
+                        actualizarTabla();
+                    } else {
+                        alert('No hay más stock disponible para este producto');
+                    }
+                } else {
+                    // Si no existe, agregarlo
+                    if (stock > 0) {
+                        productosSeleccionados.push({
+                            id: id,
+                            nombre: nombre,
+                            precio: precio,
+                            cantidad: 1
+                        });
+                        actualizarTabla();
+                    } else {
+                        alert('Este producto no tiene stock disponible');
+                    }
+                }
+            }
+        });
+        
+        // Función para actualizar la tabla de productos seleccionados
+        function actualizarTabla() {
+            // Limpiar tabla
+            tablaProductos.innerHTML = '';
+            
+            // Agregar cada producto a la tabla
+            productosSeleccionados.forEach((producto, index) => {
+                const subtotal = producto.precio * producto.cantidad;
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <input type="number" class="form-control form-control-sm cantidad-input" 
+                               value="${producto.cantidad}" min="1" 
+                               data-index="${index}">
+                    </td>
+                    <td>${producto.id}</td>
+                    <td>${producto.nombre}</td>
+                    <td>${producto.precio.toLocaleString('es-CO')}</td>
+                    <td>${subtotal.toLocaleString('es-CO')}</td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-danger eliminar-btn" data-index="${index}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                
+                tablaProductos.appendChild(tr);
+            });
+            
+            // Actualizar el total
+            const total = productosSeleccionados.reduce((acc, prod) => acc + (prod.precio * prod.cantidad), 0);
+            totalVenta.textContent = `$${total.toLocaleString('es-CO')}`;
+            
+            // Actualizar campo oculto con datos JSON
+            productosJsonInput.value = JSON.stringify(productosSeleccionados);
+            
+            // Agregar eventos a los nuevos elementos
+            agregarEventosTabla();
+        }
+        
+        // Agregar eventos a los elementos de la tabla
+        function agregarEventosTabla() {
+            // Evento para cambiar cantidad
+            document.querySelectorAll('.cantidad-input').forEach(input => {
+                input.addEventListener('change', function() {
+                    const index = parseInt(this.dataset.index);
+                    const nuevaCantidad = parseInt(this.value);
+                    
+                    if (nuevaCantidad > 0) {
+                        productosSeleccionados[index].cantidad = nuevaCantidad;
+                        actualizarTabla();
+                    }
+                });
+            });
+            
+            // Evento para eliminar producto
+            document.querySelectorAll('.eliminar-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const index = parseInt(this.dataset.index);
+                    productosSeleccionados.splice(index, 1);
+                    actualizarTabla();
+                });
+            });
+        }
+        
+        // Buscador de productos
+        buscarInput.addEventListener('input', function() {
+            const busqueda = this.value.toLowerCase();
+            document.querySelectorAll('.producto-item').forEach(item => {
+                const nombre = item.dataset.nombre.toLowerCase();
+                if (nombre.includes(busqueda)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+        
+        // Validar formulario antes de enviar
+        ventaForm.addEventListener('submit', function(e) {
+            if (productosSeleccionados.length === 0) {
+                e.preventDefault();
+                alert('Debe seleccionar al menos un producto para crear la venta');
+            }
+        });
+    });
+</script>
 {% endblock %}
