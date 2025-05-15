@@ -18,15 +18,15 @@
             <form method="GET" action="{{ url_for('creditos.index') }}" class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">Cliente</label>
-                    <input type="text" class="form-control" name="busqueda" placeholder="Buscar por cliente..." value="{{ busqueda }}">
+                    <input type="text" class="form-control" name="busqueda" placeholder="Buscar por cliente..." value="{{ busqueda|default('') }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Desde</label>
-                    <input type="date" class="form-control" name="desde" value="{{ desde }}">
+                    <input type="date" class="form-control" name="desde" value="{{ desde|default('') }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Hasta</label>
-                    <input type="date" class="form-control" name="hasta" value="{{ hasta }}">
+                    <input type="date" class="form-control" name="hasta" value="{{ hasta|default('') }}">
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <button type="submit" class="btn btn-primary w-100">
@@ -50,7 +50,7 @@
         <div class="col-md-3">
             <div class="card bg-primary text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,}".format(int(total_creditos)) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(total_creditos|default(0)) }}</h3>
                     <p class="mb-0">Valor Total</p>
                 </div>
             </div>
@@ -58,7 +58,7 @@
         <div class="col-md-3">
             <div class="card bg-success text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,}".format(int(total_creditos - total_pendiente)) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format((total_creditos|default(0) - total_pendiente|default(0))) }}</h3>
                     <p class="mb-0">Total Abonado</p>
                 </div>
             </div>
@@ -66,7 +66,7 @@
         <div class="col-md-3">
             <div class="card bg-danger text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,}".format(int(total_pendiente)) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(total_pendiente|default(0)) }}</h3>
                     <p class="mb-0">Saldo Pendiente</p>
                 </div>
             </div>
@@ -104,8 +104,8 @@
                                     </a>
                                 </td>
                                 <td>{{ credito.vendedor.nombre }}</td>
-                                <td>{{ "${:,}".format(int(credito.total)) }}</td>
-                                <td class="text-danger fw-bold">{{ "${:,}".format(int(credito.saldo_pendiente)) }}</td>
+                                <td>{{ "${:,}".format(credito.total|default(0)) }}</td>
+                                <td class="text-danger fw-bold">{{ "${:,}".format(credito.saldo_pendiente|default(0)) }}</td>
                                 <td>
                                     <div class="btn-group">
                                         <a href="{{ url_for('ventas.detalle', id=credito.id) }}" class="btn btn-sm btn-info" data-bs-toggle="tooltip" title="Ver Detalle">
