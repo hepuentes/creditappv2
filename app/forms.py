@@ -1,7 +1,8 @@
 from flask_wtf import FlaskForm
 from wtforms import (
     StringField, PasswordField, BooleanField, SubmitField,
-    SelectField, FloatField, IntegerField, HiddenField
+    SelectField, FloatField, IntegerField, HiddenField, TextAreaField,
+    FileField
 )
 from wtforms.validators import (
     DataRequired, Email, Length, EqualTo,
@@ -42,7 +43,7 @@ class UsuarioForm(FlaskForm):
     )
     rol = SelectField(
         'Rol',
-        choices=[('admin','Admin'),('vendedor','Vendedor'),('cobrador','Cobrador')],
+        choices=[('administrador','Administrador'),('vendedor','Vendedor'),('cobrador','Cobrador')],
         validators=[DataRequired()]
     )
     activo = BooleanField('Activo', default=True)
@@ -52,8 +53,10 @@ class UsuarioForm(FlaskForm):
 # --- Formulario de Clientes ---
 class ClienteForm(FlaskForm):
     nombre = StringField('Nombre', validators=[DataRequired()])
-    direccion = StringField('Dirección', validators=[Optional(), Length(max=200)])
+    cedula = StringField('Cédula/NIT', validators=[DataRequired()])
     telefono = StringField('Teléfono', validators=[Optional(), Length(max=20)])
+    email = StringField('Email', validators=[Optional(), Email(message='Email inválido')])
+    direccion = StringField('Dirección', validators=[Optional(), Length(max=200)])
     submit = SubmitField('Guardar Cliente')
 
 
@@ -62,9 +65,11 @@ class ProductoForm(FlaskForm):
     nombre = StringField('Nombre', validators=[DataRequired()])
     codigo = StringField('Código', validators=[DataRequired()])
     descripcion = StringField('Descripción', validators=[Optional(), Length(max=200)])
-    precio_venta = FloatField('Precio de Venta', validators=[DataRequired(), NumberRange(min=0)])
     precio_compra = FloatField('Precio de Compra', validators=[Optional(), NumberRange(min=0)])
+    precio_venta = FloatField('Precio de Venta', validators=[DataRequired(), NumberRange(min=0)])
     stock = IntegerField('Stock', validators=[DataRequired(), NumberRange(min=0)])
+    stock_minimo = IntegerField('Stock Mínimo', validators=[DataRequired(), NumberRange(min=0)])
+    unidad = StringField('Unidad', validators=[Optional()])
     submit = SubmitField('Guardar Producto')
 
 
@@ -84,11 +89,12 @@ class VentaForm(FlaskForm):
 
 # --- Formulario de Abonos ---
 class AbonoForm(FlaskForm):
-    cliente = SelectField('Cliente', coerce=int, validators=[DataRequired()])
+    cliente_id = SelectField('Cliente', coerce=int, validators=[DataRequired()])
     tipo_credito = SelectField('Tipo de Crédito', choices=[('credito', 'Crédito Directo'), ('venta', 'Venta a Crédito')], validators=[DataRequired()])
-    credito = SelectField('Crédito', coerce=int, validators=[DataRequired()])
+    venta_id = SelectField('Venta/Crédito', coerce=int, validators=[DataRequired()])
     monto = FloatField('Monto', validators=[DataRequired(), NumberRange(min=0.01)])
-    caja = SelectField('Caja', coerce=int, validators=[DataRequired()])
+    caja_id = SelectField('Caja', coerce=int, validators=[DataRequired()])
+    notas = TextAreaField('Notas', validators=[Optional(), Length(max=500)])
     submit = SubmitField('Registrar Abono')
 
 
@@ -99,6 +105,19 @@ class CreditoForm(FlaskForm):
     plazo = IntegerField('Plazo (días)', validators=[DataRequired(), NumberRange(min=1)])
     tasa = FloatField('Tasa (%)', validators=[DataRequired(), NumberRange(min=0)])
     submit = SubmitField('Registrar Crédito')
+
+
+# --- Formulario de Cajas ---
+class CajaForm(FlaskForm):
+    nombre = StringField('Nombre', validators=[DataRequired(), Length(max=100)])
+    tipo = SelectField('Tipo', choices=[
+        ('efectivo', 'Efectivo'),
+        ('nequi', 'Nequi'),
+        ('daviplata', 'Daviplata'),
+        ('transferencia', 'Transferencia Bancaria')
+    ], validators=[DataRequired()])
+    saldo_inicial = FloatField('Saldo Inicial', validators=[DataRequired(), NumberRange(min=0)])
+    submit = SubmitField('Crear Caja')
 
 
 # --- Formulario de Movimientos de Caja ---
@@ -120,8 +139,12 @@ class MovimientoCajaForm(FlaskForm):
 
 # --- Formulario de Configuración ---
 class ConfiguracionForm(FlaskForm):
-    iva = FloatField('IVA (%)', validators=[DataRequired(), NumberRange(min=0, max=100)])
+    nombre_empresa = StringField('Nombre de la Empresa', validators=[DataRequired(), Length(max=100)])
+    direccion = StringField('Dirección', validators=[Optional(), Length(max=200)])
+    telefono = StringField('Teléfono', validators=[Optional(), Length(max=20)])
+    logo = FileField('Logo de la Empresa')
     moneda = StringField('Símbolo de Moneda', validators=[DataRequired(), Length(max=5)])
+    iva = FloatField('IVA (%)', validators=[DataRequired(), NumberRange(min=0, max=100)])
     porcentaje_comision = FloatField(
         'Comisión (%)',
         validators=[DataRequired(), NumberRange(min=0, max=100)]
@@ -130,7 +153,9 @@ class ConfiguracionForm(FlaskForm):
         'Periodo de Comisión',
         choices=[('quincenal','Quincenal'),('mensual','Mensual')]
     )
+    min_password = IntegerField('Tamaño Mínimo de Contraseña', validators=[DataRequired(), NumberRange(min=4, max=20)])
     submit = SubmitField('Guardar Configuración')
+
 
 # --- Formulario de Reportes de Comisiones ---
 class ReporteComisionesForm(FlaskForm):
