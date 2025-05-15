@@ -18,15 +18,15 @@
             <form method="GET" action="{{ url_for('abonos.index') }}" class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">Cliente</label>
-                    <input type="text" class="form-control" name="busqueda" placeholder="Buscar por cliente..." value="{{ busqueda }}">
+                    <input type="text" class="form-control" name="busqueda" placeholder="Buscar por cliente..." value="{{ busqueda|default('') }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Desde</label>
-                    <input type="date" class="form-control" name="desde" value="{{ desde }}">
+                    <input type="date" class="form-control" name="desde" value="{{ desde|default('') }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Hasta</label>
-                    <input type="date" class="form-control" name="hasta" value="{{ hasta }}">
+                    <input type="date" class="form-control" name="hasta" value="{{ hasta|default('') }}">
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <button type="submit" class="btn btn-primary w-100">
@@ -50,7 +50,7 @@
         <div class="col-md-6">
             <div class="card bg-success text-white h-100">
                 <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,}".format(int(total_abonos)) }}</h3>
+                    <h3 class="mb-0">{{ "${:,}".format(total_abonos|default(0)) }}</h3>
                     <p class="mb-0">Monto Total</p>
                 </div>
             </div>
@@ -92,7 +92,7 @@
                                         #{{ abono.venta_id }}
                                     </a>
                                 </td>
-                                <td>{{ "${:,}".format(int(abono.monto)) }}</td>
+                                <td>{{ "${:,}".format(abono.monto|default(0)) }}</td>
                                 <td>{{ abono.cobrador.nombre }}</td>
                                 <td>
                                     <div class="btn-group">
