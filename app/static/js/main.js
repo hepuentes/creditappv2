@@ -3,11 +3,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // Corrección para el botón hamburguesa - este es el código nuevo
   const sidebarToggleBtns = document.querySelectorAll('#sidebarCollapse, .navbar-toggler');
   const sidebar = document.getElementById('sidebar');
+  const mainContent = document.getElementById('content');
   
   sidebarToggleBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       sidebar.classList.toggle('active');
-      document.body.classList.toggle('sidebar-open');
+      mainContent.classList.toggle('expanded');
+      
+      // Esta línea asegura que el botón hamburguesa permanezca visible
+      document.querySelector('.navbar-toggler').style.display = 'block';
     });
   });
 
@@ -30,14 +34,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Código original para productos
-  document.querySelectorAll('.producto-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const id = item.dataset.id;
-      const precio = item.dataset.precio;
-      console.log(`Agregar producto ${id} - $${precio}`);
+  // Código para productos
+  const productosItems = document.querySelectorAll('.producto-item');
+  if (productosItems.length > 0) {
+    productosItems.forEach(item => {
+      item.addEventListener('click', () => {
+        const id = item.dataset.id;
+        const precio = item.dataset.precio;
+        console.log(`Agregar producto ${id} - $${precio}`);
+      });
     });
-  });
+  }
+
+  // Tooltips de Bootstrap
+  const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+  if (tooltipTriggerList.length > 0) {
+    [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+  }
+
+  // Auto-close alerts después de 5 segundos
+  setTimeout(function() {
+    const alerts = document.querySelectorAll('.alert');
+    alerts.forEach(alert => {
+      if (bootstrap && bootstrap.Alert) {
+        const bsAlert = new bootstrap.Alert(alert);
+        bsAlert.close();
+      }
+    });
+  }, 5000);
 });
 
 // ---------- Código jQuery original - no modificar ----------
