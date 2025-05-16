@@ -144,3 +144,20 @@ def generate_qr_for_whatsapp(url):
     img_str = buffered.getvalue()
     
     return img_str
+
+# Funciones para compartir PDFs públicamente
+def get_venta_pdf_public_url(venta_id):
+    """Genera una URL pública para el PDF de venta"""
+    from flask import url_for
+    from app.controllers.public import generar_token
+    
+    token = generar_token(venta_id, 'venta')
+    return url_for('public.venta_pdf', id=venta_id, token=token, _external=True)
+
+def get_abono_pdf_public_url(abono_id):
+    """Genera una URL pública para el PDF de abono"""
+    from flask import url_for
+    from app.controllers.public import generar_token
+    
+    token = generar_token(abono_id, 'abono')
+    return url_for('public.abono_pdf', id=abono_id, token=token, _external=True)
