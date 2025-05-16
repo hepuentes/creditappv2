@@ -115,20 +115,32 @@ class Abono(db.Model):
     __tablename__ = 'abonos'
 
     id = db.Column(db.Integer, primary_key=True)
+    venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=True)  # Columna añadida
     credito_id = db.Column(db.Integer, db.ForeignKey('creditos.id'), nullable=True)
     credito_venta_id = db.Column(db.Integer, db.ForeignKey('creditos_venta.id'), nullable=True)
-    monto = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    monto = db.Column(db.Integer, nullable=False)
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Otros campos existentes...
     cobrador_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     caja_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=True)
+    notas = db.Column(db.Text, nullable=True)  # Asegúrate de que este campo exista también
     
-    # Asegurarse de que al menos uno de los tipos de crédito no sea nulo
+    # Modificar la restricción para incluir venta_id
     __table_args__ = (
-        db.CheckConstraint('credito_id IS NOT NULL OR credito_venta_id IS NOT NULL', 
-                           name='check_credito_reference'),
+        db.CheckConstraint('credito_id IS NOT NULL OR credito_venta_id IS NOT NULL OR venta_id IS NOT NULL', 
+                           name='check_credito_or_venta_reference'),
     )
+    
+    # Relaciones existentes - asegúrate de que estén correctamente definidas
+    venta = db.relationship('Venta', foreign_keys=[venta_id], backref='abonos_relacionados')
+
+# Añadir una propiedad para compatibilidad
+    @property
+    def cliente(self):
+        if hasattr(self, 'venta') and self.venta and hasattr(self.venta, 'cliente'):
+            return self.venta.cliente
+        return None
 
 
 class Caja(db.Model):
