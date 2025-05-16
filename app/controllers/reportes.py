@@ -30,18 +30,30 @@ def comisiones():
 
     # Si se envía el formulario
     if form.validate_on_submit():
-        fecha_inicio = datetime.strptime(form.fecha_inicio.data, '%Y-%m-%d')
-        fecha_fin = datetime.strptime(form.fecha_fin.data, '%Y-%m-%d')
-        usuario_id = form.usuario_id.data if form.usuario_id.data > 0 else None
+        try:
+            fecha_inicio = datetime.strptime(form.fecha_inicio.data, '%Y-%m-%d')
+        except:
+            fecha_inicio = primer_dia_mes
+            
+        try:
+            fecha_fin = datetime.strptime(form.fecha_fin.data, '%Y-%m-%d')
+        except:
+            fecha_fin = ultimo_dia_mes
+            
+        usuario_id = form.usuario_id.data
 
-        # Consulta de comisiones
-        query = Comision.query.filter(
-            Comision.fecha_generacion >= fecha_inicio,
-            Comision.fecha_generacion <= fecha_fin
-        )
-
-        if usuario_id:
-            query = query.filter_by(usuario_id=usuario_id)
+        # MODIFICADO: Tratar 0 como "Todos"
+        if usuario_id == 0:
+            query = Comision.query.filter(
+                Comision.fecha_generacion >= fecha_inicio,
+                Comision.fecha_generacion <= fecha_fin
+            )
+        else:
+            query = Comision.query.filter(
+                Comision.fecha_generacion >= fecha_inicio,
+                Comision.fecha_generacion <= fecha_fin,
+                Comision.usuario_id == usuario_id
+            )
 
         comisiones = query.all()
 
@@ -96,7 +108,7 @@ def exportar_csv_comisiones(comisiones, fecha_inicio, fecha_fin):
     for comision in comisiones:
         writer.writerow([
             comision.id,
-            comision.fecha_generacion.strftime('%d/%m/%Y %H:%M'),  # Cambiado de fecha a fecha_generacion
+            comision.fecha_generacion.strftime('%d/%m/%Y %H:%M'),
             comision.usuario.nombre,
             comision.monto_base,
             f"{comision.porcentaje}%",
