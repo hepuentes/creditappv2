@@ -11,5 +11,8 @@ def generar_pdf_credito(credito):
     pdf.cell(0, 10, txt=f"Tasa: {credito.tasa}%", ln=1)
     pdf.cell(0, 10, txt=f"Fecha: {credito.fecha.strftime('%d/%m/%Y')}", ln=1)
     
-    # Corrección: Convertir a bytes, no bytesarray
-    return pdf.output(dest='S').encode('latin1')
+    # Corrección para manejar los bytes correctamente
+    pdf_bytes = pdf.output(dest='S')
+    if isinstance(pdf_bytes, str):
+        return pdf_bytes.encode('latin1')
+    return bytes(pdf_bytes)  # Convertir bytearray a bytes
