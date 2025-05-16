@@ -8,8 +8,18 @@ document.addEventListener('DOMContentLoaded', () => {
   if (sidebarToggleBtns.length > 0 && sidebar && mainContent) {
     sidebarToggleBtns.forEach(btn => {
       btn.addEventListener('click', () => {
+        // Modificar para alternar la clase 'active' en lugar de añadirla/eliminarla
         sidebar.classList.toggle('active');
-        mainContent.classList.toggle('expanded');
+        
+        // Importante: No cambiar completamente la visibilidad
+        // Solo ajustar el margen/ancho para el colapso
+        if (sidebar.classList.contains('active')) {
+          mainContent.style.marginLeft = '0';
+          mainContent.style.width = '100%';
+        } else {
+          mainContent.style.marginLeft = '250px';
+          mainContent.style.width = 'calc(100% - 250px)';
+        }
         
         // Esta línea asegura que el botón hamburguesa permanezca visible
         if (document.querySelector('.navbar-toggler')) {
