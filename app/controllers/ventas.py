@@ -1,17 +1,18 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response
+from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response, current_app
 from flask_login import login_required, current_user
 from app import db
-from app.models import Venta, DetalleVenta, Producto, Cliente, Caja # Asegúrate que todos los modelos necesarios estén importados
+from app.models import Venta, DetalleVenta, Producto, Cliente, Caja
 from app.forms import VentaForm
-from app.decorators import vendedor_required # o el decorador apropiado si todos pueden ver detalles
+from app.decorators import vendedor_required, admin_required, cobrador_required
 from app.pdf.venta import generar_pdf_venta
 from datetime import datetime
+import traceback
 
 ventas_bp = Blueprint('ventas', __name__, url_prefix='/ventas')
 
 @ventas_bp.route('/')
 @login_required
-@vendedor_required # Ajusta el decorador si otros roles pueden ver el índice de ventas
+@vendedor_required
 def index():
     # Obtener parámetros de filtro
     busqueda = request.args.get('busqueda', '')
@@ -45,14 +46,13 @@ def index():
         query = query.filter(Venta.tipo == tipo_filtro)
 
     if estado_filtro:
-        query = query.filter(Venta.estado == estado_filtro) # Asumiendo que tienes un campo 'estado' en el modelo Venta
+        query = query.filter(Venta.estado == estado_filtro)
 
     ventas = query.order_by(Venta.fecha.desc()).all()
     
-    # Calcular totales para el resumen (esto podría necesitar ajustes si 'estado' no existe o los filtros cambian mucho los resultados)
+    # Calcular totales para el resumen
     total_ventas_monto = sum(v.total for v in ventas)
     ventas_a_credito_count = sum(1 for v in ventas if v.tipo == 'credito')
-    # Asegúrate de que `saldo_pendiente` sea un atributo numérico
     saldo_pendiente_total = sum(v.saldo_pendiente for v in ventas if v.tipo == 'credito' and isinstance(v.saldo_pendiente, (int, float)))
 
 
@@ -89,16 +89,12 @@ def crear():
             nueva_venta = Venta(
                 cliente_id=form.cliente.data,
                 vendedor_id=current_user.id,
-                caja_id=form.caja.data, # Asegúrate que el form y modelo tengan caja_id
-                tipo=request.form.get('tipo_venta'), # Se obtiene del select manual
+                caja_id=form.caja.data, 
+                tipo=request.form.get('tipo_venta'),
                 fecha=datetime.utcnow(),
                 total=0, # Se calculará después
                 saldo_pendiente=0 # Se calculará después
             )
-            
-            # Si es crédito, podrías querer guardar frecuencia y cuotas aquí
-            # frecuencia = request.form.get('frecuencia_pago')
-            # num_cuotas = request.form.get('numero_cuotas')
 
             db.session.add(nueva_venta)
             db.session.flush() # Para obtener el ID de nueva_venta antes del commit
@@ -107,7 +103,7 @@ def crear():
             
             # Procesar productos_json (debe venir del frontend)
             import json
-            productos_seleccionados_json = request.form.get('productos_json_hidden') # Nombre del campo oculto que debe enviar el JSON
+            productos_seleccionados_json = request.form.get('productos_json_hidden')
             
             if not productos_seleccionados_json:
                 flash('No se seleccionaron productos.', 'danger')
@@ -130,7 +126,7 @@ def crear():
                     venta_id=nueva_venta.id,
                     producto_id=item['id'],
                     cantidad=item['cantidad'],
-                    precio_unitario=item['precio_venta'], # Usar precio_venta del producto o el que se envíe
+                    precio_unitario=item['precio_venta'],
                     subtotal=item['cantidad'] * item['precio_venta']
                 )
                 db.session.add(detalle)
@@ -141,70 +137,49 @@ def crear():
             nueva_venta.total = total_venta_calculado
             if nueva_venta.tipo == 'credito':
                 nueva_venta.saldo_pendiente = total_venta_calculado
-                nueva_venta.estado = 'pendiente' # Asumiendo que tienes un campo estado
+                nueva_venta.estado = 'pendiente'
             else: # Contado
                 nueva_venta.saldo_pendiente = 0
-                nueva_venta.estado = 'pagado' # Asumiendo que tienes un campo estado
-                # Registrar movimiento de caja para venta de contado
-                # from app.utils import registrar_movimiento_caja (si no está ya importado)
-                # registrar_movimiento_caja(caja_id=nueva_venta.caja_id, tipo='entrada', monto=nueva_venta.total, concepto=f"Venta de contado #{nueva_venta.id}", venta_id=nueva_venta.id)
-
+                nueva_venta.estado = 'pagado'
 
             db.session.commit()
             flash(f'Venta #{nueva_venta.id} creada exitosamente!', 'success')
             
-            # Después de commit, generar PDF
-            # pdf_bytes = generar_pdf_venta(nueva_venta)
-            # response = make_response(pdf_bytes)
-            # response.headers['Content-Type'] = 'application/pdf'
-            # response.headers['Content-Disposition'] = f'inline; filename=venta_{nueva_venta.id}.pdf'
-            # return response
-            return redirect(url_for('ventas.detalle', id=nueva_venta.id)) # Redirigir al detalle de la venta
+            return redirect(url_for('ventas.detalle', id=nueva_venta.id))
 
         except Exception as e:
             db.session.rollback()
             flash(f'Error al crear la venta: {str(e)}', 'danger')
-            current_app.logger.error(f"Error creando venta: {e}") # Log del error
-            current_app.logger.error(traceback.format_exc()) # Log completo del traceback
+            current_app.logger.error(f"Error creando venta: {e}")
+            current_app.logger.error(traceback.format_exc())
 
     # Si el método es GET o el formulario no es válido
     return render_template('ventas/crear.html', form=form, productos=productos_disponibles, titulo='Nueva Venta')
 
-# NUEVA RUTA Y FUNCIÓN PARA 'ventas.detalle'
-@ventas_bp.route('/<int:id>/detalle') # o simplemente '/<int:id>' si prefieres /ventas/1
+@ventas_bp.route('/<int:id>/detalle')
 @login_required
-# @vendedor_required # O el decorador que corresponda para ver detalles
 def detalle(id):
     venta = Venta.query.get_or_404(id)
-    # Asumo que tienes una plantilla llamada 'detalle.html' en la carpeta 'templates/ventas/'
-    # Si tu plantilla se llama 'detalle_venta.html', cambia el nombre abajo.
     return render_template('ventas/detalle.html', venta=venta)
 
 
 @ventas_bp.route('/<int:id>/pdf')
 @login_required
-# @vendedor_required # O el decorador apropiado
 def pdf(id):
     venta = Venta.query.get_or_404(id)
     try:
         pdf_bytes = generar_pdf_venta(venta)
         response = make_response(pdf_bytes)
         response.headers['Content-Type'] = 'application/pdf'
-        # Cambiar a 'attachment' si quieres que se descargue directamente
         response.headers['Content-Disposition'] = f'inline; filename=venta_{venta.id}.pdf'
         return response
     except Exception as e:
         flash(f"Error generando el PDF: {str(e)}", "danger")
-        # Loguear el error también es buena idea
-        # current_app.logger.error(f"Error PDF venta {id}: {e}")
         return redirect(url_for('ventas.detalle', id=id))
 
-# Debes tener también una ruta y función para eliminar si es necesario,
-# y para editar si aplica.
-# Ejemplo de eliminar (asegúrate de tener el modelo Venta y el manejo de stock correcto):
 @ventas_bp.route('/<int:id>/eliminar', methods=['POST'])
 @login_required
-@admin_required # O el rol que pueda eliminar ventas
+@admin_required
 def eliminar(id):
     venta = Venta.query.get_or_404(id)
     try:
@@ -215,9 +190,7 @@ def eliminar(id):
                 producto.stock += detalle.cantidad
         
         # Eliminar detalles y luego la venta
-        # Si tienes cascade='all, delete-orphan' en la relación, esto podría ser automático
         DetalleVenta.query.filter_by(venta_id=id).delete()
-        # También considera eliminar abonos o movimientos de caja asociados si la lógica lo requiere
         
         db.session.delete(venta)
         db.session.commit()
