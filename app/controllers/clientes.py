@@ -78,7 +78,12 @@ def eliminar(id):
 @login_required
 def detalle(id):
     cliente = Cliente.query.get_or_404(id)
-    # Usamos las relaciones definidas en el modelo
+    
+    # Si es una petición para el modal
+    if request.args.get('modal') == 'true':
+        return render_template('clientes/detalle_modal.html', cliente=cliente)
+    
+    # Vista normal
     ventas = cliente.ventas
     creditos = cliente.creditos
     
