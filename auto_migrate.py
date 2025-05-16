@@ -87,6 +87,12 @@ with app.app_context():
                     connection.execute(text("ALTER TABLE abonos ADD COLUMN venta_id INTEGER"))
                     connection.execute(text("ALTER TABLE abonos ADD CONSTRAINT fk_abonos_venta_id FOREIGN KEY (venta_id) REFERENCES ventas(id)"))
                     print("Columna 'venta_id' agregada.")
+                
+                # Verificar si falta la columna 'notas'
+                if 'notas' not in columns:
+                    print("La columna 'notas' no existe en la tabla 'abonos'. Agregando...")
+                    connection.execute(text("ALTER TABLE abonos ADD COLUMN notas TEXT"))
+                    print("Columna 'notas' agregada.")
         else:
             print("La tabla 'abonos' no existe. Será creada al ejecutar db.create_all().")
     except Exception as e:
