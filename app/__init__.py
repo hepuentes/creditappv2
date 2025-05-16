@@ -24,9 +24,11 @@ def create_app():
     # Asegurar que existan los directorios necesarios
     static_dir = app.static_folder
     css_dir = os.path.join(static_dir, 'css')
+    js_dir = os.path.join(static_dir, 'js')
     uploads_dir = os.path.join(static_dir, 'uploads')
+    img_dir = os.path.join(static_dir, 'img')  
     
-    for directory in [static_dir, css_dir, uploads_dir]:
+    for directory in [static_dir, css_dir, js_dir, uploads_dir, img_dir]:  
         if not os.path.exists(directory):
             os.makedirs(directory)
     
