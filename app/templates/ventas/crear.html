@@ -24,59 +24,38 @@
                         {{ form.hidden_tag() }}
                         
                         <div class="row mb-3">
-                            <div class="col-md-6 mb-3 mb-md-0">
-                                {{ form.cliente.label(class="form-label") }}
-                                {% if form.cliente.errors %}
-                                    {{ form.cliente(class="form-select is-invalid") }}
-                                    <div class="invalid-feedback">
-                                        {% for error in form.cliente.errors %}
-                                            {{ error }}
-                                        {% endfor %}
-                                    </div>
-                                {% else %}
-                                    {{ form.cliente(class="form-select") }}
-                                {% endif %}
-                                <div class="mt-2 d-md-none">
-                                    <input type="text" class="form-control" id="buscar-cliente-mobile" placeholder="Buscar cliente...">
-                                </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Cliente</label>
+                                {{ form.cliente(class="form-select") }}
                             </div>
                             
-                            <div class="col-md-6">
-                                {{ form.caja.label(class="form-label") }}
-                                {% if form.caja.errors %}
-                                    {{ form.caja(class="form-select is-invalid") }}
-                                    <div class="invalid-feedback">
-                                        {% for error in form.caja.errors %}
-                                            {{ error }}
-                                        {% endfor %}
-                                    </div>
-                                {% else %}
-                                    {{ form.caja(class="form-select") }}
-                                {% endif %}
-                            </div>
-                        </div>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="tipo_venta" class="form-label">Tipo de Venta</label>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Tipo de Venta</label>
                                 <select class="form-select" id="tipo_venta" name="tipo_venta">
                                     <option value="contado" selected>Contado</option>
                                     <option value="credito">Crédito</option>
                                 </select>
                             </div>
                         </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Caja</label>
+                                {{ form.caja(class="form-select") }}
+                            </div>
+                        </div>
 
                         <div id="seccion_credito" style="display: none;" class="row mb-3">
-                            <div class="col-md-6 mb-3 mb-md-0">
-                                <label class="form-label" for="frecuencia_pago">Frecuencia de pago</label>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Frecuencia de pago</label>
                                 <select class="form-select" id="frecuencia_pago" name="frecuencia_pago">
                                     <option value="semanal">Semanal</option>
                                     <option value="quincenal">Quincenal</option>
                                     <option value="mensual" selected>Mensual</option>
                                 </select>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="numero_cuotas">Número de cuotas</label>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Número de cuotas</label>
                                 <input type="number" class="form-control" id="numero_cuotas" name="numero_cuotas" min="1" value="1">
                             </div>
                         </div>
@@ -184,22 +163,7 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Buscador de Clientes
-    const clienteSelect = document.getElementById('cliente-select') || document.querySelector('select[name="cliente"]');
-    const buscarClienteInput = document.getElementById('buscar-cliente-mobile');
-    
-    if (buscarClienteInput && clienteSelect) {
-        buscarClienteInput.addEventListener('input', function() {
-            const busqueda = this.value.toLowerCase().trim();
-            Array.from(clienteSelect.options).forEach(option => {
-                if (option.value === "") return; // No ocultar la opción "Seleccione un cliente" si existe
-                const textoOpcion = option.text.toLowerCase();
-                option.style.display = textoOpcion.includes(busqueda) ? '' : 'none';
-            });
-        });
-    }
-
-    // Lógica de la Venta
+    // Variables y elementos del DOM
     let productosSeleccionadosParaVenta = [];
     const productosDisponiblesContainer = document.getElementById('productos-disponibles-container');
     const tablaProductosVentaBody = document.getElementById('tabla-productos').getElementsByTagName('tbody')[0];
@@ -213,6 +177,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const divResumenCredito = document.getElementById('resumen_credito');
     const selectFrecuenciaPago = document.getElementById('frecuencia_pago');
     const inputNumeroCuotas = document.getElementById('numero_cuotas');
+    const clienteSelect = document.querySelector('select[name="cliente"]');
 
     // Formateador de moneda
     const currencyFormatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -309,8 +274,8 @@ document.addEventListener('DOMContentLoaded', function() {
                            value="${producto.cantidad}" min="1" max="${producto.stockMax}" 
                            data-index="${index}">
                 </td>
-                <td>${currencyFormatter.format(producto.precio)}</td>
-                <td>${currencyFormatter.format(subtotal)}</td>
+                <td class="text-end">${currencyFormatter.format(producto.precio)}</td>
+                <td class="text-end">${currencyFormatter.format(subtotal)}</td>
                 <td>
                     <button type="button" class="btn btn-sm btn-danger eliminar-item-venta" data-index="${index}">
                         <i class="fas fa-trash"></i>
@@ -325,7 +290,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
             id: p.id,
             cantidad: p.cantidad,
-            precio_venta: p.precio // Precio al que se vende
+            precio_venta: p.precio
         }));
         inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
         
@@ -342,14 +307,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 if (isNaN(nuevaCantidad) || nuevaCantidad < 1) {
                     nuevaCantidad = 1;
+                    this.value = 1;
                 }
                 if (nuevaCantidad > producto.stockMax) {
                     nuevaCantidad = producto.stockMax;
+                    this.value = producto.stockMax;
                     alert('La cantidad no puede exceder el stock disponible.');
                 }
                 
                 producto.cantidad = nuevaCantidad;
-                this.value = nuevaCantidad;
                 renderTablaProductosSeleccionados();
             });
         });
@@ -381,6 +347,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Debe seleccionar al menos un producto para crear la venta.');
                 return;
             }
+            
+            // Verificar que exista cliente seleccionado
+            if (!clienteSelect.value) {
+                e.preventDefault();
+                alert('Debe seleccionar un cliente para crear la venta.');
+                return;
+            }
+            
             // Asegurar que el JSON esté actualizado justo antes del submit
             const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
                 id: p.id,
