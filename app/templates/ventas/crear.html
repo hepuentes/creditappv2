@@ -21,26 +21,23 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" id="ventaForm">
-                        {{ form.hidden_tag() }} {# CSRF token y otros campos ocultos de WTForms #}
+                        {{ form.hidden_tag() }}
                         
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-6 mb-3 mb-md-0">
                                 {{ form.cliente.label(class="form-label") }}
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="buscar-cliente-input" placeholder="Buscar cliente...">
-                                    {# El botón de búsqueda es opcional si el filtro es en tiempo real #}
-                                </div>
-                                <div class="mt-2">
-                                    {% if form.cliente.errors %}
-                                        {{ form.cliente(class="form-select is-invalid", id="cliente-select") }}
-                                        <div class="invalid-feedback">
-                                            {% for error in form.cliente.errors %}
-                                                {{ error }}
-                                            {% endfor %}
-                                        </div>
-                                    {% else %}
-                                        {{ form.cliente(class="form-select", id="cliente-select") }}
-                                    {% endif %}
+                                {% if form.cliente.errors %}
+                                    {{ form.cliente(class="form-select is-invalid") }}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.cliente.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    {{ form.cliente(class="form-select") }}
+                                {% endif %}
+                                <div class="mt-2 d-md-none">
+                                    <input type="text" class="form-control" id="buscar-cliente-mobile" placeholder="Buscar cliente...">
                                 </div>
                             </div>
                             
@@ -70,7 +67,7 @@
                         </div>
 
                         <div id="seccion_credito" style="display: none;" class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-6 mb-3 mb-md-0">
                                 <label class="form-label" for="frecuencia_pago">Frecuencia de pago</label>
                                 <select class="form-select" id="frecuencia_pago" name="frecuencia_pago">
                                     <option value="semanal">Semanal</option>
@@ -84,15 +81,6 @@
                             </div>
                         </div>
                         
-                        {# Este es el campo oculto que WTForms podría generar si 'productos' es un HiddenField en tu VentaForm.
-                           Si no lo es, crearemos uno manualmente para el JSON.
-                           Lo importante es que el JavaScript ponga el JSON en un campo que se envíe.
-                           Si `form.productos` ya es el HiddenField que espera el nombre `productos_json_hidden`
-                           en el backend (revisar tu VentaForm en forms.py), esto está bien.
-                           Si no, necesitamos un input hidden con name="productos_json_hidden".
-                           Por seguridad, añadiré uno explícito y comentaré el de WTForms si no está configurado para esto.
-                        #}
-                        {# {{ form.productos(id="productos_json_wtform", class="d-none") }} #}
                         <input type="hidden" name="productos_json_hidden" id="productos_json_hidden_input">
                         
                         <div class="table-responsive mt-4">
@@ -108,12 +96,12 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {# Productos seleccionados se añaden aquí con JavaScript #}
+                                    <!-- Productos seleccionados se añaden aquí con JavaScript -->
                                 </tbody>
                                 <tfoot>
                                     <tr>
                                         <th colspan="4" class="text-end">Total:</th>
-                                        <th id="total-venta">$0.00</th>
+                                        <th id="total-venta">$0</th>
                                         <th></th>
                                     </tr>
                                 </tfoot>
@@ -154,7 +142,6 @@
                     <h5 class="mb-0">Productos Disponibles</h5>
                     <div class="input-group mt-2">
                         <input type="text" class="form-control" id="buscar-producto-disponible" placeholder="Buscar por nombre o código...">
-                        {# Botón de búsqueda es opcional si el filtro es en tiempo real #}
                     </div>
                 </div>
                 <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
@@ -183,7 +170,7 @@
                             {% endfor %}
                         {% else %}
                             <div class="col-12">
-                                <p class="text-center p-3">No hay productos disponibles o que coincidan con la búsqueda.</p>
+                                <p class="text-center p-3">No hay productos disponibles.</p>
                             </div>
                         {% endif %}
                     </div>
@@ -198,8 +185,9 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Buscador de Clientes
-    const buscarClienteInput = document.getElementById('buscar-cliente-input');
-    const clienteSelect = document.getElementById('cliente-select');
+    const clienteSelect = document.getElementById('cliente-select') || document.querySelector('select[name="cliente"]');
+    const buscarClienteInput = document.getElementById('buscar-cliente-mobile');
+    
     if (buscarClienteInput && clienteSelect) {
         buscarClienteInput.addEventListener('input', function() {
             const busqueda = this.value.toLowerCase().trim();
@@ -208,9 +196,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const textoOpcion = option.text.toLowerCase();
                 option.style.display = textoOpcion.includes(busqueda) ? '' : 'none';
             });
-            if (busqueda === '') { // Mostrar todas las opciones si la búsqueda está vacía
-                Array.from(clienteSelect.options).forEach(option => option.style.display = '');
-            }
         });
     }
 
@@ -218,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let productosSeleccionadosParaVenta = [];
     const productosDisponiblesContainer = document.getElementById('productos-disponibles-container');
     const tablaProductosVentaBody = document.getElementById('tabla-productos').getElementsByTagName('tbody')[0];
-    const inputJsonProductosOculto = document.getElementById('productos_json_hidden_input'); // Usamos el input hidden explícito
+    const inputJsonProductosOculto = document.getElementById('productos_json_hidden_input');
     const displayTotalVenta = document.getElementById('total-venta');
     const inputBuscarProductoDisponible = document.getElementById('buscar-producto-disponible');
     const formularioVenta = document.getElementById('ventaForm');
@@ -237,7 +222,7 @@ document.addEventListener('DOMContentLoaded', function() {
         selectTipoVenta.addEventListener('change', function() {
             const esCredito = this.value === 'credito';
             divSeccionCredito.style.display = esCredito ? 'flex' : 'none';
-            divResumenCredito.style.display = 'none'; // Ocultar resumen hasta que se actualice
+            divResumenCredito.style.display = esCredito && productosSeleccionadosParaVenta.length > 0 ? 'block' : 'none';
             if (esCredito) {
                 actualizarResumenVentaCredito();
             }
@@ -276,7 +261,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (selectFrecuenciaPago) selectFrecuenciaPago.addEventListener('change', actualizarResumenVentaCredito);
     if (inputNumeroCuotas) inputNumeroCuotas.addEventListener('input', actualizarResumenVentaCredito);
     if (clienteSelect) clienteSelect.addEventListener('change', actualizarResumenVentaCredito);
-
 
     if (productosDisponiblesContainer) {
         productosDisponiblesContainer.addEventListener('click', function(e) {
@@ -341,7 +325,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
             id: p.id,
             cantidad: p.cantidad,
-            precio_venta: p.precio // Asegúrate que este sea el precio al que se vende
+            precio_venta: p.precio // Precio al que se vende
         }));
         inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
         
@@ -410,7 +394,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Llamada inicial si el tipo de venta es crédito al cargar
     if (selectTipoVenta && selectTipoVenta.value === 'credito') {
         divSeccionCredito.style.display = 'flex';
-        // No es necesario llamar a actualizarResumenVentaCredito() aquí si no hay productos aún
     }
 });
 </script>
