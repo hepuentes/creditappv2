@@ -79,12 +79,6 @@
                             </a>
                         </div>
                         {% endif %}
-                        {# La condición original era venta.abonos|length == 0.
-                           Si la venta es de tipo 'contado', no tendrá abonos,
-                           pero podría no ser eliminable si tiene otros impactos.
-                           Ajusta esta lógica según tus reglas de negocio para eliminar ventas.
-                           Por ahora, mantengo la lógica original de abonos.
-                        #}
                         {% if venta.abonos|length == 0 %}
                         <div class="col-md-4 mb-2">
                             <button type="button" class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#eliminarModal">
@@ -92,17 +86,14 @@
                             </button>
                         </div>
                         {% endif %}
-                    </div> {# Cierre del <div class="row"> de acciones #}
+                    </div>
 
-                    <!-- Opciones de compartir por WhatsApp -->
-<div class="mt-3">
-    <p class="mb-2">Compartir por WhatsApp:</p>
-    <div class="text-center mt-2">
-        <a href="{{ url_for('ventas.compartir', id=venta.id) }}" target="_blank" class="btn btn-success">
-            <i class="fab fa-whatsapp"></i> Compartir PDF
-        </a>
-    </div>
-</div>
+                    <div class="mt-3">
+                        <p class="mb-2">Compartir por WhatsApp:</p>
+                        <div class="text-center mt-2">
+                            <a href="{{ url_for('ventas.compartir', id=venta.id) }}" target="_blank" class="btn btn-success">
+                                <i class="fab fa-whatsapp"></i> Compartir PDF
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -170,17 +161,17 @@
                     </thead>
                     <tbody>
                         {% if venta.abonos %}
-                            {% for abono in venta.abonos|sort(attribute='fecha', reverse=True) %}
+                            {% for abono_item in venta.abonos|sort(attribute='fecha', reverse=True) %} {# Cambiado 'abono' a 'abono_item' para evitar conflicto con variable de contexto en detalle_abono.html si se incluyera #}
                             <tr>
-                                <td>{{ abono.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
-                                <td>{{ "${:,}".format(abono.monto) }}</td>
-                                <td>{{ abono.cobrador.nombre }}</td>
-                                <td>{{ abono.notas or 'N/A' }}</td>
+                                <td>{{ abono_item.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td>{{ "${:,}".format(abono_item.monto) }}</td>
+                                <td>{{ abono_item.cobrador.nombre }}</td>
+                                <td>{{ abono_item.notas or 'N/A' }}</td>
                                 <td>
-                                    <a href="{{ url_for('abonos.detalle', id=abono.id) }}" class="btn btn-sm btn-info">
+                                    <a href="{{ url_for('abonos.detalle', id=abono_item.id) }}" class="btn btn-sm btn-info">
                                         <i class="fas fa-eye"></i>
                                     </a>
-                                    <a href="{{ url_for('abonos.pdf', id=abono.id) }}" target="_blank" class="btn btn-sm btn-secondary">
+                                    <a href="{{ url_for('abonos.pdf', id=abono_item.id) }}" target="_blank" class="btn btn-sm btn-secondary">
                                         <i class="fas fa-file-pdf"></i>
                                     </a>
                                 </td>
