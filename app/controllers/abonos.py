@@ -109,3 +109,15 @@ def cargar_ventas(cliente_id):
         })
     
     return jsonify(ventas_json)
+
+@abonos_bp.route('/<int:id>/share')
+@login_required
+def compartir(id):
+    from app.utils import get_abono_pdf_public_url
+    
+    abono = Abono.query.get_or_404(id)
+    public_url = get_abono_pdf_public_url(abono.id)
+    
+    # Devolver la URL formateada para WhatsApp
+    whatsapp_url = f"https://wa.me/?text=Consulte%20y%20descargue%20su%20comprobante%20de%20abono%20aquí:%20{public_url}"
+    return redirect(whatsapp_url)
