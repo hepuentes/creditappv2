@@ -77,51 +77,60 @@ def crear():
     clientes = Cliente.query.order_by(Cliente.nombre).all()
     form.cliente.choices = [(c.id, f"{c.nombre} - {c.cedula}") for c in clientes]
     
-    # Filtrar cajas activas o según el criterio que necesites
-    cajas = Caja.query.all() # Podrías querer filtrar por cajas abiertas o del usuario, etc.
+    cajas = Caja.query.all()
     form.caja.choices = [(c.id, c.nombre) for c in cajas]
     
     productos_disponibles = Producto.query.filter(Producto.stock > 0).order_by(Producto.nombre).all()
     
     if form.validate_on_submit():
         try:
+            tipo_venta = request.form.get('tipo_venta', 'contado')
+            
             # Crear la venta principal
             nueva_venta = Venta(
                 cliente_id=form.cliente.data,
                 vendedor_id=current_user.id,
-                caja_id=form.caja.data, 
-                tipo=request.form.get('tipo_venta'),
+                tipo=tipo_venta,
                 fecha=datetime.utcnow(),
-                total=0, # Se calculará después
-                saldo_pendiente=0 # Se calculará después
+                total=0,  # Se calculará después
+                saldo_pendiente=0  # Se calculará después
             )
-
-            db.session.add(nueva_venta)
-            db.session.flush() # Para obtener el ID de nueva_venta antes del commit
-
-            total_venta_calculado = 0
             
-            # Procesar productos_json (debe venir del frontend)
+            # CORRECCIÓN: Establecer estado según tipo de venta
+            if tipo_venta == 'contado':
+                nueva_venta.estado = 'pagado'
+            else:
+                nueva_venta.estado = 'pendiente'
+            
+            db.session.add(nueva_venta)
+            db.session.flush()  # Para obtener el ID antes del commit
+            
             import json
             productos_seleccionados_json = request.form.get('productos_json_hidden')
             
             if not productos_seleccionados_json:
                 flash('No se seleccionaron productos.', 'danger')
                 return render_template('ventas/crear.html', form=form, productos=productos_disponibles, titulo='Nueva Venta')
-
-            productos_seleccionados = json.loads(productos_seleccionados_json)
-
+            
+            try:
+                productos_seleccionados = json.loads(productos_seleccionados_json)
+            except json.JSONDecodeError:
+                flash('Error en el formato de productos seleccionados.', 'danger')
+                return render_template('ventas/crear.html', form=form, productos=productos_disponibles, titulo='Nueva Venta')
+            
             if not productos_seleccionados:
                 flash('La lista de productos está vacía.', 'danger')
                 return render_template('ventas/crear.html', form=form, productos=productos_disponibles, titulo='Nueva Venta')
-
+            
+            total_venta_calculado = 0
+            
             for item in productos_seleccionados:
                 producto_db = Producto.query.get(item['id'])
                 if not producto_db or producto_db.stock < item['cantidad']:
                     flash(f"Stock insuficiente para el producto {producto_db.nombre if producto_db else 'desconocido'}.", 'danger')
                     db.session.rollback()
                     return render_template('ventas/crear.html', form=form, productos=productos_disponibles, titulo='Nueva Venta')
-
+                
                 detalle = DetalleVenta(
                     venta_id=nueva_venta.id,
                     producto_id=item['id'],
@@ -135,25 +144,37 @@ def crear():
                 total_venta_calculado += detalle.subtotal
             
             nueva_venta.total = total_venta_calculado
-            if nueva_venta.tipo == 'credito':
+            
+            # Establecer el saldo pendiente según el tipo de venta
+            if tipo_venta == 'credito':
                 nueva_venta.saldo_pendiente = total_venta_calculado
-                nueva_venta.estado = 'pendiente'
-            else: # Contado
+            else:  # Contado
                 nueva_venta.saldo_pendiente = 0
-                nueva_venta.estado = 'pagado'
-
+            
+            # Registrar movimiento de caja para venta de contado
+            if tipo_venta == 'contado' and form.caja.data:
+                from app.utils import registrar_movimiento_caja
+                registrar_movimiento_caja(
+                    caja_id=form.caja.data,
+                    tipo='entrada',
+                    monto=total_venta_calculado,
+                    concepto=f"Venta de contado #{nueva_venta.id}",
+                    venta_id=nueva_venta.id
+                )
+            
             db.session.commit()
             flash(f'Venta #{nueva_venta.id} creada exitosamente!', 'success')
             
-            return redirect(url_for('ventas.detalle', id=nueva_venta.id))
-
+            # CORRECCIÓN: Redireccionar a la lista de ventas después de crear
+            return redirect(url_for('ventas.index'))
+            
         except Exception as e:
             db.session.rollback()
             flash(f'Error al crear la venta: {str(e)}', 'danger')
             current_app.logger.error(f"Error creando venta: {e}")
+            import traceback
             current_app.logger.error(traceback.format_exc())
-
-    # Si el método es GET o el formulario no es válido
+    
     return render_template('ventas/crear.html', form=form, productos=productos_disponibles, titulo='Nueva Venta')
 
 @ventas_bp.route('/<int:id>/detalle')
