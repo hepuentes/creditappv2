@@ -219,3 +219,15 @@ def eliminar(id):
         flash(f'Error al eliminar la venta: {str(e)}', 'danger')
         current_app.logger.error(f"Error eliminando venta {id}: {e}")
     return redirect(url_for('ventas.index'))
+
+@ventas_bp.route('/<int:id>/share')
+@login_required
+def compartir(id):
+    from app.utils import get_venta_pdf_public_url
+    
+    venta = Venta.query.get_or_404(id)
+    public_url = get_venta_pdf_public_url(venta.id)
+    
+    # Devolver la URL formateada para WhatsApp
+    whatsapp_url = f"https://wa.me/?text=Consulte%20y%20descargue%20su%20factura%20aquí:%20{public_url}"
+    return redirect(whatsapp_url)
