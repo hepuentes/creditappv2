@@ -17,4 +17,9 @@ def generar_pdf_historial(cliente, ventas, creditos, abonos):
     pdf.cell(0, 10, txt="Abonos:", ln=1)
     for a in abonos:
         pdf.cell(0, 8, txt=f"- Abono #{a.id}: {a.monto}", ln=1)
-    return pdf.output(dest='S').encode('latin1')
+    
+    # Corregido: Asegurar que siempre devuelva bytes
+    output = pdf.output(dest='S')
+    if isinstance(output, str):
+        return output.encode('latin1')
+    return output
