@@ -63,7 +63,7 @@ class Cliente(db.Model):
     direccion = db.Column(db.String(200), nullable=True)
     fecha_registro = db.Column(db.DateTime, default=datetime.utcnow)
 
-    ventas = db.relationship('Venta', backref='cliente', lazy=True, cascade='all, delete-orphan')
+    ventas = db.relationship('Venta', back_populates='cliente', lazy=True, cascade='all, delete-orphan')
     creditos = db.relationship('Credito', backref='cliente', lazy=True, cascade='all, delete-orphan')
 
     def saldo_pendiente(self):
@@ -75,14 +75,14 @@ class Venta(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
-    vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)  # Cambiado a nullable=True para evitar problemas con ventas existentes
+    vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)  # Cambiado a nullable=True
     total = db.Column(db.Integer, nullable=False)
     tipo = db.Column(db.String(20), nullable=False)  # 'contado' o 'credito'
     saldo_pendiente = db.Column(db.Integer, nullable=True)  # sólo para crédito
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relaciones
-    cliente = db.relationship('Cliente', backref='ventas')
+    cliente = db.relationship('Cliente', back_populates='ventas')
     vendedor = db.relationship('Usuario', foreign_keys=[vendedor_id], backref='ventas_realizadas')
     detalles = db.relationship('DetalleVenta', backref='venta', lazy=True, cascade='all, delete-orphan')
     abonos = db.relationship('Abono', backref='venta', lazy=True, foreign_keys='Abono.venta_id')
