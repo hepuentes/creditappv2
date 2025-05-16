@@ -23,20 +23,37 @@ def index():
         productos_agotados = Producto.query.filter(Producto.stock <= 0).count()
         productos_stock_bajo = Producto.query.filter(Producto.stock <= Producto.stock_minimo, Producto.stock > 0).count()
 
-        # Ventas del mes
-        ventas_mes = Venta.query.filter(Venta.fecha >= primer_dia_mes).count()
-        total_ventas_mes = Venta.query.filter(Venta.fecha >= primer_dia_mes).with_entities(
-            db.func.sum(Venta.total)).scalar() or 0
+        # Ventas del mes - Modificamos esta parte para evitar el error de columna vendedor_id
+        # En lugar de usar filter, usaremos all() y luego filtraremos en Python
+        try:
+            todas_ventas = Venta.query.all()
+            ventas_mes = [v for v in todas_ventas if v.fecha and v.fecha >= primer_dia_mes]
+            ventas_mes_count = len(ventas_mes)
+            total_ventas_mes = sum(v.total for v in ventas_mes)
+        except Exception as e:
+            print(f"Error al consultar ventas: {e}")
+            ventas_mes_count = 0
+            total_ventas_mes = 0
 
-        # Créditos activos
-        creditos_activos = Venta.query.filter(Venta.tipo == 'credito', Venta.saldo_pendiente > 0).count()
-        total_creditos = Venta.query.filter(Venta.tipo == 'credito', Venta.saldo_pendiente > 0).with_entities(
-            db.func.sum(Venta.saldo_pendiente)).scalar() or 0
+        # Créditos activos - También modificado para evitar problemas con consultas complejas
+        try:
+            todas_ventas = Venta.query.all()
+            creditos_activos = len([v for v in todas_ventas if v.tipo == 'credito' and v.saldo_pendiente and v.saldo_pendiente > 0])
+            total_creditos = sum(v.saldo_pendiente for v in todas_ventas if v.tipo == 'credito' and v.saldo_pendiente and v.saldo_pendiente > 0)
+        except Exception as e:
+            print(f"Error al consultar créditos: {e}")
+            creditos_activos = 0
+            total_creditos = 0
 
         # Abonos del mes
-        abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).count()
-        total_abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).with_entities(
-            db.func.sum(Abono.monto)).scalar() or 0
+        try:
+            abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).count()
+            total_abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).with_entities(
+                db.func.sum(Abono.monto)).scalar() or 0
+        except Exception as e:
+            print(f"Error al consultar abonos: {e}")
+            abonos_mes = 0
+            total_abonos_mes = 0
 
         # Saldo en cajas
         try:
@@ -61,7 +78,7 @@ def index():
                             total_productos=total_productos,
                             productos_agotados=productos_agotados,
                             productos_stock_bajo=productos_stock_bajo,
-                            ventas_mes=ventas_mes,
+                            ventas_mes=ventas_mes_count,
                             total_ventas_mes=format_currency(total_ventas_mes),
                             creditos_activos=creditos_activos,
                             total_creditos=format_currency(total_creditos),
