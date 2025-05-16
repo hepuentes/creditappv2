@@ -7,6 +7,7 @@ from app.decorators import vendedor_required, admin_required, cobrador_required
 from app.pdf.venta import generar_pdf_venta
 from datetime import datetime
 import traceback
+import json
 
 ventas_bp = Blueprint('ventas', __name__, url_prefix='/ventas')
 
@@ -55,7 +56,6 @@ def index():
     ventas_a_credito_count = sum(1 for v in ventas if v.tipo == 'credito')
     saldo_pendiente_total = sum(v.saldo_pendiente for v in ventas if v.tipo == 'credito' and isinstance(v.saldo_pendiente, (int, float)))
 
-
     return render_template('ventas/index.html', 
                            ventas=ventas,
                            busqueda=busqueda,
@@ -98,14 +98,13 @@ def crear():
             
             # CORRECCIÓN: Establecer estado según tipo de venta
             if tipo_venta == 'contado':
-                nueva_venta.estado = 'pagado'
+                nueva_venta.estado = 'pagado'  # Corregido: ventas de contado son pagadas
             else:
                 nueva_venta.estado = 'pendiente'
             
             db.session.add(nueva_venta)
             db.session.flush()  # Para obtener el ID antes del commit
             
-            import json
             productos_seleccionados_json = request.form.get('productos_json_hidden')
             
             if not productos_seleccionados_json:
@@ -172,7 +171,6 @@ def crear():
             db.session.rollback()
             flash(f'Error al crear la venta: {str(e)}', 'danger')
             current_app.logger.error(f"Error creando venta: {e}")
-            import traceback
             current_app.logger.error(traceback.format_exc())
     
     return render_template('ventas/crear.html', form=form, productos=productos_disponibles, titulo='Nueva Venta')
