@@ -49,24 +49,35 @@ body {
   }
   
   .sidebar {
-    margin-left: -250px !important;
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    height: 100vh !important;
-    z-index: 1000 !important;
-    transition: all 0.3s !important;
-  }
-  
-  .sidebar.active {
-    margin-left: 0 !important;
-    transform: translateX(0) !important;
-  }
-  
-  #content {
-    width: 100% !important;
-    margin-left: 0 !important;
-  }
+    min-width: 250px;
+    max-width: 250px;
+    background: #343a40;
+    color: #fff;
+    transition: all 0.3s;
+    height: 100vh;
+    position: fixed;
+    z-index: 1000;
+    overflow-y: auto;
+    left: 0; /* Asegurar que siempre empiece desde la izquierda */
+}
+
+.sidebar.active {
+    margin-left: -250px;
+    /* No usar transform aquí, puede causar problemas */
+}
+
+#content {
+    width: calc(100% - 250px);
+    margin-left: 250px;
+    transition: all 0.3s;
+    min-height: 100vh;
+}
+
+#content.expanded {
+    width: 100%;
+    margin-left: 0;
+}
+4. Mejoras de U
 }
 
 /* Mejoras adicionales */
