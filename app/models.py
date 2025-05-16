@@ -85,7 +85,8 @@ class Venta(db.Model):
     cliente = db.relationship('Cliente', back_populates='ventas')
     vendedor = db.relationship('Usuario', foreign_keys=[vendedor_id], backref='ventas_realizadas')
     detalles = db.relationship('DetalleVenta', backref='venta', lazy=True, cascade='all, delete-orphan')
-    abonos = db.relationship('Abono', backref='venta', lazy=True, foreign_keys='Abono.venta_id')
+    # Corrección: Quitamos el backref para evitar el conflicto y usamos relación directa
+    abonos = db.relationship('Abono', foreign_keys='Abono.venta_id', lazy=True)
     productos = db.relationship('DetalleVenta', backref='venta', lazy=True, cascade='all, delete-orphan')
 
 
@@ -132,10 +133,12 @@ class Abono(db.Model):
                            name='check_credito_or_venta_reference'),
     )
     
-    # Relaciones existentes - asegúrate de que estén correctamente definidas
-    venta = db.relationship('Venta', foreign_keys=[venta_id], backref='abonos_relacionados')
+    # Corrección: Definimos la relación sin backref 
+    venta = db.relationship('Venta', foreign_keys=[venta_id])
+    cobrador = db.relationship('Usuario', foreign_keys=[cobrador_id], backref='abonos')
+    caja = db.relationship('Caja', foreign_keys=[caja_id])
 
-# Añadir una propiedad para compatibilidad
+    # Añadir una propiedad para compatibilidad
     @property
     def cliente(self):
         if hasattr(self, 'venta') and self.venta and hasattr(self.venta, 'cliente'):
