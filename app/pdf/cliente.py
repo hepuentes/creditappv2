@@ -18,5 +18,8 @@ def generar_pdf_historial(cliente, ventas, creditos, abonos):
     for a in abonos:
         pdf.cell(0, 8, txt=f"- Abono #{a.id}: {a.monto}", ln=1)
     
-    # Corrección: Convertir a bytes, no bytesarray
-    return pdf.output(dest='S').encode('latin1')
+    # Corrección para manejar los bytes correctamente
+    pdf_bytes = pdf.output(dest='S')
+    if isinstance(pdf_bytes, str):
+        return pdf_bytes.encode('latin1')
+    return bytes(pdf_bytes)  # Convertir bytearray a bytes
