@@ -84,10 +84,12 @@ class Venta(db.Model):
     # Relaciones
     cliente = db.relationship('Cliente', back_populates='ventas')
     vendedor = db.relationship('Usuario', foreign_keys=[vendedor_id], backref='ventas_realizadas')
+    # Relación con DetalleVenta
     detalles = db.relationship('DetalleVenta', backref='venta', lazy=True, cascade='all, delete-orphan')
-    # Corrección: Quitamos el backref para evitar el conflicto y usamos relación directa
+    # Relación con Abonos
     abonos = db.relationship('Abono', foreign_keys='Abono.venta_id', lazy=True)
-    productos = db.relationship('DetalleVenta', backref='venta', lazy=True, cascade='all, delete-orphan')
+    # Eliminar esta línea duplicada que causa el conflicto
+    # productos = db.relationship('DetalleVenta', backref='venta', lazy=True, cascade='all, delete-orphan')
 
 
 class Credito(db.Model):
