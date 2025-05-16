@@ -23,7 +23,7 @@
                     <form method="POST">
                         {{ form.hidden_tag() }}
 
-                        <!-- Búsqueda de cliente -->
+                        <!-- Búsqueda de cliente mejorada -->
                         <div class="mb-3">
                             <label class="form-label">Buscar Cliente</label>
                             <div class="input-group">
@@ -35,82 +35,61 @@
                         </div>
 
                         <div class="mb-3">
-                            {{ form.cliente_id.label(class="form-label") }}
-                            {% if form.cliente_id.errors %}
-                                {{ form.cliente_id(class="form-select is-invalid", id="cliente_select") }}
-                                <div class="invalid-feedback">
-                                    {% for error in form.cliente_id.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                {{ form.cliente_id(class="form-select", id="cliente_select") }}
-                            {% endif %}
+                            <label class="form-label">Cliente</label>
+                            <select class="form-select" id="cliente_select" name="cliente_id" required>
+                                <option value="" selected disabled>Seleccione un cliente</option>
+                                {% for cliente in clientes %}
+                                <option value="{{ cliente.id }}">{{ cliente.nombre }} - {{ cliente.cedula }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="invalid-feedback">
+                                Por favor seleccione un cliente.
+                            </div>
                         </div>
 
                         <div class="mb-3">
-                            {{ form.venta_id.label(class="form-label") }}
-                            {% if form.venta_id.errors %}
-                                {{ form.venta_id(class="form-select is-invalid", id="venta_select") }}
-                                <div class="invalid-feedback">
-                                    {% for error in form.venta_id.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                {{ form.venta_id(class="form-select", id="venta_select") }}
-                            {% endif %}
+                            <label class="form-label">Venta/Crédito</label>
+                            <select class="form-select" id="venta_select" name="venta_id" required>
+                                <option value="" selected disabled>Primero seleccione un cliente</option>
+                            </select>
+                            <div class="invalid-feedback">
+                                Por favor seleccione una venta.
+                            </div>
                         </div>
 
                         <div class="mb-3">
-                            {{ form.monto.label(class="form-label") }}
+                            <label class="form-label">Monto</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
-                                {% if form.monto.errors %}
-                                    {{ form.monto(class="form-control is-invalid", id="monto_input") }}
-                                    <div class="invalid-feedback">
-                                        {% for error in form.monto.errors %}
-                                            {{ error }}
-                                        {% endfor %}
-                                    </div>
-                                {% else %}
-                                    {{ form.monto(class="form-control", id="monto_input") }}
-                                {% endif %}
+                                <input type="number" class="form-control" id="monto_input" name="monto" required min="0.01" step="0.01">
+                                <div class="invalid-feedback">
+                                    Por favor ingrese un monto válido.
+                                </div>
                             </div>
                             <div class="form-text" id="saldo_info">Saldo pendiente: $0.00</div>
                         </div>
 
                         <div class="mb-3">
-                            {{ form.caja_id.label(class="form-label") }}
-                            {% if form.caja_id.errors %}
-                                {{ form.caja_id(class="form-select is-invalid") }}
-                                <div class="invalid-feedback">
-                                    {% for error in form.caja_id.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                {{ form.caja_id(class="form-select") }}
-                            {% endif %}
+                            <label class="form-label">Caja</label>
+                            <select class="form-select" id="caja_id" name="caja_id" required>
+                                <option value="" selected disabled>Seleccione una caja</option>
+                                {% for caja in form.caja_id.choices %}
+                                <option value="{{ caja[0] }}">{{ caja[1] }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="invalid-feedback">
+                                Por favor seleccione una caja.
+                            </div>
                         </div>
 
                         <div class="mb-3">
-                            {{ form.notas.label(class="form-label") }}
-                            {% if form.notas.errors %}
-                                {{ form.notas(class="form-control is-invalid", rows=3) }}
-                                <div class="invalid-feedback">
-                                    {% for error in form.notas.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                {{ form.notas(class="form-control", rows=3, placeholder="Observaciones adicionales...") }}
-                            {% endif %}
+                            <label class="form-label">Notas</label>
+                            <textarea class="form-control" id="notas" name="notas" rows="3" placeholder="Observaciones adicionales..."></textarea>
                         </div>
 
                         <div class="d-flex justify-content-end mt-4">
                             <a href="{{ url_for('abonos.index') }}" class="btn btn-secondary me-2">Cancelar</a>
-                            {{ form.submit(class="btn btn-success") }}
+                            <button type="submit" class="btn btn-success">Registrar Abono</button>
                         </div>
                     </form>
                 </div>
@@ -122,114 +101,114 @@
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const buscarClienteInput = document.getElementById('buscar-cliente-input');
-        const clienteSelect = document.getElementById('cliente_select');
-        const ventaSelect = document.getElementById('venta_select');
-        const montoInput = document.getElementById('monto_input');
-        const saldoInfo = document.getElementById('saldo_info');
-        const btnBuscarCliente = document.getElementById('btn-buscar-cliente');
+document.addEventListener('DOMContentLoaded', function() {
+    const buscarClienteInput = document.getElementById('buscar-cliente-input');
+    const clienteSelect = document.getElementById('cliente_select');
+    const ventaSelect = document.getElementById('venta_select');
+    const montoInput = document.getElementById('monto_input');
+    const saldoInfo = document.getElementById('saldo_info');
+    const btnBuscarCliente = document.getElementById('btn-buscar-cliente');
 
-        // Variable para almacenar el saldo pendiente de la venta seleccionada
-        let saldoPendiente = 0;
+    // Variable para almacenar el saldo pendiente de la venta seleccionada
+    let saldoPendiente = 0;
 
-        // Función para filtrar clientes
-        function filtrarClientes() {
-            const busqueda = buscarClienteInput.value.toLowerCase().trim();
-            Array.from(clienteSelect.options).forEach(option => {
-                if (option.value === "") return; // No ocultar la opción predeterminada
-                const textoOpcion = option.text.toLowerCase();
-                option.style.display = textoOpcion.includes(busqueda) ? '' : 'none';
-            });
-        }
+    // Función para filtrar clientes
+    function filtrarClientes() {
+        const busqueda = buscarClienteInput.value.toLowerCase().trim();
+        Array.from(clienteSelect.options).forEach(option => {
+            if (option.value === "") return; // No ocultar la opción predeterminada
+            const textoOpcion = option.text.toLowerCase();
+            option.style.display = textoOpcion.includes(busqueda) ? '' : 'none';
+        });
+    }
 
-        // Evento para buscar clientes al escribir
-        if (buscarClienteInput) {
-            buscarClienteInput.addEventListener('input', filtrarClientes);
-        }
+    // Evento para buscar clientes al escribir
+    if (buscarClienteInput) {
+        buscarClienteInput.addEventListener('input', filtrarClientes);
+    }
 
-        // Evento para el botón de búsqueda
-        if (btnBuscarCliente) {
-            btnBuscarCliente.addEventListener('click', filtrarClientes);
-        }
+    // Evento para el botón de búsqueda
+    if (btnBuscarCliente) {
+        btnBuscarCliente.addEventListener('click', filtrarClientes);
+    }
 
-        // Función para actualizar el saldo info
-        function actualizarSaldoInfo() {
-            const ventaOption = ventaSelect.options[ventaSelect.selectedIndex];
-            if (ventaOption && ventaOption.value) {
-                const texto = ventaOption.text;
-                const match = texto.match(/Saldo: \$([\d,]+\.\d+)/);
-                if (match) {
-                    saldoPendiente = parseFloat(match[1].replace(/,/g, ''));
-                    saldoInfo.textContent = `Saldo pendiente: $${saldoPendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    // Función para actualizar el saldo info
+    function actualizarSaldoInfo() {
+        const ventaOption = ventaSelect.options[ventaSelect.selectedIndex];
+        if (ventaOption && ventaOption.value) {
+            const texto = ventaOption.text;
+            const match = texto.match(/Saldo: \$([\d,]+\.\d+)/);
+            if (match) {
+                saldoPendiente = parseFloat(match[1].replace(/,/g, ''));
+                saldoInfo.textContent = `Saldo pendiente: $${saldoPendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
-                    // Establecer el valor máximo del monto
-                    montoInput.max = saldoPendiente;
+                // Establecer el valor máximo del monto
+                montoInput.max = saldoPendiente;
 
-                    // Si el monto actual es mayor al saldo, ajustarlo
-                    if (parseFloat(montoInput.value) > saldoPendiente) {
-                        montoInput.value = saldoPendiente;
-                    }
+                // Si el monto actual es mayor al saldo, ajustarlo
+                if (parseFloat(montoInput.value) > saldoPendiente) {
+                    montoInput.value = saldoPendiente;
                 }
             }
         }
+    }
 
-        // Actualizar ventas cuando cambia el cliente
-        if (clienteSelect) {
-            clienteSelect.addEventListener('change', function() {
-                const clienteId = this.value;
-                if (!clienteId) return;
+    // Actualizar ventas cuando cambia el cliente
+    if (clienteSelect) {
+        clienteSelect.addEventListener('change', function() {
+            const clienteId = this.value;
+            if (!clienteId) return;
 
-                // Limpiar el select de ventas
-                ventaSelect.innerHTML = '<option value="" selected disabled>Cargando ventas...</option>';
+            // Limpiar el select de ventas
+            ventaSelect.innerHTML = '<option value="" selected disabled>Cargando ventas...</option>';
 
-                // Cargar las ventas del cliente seleccionado
-                fetch(`/abonos/cargar-ventas/${clienteId}`)
-                    .then(response => response.json())
-                    .then(ventas => {
-                        ventaSelect.innerHTML = '';
+            // Cargar las ventas del cliente seleccionado
+            fetch(`/abonos/cargar-ventas/${clienteId}`)
+                .then(response => response.json())
+                .then(ventas => {
+                    ventaSelect.innerHTML = '';
 
-                        if (ventas.length === 0) {
-                            ventaSelect.innerHTML = '<option value="" selected disabled>No hay ventas pendientes</option>';
-                            return;
-                        }
+                    if (ventas.length === 0) {
+                        ventaSelect.innerHTML = '<option value="" selected disabled>No hay ventas pendientes</option>';
+                        return;
+                    }
 
-                        ventas.forEach(venta => {
-                            const option = document.createElement('option');
-                            option.value = venta.id;
-                            option.textContent = venta.texto;
-                            ventaSelect.appendChild(option);
-                        });
-
-                        // Actualizar la información de saldo
-                        actualizarSaldoInfo();
-                    })
-                    .catch(error => {
-                        console.error('Error al cargar ventas:', error);
-                        ventaSelect.innerHTML = '<option value="" selected disabled>Error al cargar ventas</option>';
+                    ventas.forEach(venta => {
+                        const option = document.createElement('option');
+                        option.value = venta.id;
+                        option.textContent = venta.texto;
+                        ventaSelect.appendChild(option);
                     });
-            });
-        }
 
-        // Actualizar saldo cuando cambia la venta
-        if (ventaSelect) {
-            ventaSelect.addEventListener('change', actualizarSaldoInfo);
-        }
+                    // Actualizar la información de saldo
+                    actualizarSaldoInfo();
+                })
+                .catch(error => {
+                    console.error('Error al cargar ventas:', error);
+                    ventaSelect.innerHTML = '<option value="" selected disabled>Error al cargar ventas</option>';
+                });
+        });
+    }
 
-        // Validar que el monto no exceda el saldo pendiente
-        if (montoInput) {
-            montoInput.addEventListener('input', function() {
-                const monto = parseFloat(this.value) || 0;
+    // Actualizar saldo cuando cambia la venta
+    if (ventaSelect) {
+        ventaSelect.addEventListener('change', actualizarSaldoInfo);
+    }
 
-                if (monto > saldoPendiente) {
-                    this.value = saldoPendiente;
-                    alert(`El monto no puede ser mayor al saldo pendiente ($${saldoPendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})})`);
-                }
-            });
-        }
+    // Validar que el monto no exceda el saldo pendiente
+    if (montoInput) {
+        montoInput.addEventListener('input', function() {
+            const monto = parseFloat(this.value) || 0;
 
-        // Inicializar la información de saldo
-        actualizarSaldoInfo();
-    });
+            if (monto > saldoPendiente) {
+                this.value = saldoPendiente;
+                alert(`El monto no puede ser mayor al saldo pendiente ($${saldoPendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})})`);
+            }
+        });
+    }
+
+    // Inicializar la información de saldo
+    actualizarSaldoInfo();
+});
 </script>
 {% endblock %}
