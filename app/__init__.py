@@ -55,6 +55,7 @@ def create_app():
     from app.controllers.usuarios import usuarios_bp
     from app.controllers.config import config_bp
     from app.controllers.reportes import reportes_bp
+    from app.controllers.public import public_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -67,6 +68,7 @@ def create_app():
     app.register_blueprint(usuarios_bp)
     app.register_blueprint(config_bp)
     app.register_blueprint(reportes_bp)
+    app.register_blueprint(public_bp)
     
     # Crear todas las tablas
     with app.app_context():
