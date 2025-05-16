@@ -75,7 +75,7 @@ class Venta(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
-    vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)  # Cambiado a nullable=True
+    vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     total = db.Column(db.Integer, nullable=False)
     tipo = db.Column(db.String(20), nullable=False)  # 'contado' o 'credito'
     saldo_pendiente = db.Column(db.Integer, nullable=True)  # sólo para crédito
@@ -84,12 +84,9 @@ class Venta(db.Model):
     # Relaciones
     cliente = db.relationship('Cliente', back_populates='ventas')
     vendedor = db.relationship('Usuario', foreign_keys=[vendedor_id], backref='ventas_realizadas')
-    # Relación con DetalleVenta
     detalles = db.relationship('DetalleVenta', backref='venta', lazy=True, cascade='all, delete-orphan')
-    # Relación con Abonos
-    abonos = db.relationship('Abono', foreign_keys='Abono.venta_id', lazy=True)
-    # Eliminar esta línea duplicada que causa el conflicto
-    # productos = db.relationship('DetalleVenta', backref='venta', lazy=True, cascade='all, delete-orphan')
+    # Usar back_populates en lugar de una relación unidireccional
+    abonos = db.relationship('Abono', back_populates='venta', foreign_keys='Abono.venta_id', lazy=True)
 
 
 class Credito(db.Model):
@@ -97,9 +94,9 @@ class Credito(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
-    monto = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    monto = db.Column(db.Integer, nullable=False)
     plazo = db.Column(db.Integer, nullable=False)
-    tasa = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    tasa = db.Column(db.Integer, nullable=False)
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
 
     # relación con abonos
@@ -118,29 +115,28 @@ class Abono(db.Model):
     __tablename__ = 'abonos'
 
     id = db.Column(db.Integer, primary_key=True)
-    venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=True)  # Columna añadida
+    venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=True)
     credito_id = db.Column(db.Integer, db.ForeignKey('creditos.id'), nullable=True)
     credito_venta_id = db.Column(db.Integer, db.ForeignKey('creditos_venta.id'), nullable=True)
     monto = db.Column(db.Integer, nullable=False)
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Otros campos existentes...
+    # Otros campos
     cobrador_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     caja_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=True)
-    notas = db.Column(db.Text, nullable=True)  # Asegúrate de que este campo exista también
+    notas = db.Column(db.Text, nullable=True)
     
-    # Modificar la restricción para incluir venta_id
+    # Restricción
     __table_args__ = (
         db.CheckConstraint('credito_id IS NOT NULL OR credito_venta_id IS NOT NULL OR venta_id IS NOT NULL', 
                            name='check_credito_or_venta_reference'),
     )
     
-    # Corrección: Definimos la relación sin backref 
-    venta = db.relationship('Venta', foreign_keys=[venta_id])
+    # Relación bidireccional con back_populates
+    venta = db.relationship('Venta', back_populates='abonos', foreign_keys=[venta_id])
     cobrador = db.relationship('Usuario', foreign_keys=[cobrador_id], backref='abonos')
     caja = db.relationship('Caja', foreign_keys=[caja_id])
 
-    # Añadir una propiedad para compatibilidad
     @property
     def cliente(self):
         if hasattr(self, 'venta') and self.venta and hasattr(self.venta, 'cliente'):
@@ -153,7 +149,7 @@ class Caja(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(100), nullable=False)
-    tipo = db.Column(db.String(50), nullable=False)  # Campo agregado
+    tipo = db.Column(db.String(50), nullable=False)
     saldo_inicial = db.Column(db.Integer, nullable=False, default=0)
     saldo_actual = db.Column(db.Integer, nullable=False, default=0)
     fecha_apertura = db.Column(db.DateTime, default=datetime.utcnow)
@@ -167,7 +163,7 @@ class MovimientoCaja(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     caja_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=False)
     tipo = db.Column(db.String(20), nullable=False)  # 'ingreso' o 'egreso' o 'transferencia'
-    monto = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    monto = db.Column(db.Integer, nullable=False)
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
     descripcion = db.Column(db.String(200), nullable=True)
     
@@ -186,8 +182,8 @@ class CreditoVenta(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
     vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
-    total = db.Column(db.Integer, nullable=False)  # Cambiado a entero
-    saldo_pendiente = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    total = db.Column(db.Integer, nullable=False)
+    saldo_pendiente = db.Column(db.Integer, nullable=False)
     fecha_inicio = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_fin = db.Column(db.DateTime, nullable=True)
     estado = db.Column(db.String(20), default='activo', nullable=False)
@@ -212,8 +208,8 @@ class DetalleVenta(db.Model):
     venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=False)
     producto_id = db.Column(db.Integer, db.ForeignKey('productos.id'), nullable=False)
     cantidad = db.Column(db.Integer, nullable=False)
-    precio_unitario = db.Column(db.Integer, nullable=False)  # Cambiado a entero
-    subtotal = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    precio_unitario = db.Column(db.Integer, nullable=False)
+    subtotal = db.Column(db.Integer, nullable=False)
 
 
 class Comision(db.Model):
@@ -221,9 +217,9 @@ class Comision(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
-    monto_base = db.Column(db.Integer, nullable=False)  # Cambiado a entero
-    porcentaje = db.Column(db.Integer, nullable=False)  # Cambiado a entero
-    monto_comision = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    monto_base = db.Column(db.Integer, nullable=False)
+    porcentaje = db.Column(db.Integer, nullable=False)
+    monto_comision = db.Column(db.Integer, nullable=False)
     periodo = db.Column(db.String(20), nullable=False)
     pagado = db.Column(db.Boolean, default=False, nullable=False)
     fecha_generacion = db.Column(db.DateTime, default=datetime.utcnow)
@@ -244,7 +240,6 @@ class Configuracion(db.Model):
     min_password = db.Column(db.Integer, nullable=False, default=6)
 
 
-#clase Producto
 class Producto(db.Model):
     __tablename__ = 'productos'
 
@@ -252,8 +247,8 @@ class Producto(db.Model):
     codigo = db.Column(db.String(50), unique=True, nullable=False)
     nombre = db.Column(db.String(100), nullable=False)
     descripcion = db.Column(db.String(200), nullable=True)
-    precio_compra = db.Column(db.Integer, nullable=True)  # Cambiado a entero
-    precio_venta = db.Column(db.Integer, nullable=False)  # Cambiado a entero
+    precio_compra = db.Column(db.Integer, nullable=True)
+    precio_venta = db.Column(db.Integer, nullable=False)
     stock = db.Column(db.Integer, nullable=False, default=0)
     stock_minimo = db.Column(db.Integer, nullable=False, default=0)
     unidad = db.Column(db.String(20), nullable=True)
