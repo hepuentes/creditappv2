@@ -44,42 +44,28 @@
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover mb-0">
+                <table class="table table-hover mb-0" id="clientes-table">
                     <thead class="table-light">
                         <tr>
                             <th>Nombre</th>
                             <th>Cédula</th>
                             <th>Teléfono</th>
                             <th>Email</th>
-                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% if clientes %}
                             {% for cliente in clientes %}
-                            <tr>
+                            <tr class="cliente-row" data-cliente-id="{{ cliente.id }}">
                                 <td>{{ cliente.nombre }}</td>
                                 <td>{{ cliente.cedula }}</td>
                                 <td>{{ cliente.telefono or 'N/A' }}</td>
                                 <td>{{ cliente.email or 'N/A' }}</td>
-                                <td>
-                                    <a href="{{ url_for('clientes.detalle', id=cliente.id) }}" class="btn btn-sm btn-info" data-bs-toggle="tooltip" title="Ver Detalle">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    {% if current_user.is_vendedor() or current_user.is_admin() %}
-                                    <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn btn-sm btn-warning" data-bs-toggle="tooltip" title="Editar">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#eliminarModal{{ cliente.id }}" title="Eliminar">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                    {% endif %}
-                                </td>
                             </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="5" class="text-center py-3">No se encontraron clientes.</td>
+                                <td colspan="4" class="text-center py-3">No se encontraron clientes.</td>
                             </tr>
                         {% endif %}
                     </tbody>
@@ -89,27 +75,71 @@
     </div>
 </div>
 
-<!-- Modales de Eliminación -->
-{% for cliente in clientes %}
-<div class="modal fade" id="eliminarModal{{ cliente.id }}" tabindex="-1" aria-labelledby="eliminarModalLabel{{ cliente.id }}" aria-hidden="true">
-    <div class="modal-dialog">
+<!-- Modal para detalles del cliente -->
+<div class="modal fade" id="clienteDetalleModal" tabindex="-1" aria-labelledby="clienteDetalleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="eliminarModalLabel{{ cliente.id }}">Confirmar Eliminación</h5>
+            <div class="modal-header">
+                <h5 class="modal-title" id="clienteDetalleModalLabel">Detalle de Cliente</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>¿Está seguro de eliminar al cliente <strong>{{ cliente.nombre }}</strong>?</p>
-                <p class="text-danger"><i class="fas fa-exclamation-triangle"></i> Esta acción no se puede deshacer.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <form action="{{ url_for('clientes.eliminar', id=cliente.id) }}" method="POST">
-                    <button type="submit" class="btn btn-danger">Eliminar</button>
-                </form>
+                <div id="cliente-detail-content">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p>Cargando detalles del cliente...</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
-{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const clienteRows = document.querySelectorAll('.cliente-row');
+        const clienteModal = new bootstrap.Modal(document.getElementById('clienteDetalleModal'));
+        const clienteDetailContent = document.getElementById('cliente-detail-content');
+        
+        clienteRows.forEach(row => {
+            row.addEventListener('click', function() {
+                const clienteId = this.dataset.clienteId;
+                clienteDetailContent.innerHTML = `
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p>Cargando detalles del cliente...</p>
+                    </div>
+                `;
+                
+                clienteModal.show();
+                
+                // Cargar detalles del cliente
+                fetch(`/clientes/${clienteId}?modal=true`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Error al cargar los detalles del cliente');
+                        }
+                        return response.text();
+                    })
+                    .then(html => {
+                        clienteDetailContent.innerHTML = html;
+                    })
+                    .catch(error => {
+                        clienteDetailContent.innerHTML = `
+                            <div class="alert alert-danger">
+                                <p><i class="fas fa-exclamation-triangle"></i> ${error.message}</p>
+                                <p>Intente nuevamente o contacte al administrador.</p>
+                            </div>
+                        `;
+                    });
+            });
+        });
+    });
+</script>
 {% endblock %}
