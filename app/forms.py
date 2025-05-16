@@ -148,7 +148,7 @@ class ConfiguracionForm(FlaskForm):
     moneda = StringField('Símbolo de Moneda', validators=[DataRequired(), Length(max=5)])
     iva = FloatField(
         'IVA (%)', 
-        validators=[DataRequired(), NumberRange(min=0, max=100)]  # Changed min from something positive to 0
+        validators=[DataRequired(), NumberRange(min=0, max=100)]  # Modificado: min=0 para permitir IVA 0%
     )
     porcentaje_comision = FloatField(
         'Comisión (%)',
@@ -160,6 +160,7 @@ class ConfiguracionForm(FlaskForm):
     )
     min_password = IntegerField('Tamaño Mínimo de Contraseña', validators=[DataRequired(), NumberRange(min=4, max=20)])
     submit = SubmitField('Guardar Configuración')
+
 
 
 # --- Formulario de Reportes de Comisiones ---
