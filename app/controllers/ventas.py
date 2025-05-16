@@ -36,10 +36,10 @@ def crear():
         # Crear venta
         venta = Venta(
             cliente_id=form.cliente.data,
-            vendedor_id=current_user.id,
-            caja_id=form.caja.data,
-            fecha=datetime.utcnow(),
-            tipo=form.tipo.data  # 'contado' o 'credito'
+            vendedor_id=current_user.id,  # Asignar el usuario actual como vendedor
+            total=0,  # Se calculará después
+            tipo=form.tipo.data,  # 'contado' o 'credito'
+            saldo_pendiente=0  # Se actualizará después si es crédito
         )
         db.session.add(venta)
         db.session.flush()
