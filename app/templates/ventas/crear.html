@@ -54,18 +54,45 @@
                         </div>
                         
                         <div class="mb-3">
-                            {{ form.tipo.label(class="form-label") }}
-                            {% if form.tipo.errors %}
-                                {{ form.tipo(class="form-select is-invalid", id="tipo_venta") }}
-                                <div class="invalid-feedback">
-                                    {% for error in form.tipo.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                {{ form.tipo(class="form-select", id="tipo_venta") }}
-                            {% endif %}
-                        </div>
+    {{ form.cliente.label(class="form-label") }}
+    <div class="input-group">
+        <input type="text" class="form-control" id="buscar-cliente" placeholder="Buscar cliente...">
+        <button class="btn btn-outline-primary" type="button" id="btn-buscar-cliente">
+            <i class="fas fa-search"></i>
+        </button>
+    </div>
+    <div class="mt-2">
+        {% if form.cliente.errors %}
+            {{ form.cliente(class="form-select is-invalid") }}
+            <div class="invalid-feedback">
+                {% for error in form.cliente.errors %}
+                    {{ error }}
+                {% endfor %}
+            </div>
+        {% else %}
+            {{ form.cliente(class="form-select") }}
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const buscarInput = document.getElementById('buscar-cliente');
+    const clienteSelect = document.querySelector('[name="cliente"]');
+    
+    buscarInput.addEventListener('input', function() {
+        const busqueda = this.value.toLowerCase();
+        Array.from(clienteSelect.options).forEach(option => {
+            const texto = option.text.toLowerCase();
+            if (texto.includes(busqueda)) {
+                option.style.display = '';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+    });
+});
+</script>
                         
                         <!-- Sección adicional para créditos (inicialmente oculta) -->
                         <div id="seccion_credito" style="display: none;" class="row mb-3">
