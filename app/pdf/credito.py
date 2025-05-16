@@ -10,4 +10,9 @@ def generar_pdf_credito(credito):
     pdf.cell(0, 10, txt=f"Plazo (días): {credito.plazo}", ln=1)
     pdf.cell(0, 10, txt=f"Tasa: {credito.tasa}%", ln=1)
     pdf.cell(0, 10, txt=f"Fecha: {credito.fecha.strftime('%d/%m/%Y')}", ln=1)
-    return pdf.output(dest='S').encode('latin1')
+    
+    # Corregido: Asegurar que siempre devuelva bytes
+    output = pdf.output(dest='S')
+    if isinstance(output, str):
+        return output.encode('latin1')
+    return output
