@@ -21,16 +21,14 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" id="ventaForm">
-                        {{ form.hidden_tag() }}
+                        {{ form.hidden_tag() }} {# CSRF token y otros campos ocultos de WTForms #}
                         
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 {{ form.cliente.label(class="form-label") }}
                                 <div class="input-group">
                                     <input type="text" class="form-control" id="buscar-cliente-input" placeholder="Buscar cliente...">
-                                    <button class="btn btn-outline-primary" type="button" id="btn-buscar-cliente">
-                                        <i class="fas fa-search"></i>
-                                    </button>
+                                    {# El botón de búsqueda es opcional si el filtro es en tiempo real #}
                                 </div>
                                 <div class="mt-2">
                                     {% if form.cliente.errors %}
@@ -77,7 +75,7 @@
                                 <select class="form-select" id="frecuencia_pago" name="frecuencia_pago">
                                     <option value="semanal">Semanal</option>
                                     <option value="quincenal">Quincenal</option>
-                                    <option value="mensual">Mensual</option>
+                                    <option value="mensual" selected>Mensual</option>
                                 </select>
                             </div>
                             <div class="col-md-6">
@@ -86,7 +84,16 @@
                             </div>
                         </div>
                         
-                        {{ form.productos(id="productos_json", class="d-none") }} 
+                        {# Este es el campo oculto que WTForms podría generar si 'productos' es un HiddenField en tu VentaForm.
+                           Si no lo es, crearemos uno manualmente para el JSON.
+                           Lo importante es que el JavaScript ponga el JSON en un campo que se envíe.
+                           Si `form.productos` ya es el HiddenField que espera el nombre `productos_json_hidden`
+                           en el backend (revisar tu VentaForm en forms.py), esto está bien.
+                           Si no, necesitamos un input hidden con name="productos_json_hidden".
+                           Por seguridad, añadiré uno explícito y comentaré el de WTForms si no está configurado para esto.
+                        #}
+                        {# {{ form.productos(id="productos_json_wtform", class="d-none") }} #}
+                        <input type="hidden" name="productos_json_hidden" id="productos_json_hidden_input">
                         
                         <div class="table-responsive mt-4">
                             <table class="table table-striped" id="tabla-productos">
@@ -101,11 +108,12 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    </tbody>
+                                    {# Productos seleccionados se añaden aquí con JavaScript #}
+                                </tbody>
                                 <tfoot>
                                     <tr>
                                         <th colspan="4" class="text-end">Total:</th>
-                                        <th id="total-venta">$0</th>
+                                        <th id="total-venta">$0.00</th>
                                         <th></th>
                                     </tr>
                                 </tfoot>
@@ -116,22 +124,22 @@
                             <h5 class="mb-3">Resumen de la Venta a Crédito</h5>
                             <div class="row">
                                 <div class="col-md-6">
-                                    <p><strong>Cliente:</strong> <span id="resumen_cliente"></span></p>
-                                    <p><strong>Frecuencia de pago:</strong> <span id="resumen_frecuencia"></span></p>
+                                    <p><strong>Cliente:</strong> <span id="resumen_cliente_nombre"></span></p>
+                                    <p><strong>Frecuencia de pago:</strong> <span id="resumen_frecuencia_pago"></span></p>
                                     <p><strong>Valor de cada cuota:</strong> <span id="resumen_valor_cuota"></span></p>
                                 </div>
                                 <div class="col-md-6">
-                                    <p><strong>Tipo de venta:</strong> <span id="resumen_tipo">Crédito</span></p>
-                                    <p><strong>Número de cuotas:</strong> <span id="resumen_cuotas"></span></p>
-                                    <p><strong>Fecha primer pago:</strong> <span id="resumen_fecha"></span></p>
+                                    <p><strong>Tipo de venta:</strong> Crédito</p>
+                                    <p><strong>Número de cuotas:</strong> <span id="resumen_numero_cuotas"></span></p>
+                                    <p><strong>Fecha primer pago (aprox):</strong> <span id="resumen_fecha_primer_pago"></span></p>
                                 </div>
                             </div>
-                            <p class="fw-bold mt-2">Total de la venta: <span id="resumen_total_credito"></span></p>
+                            <p class="fw-bold mt-2">Total de la venta: <span id="resumen_total_venta_credito"></span></p>
                         </div>
                         
                         <div class="d-flex justify-content-end mt-4">
                             <a href="{{ url_for('ventas.index') }}" class="btn btn-secondary me-2">Cancelar</a>
-                            <button type="submit" class="btn btn-success" id="btnConfirmar">
+                            <button type="submit" class="btn btn-success" id="btnConfirmarVenta">
                                 <i class="fas fa-check"></i> Confirmar Venta
                             </button>
                         </div>
@@ -145,30 +153,39 @@
                 <div class="card-header">
                     <h5 class="mb-0">Productos Disponibles</h5>
                     <div class="input-group mt-2">
-                        <input type="text" class="form-control" id="buscar-producto-disponible" placeholder="Buscar producto...">
-                        <button class="btn btn-outline-primary" type="button" id="btn-buscar-producto-lista">
-                            <i class="fas fa-search"></i>
-                        </button>
+                        <input type="text" class="form-control" id="buscar-producto-disponible" placeholder="Buscar por nombre o código...">
+                        {# Botón de búsqueda es opcional si el filtro es en tiempo real #}
                     </div>
                 </div>
                 <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
-                    <div class="row m-2" id="productos-container">
-                        {% for prod in productos %}
-                            <div class="col-12 mb-2 producto-item" data-id="{{ prod.id }}" data-nombre="{{ prod.nombre }}" data-precio="{{ prod.precio_venta }}" data-stock="{{ prod.stock }}" data-codigo="{{ prod.codigo }}">
-                                <div class="card p-2">
-                                    <div class="d-flex justify-content-between">
-                                        <div>
-                                            <h6 class="card-title mb-0">{{ prod.nombre }}</h6>
-                                            <small class="text-muted">{{ prod.codigo }}</small>
-                                        </div>
-                                        <div class="text-end">
-                                            <span class="badge bg-primary">${{ "{:,}".format(prod.precio_venta) }}</span><br>
-                                            <small class="text-muted">Stock: {{ prod.stock }}</small>
+                    <div class="row m-2" id="productos-disponibles-container">
+                        {% if productos %}
+                            {% for prod in productos %}
+                                <div class="col-12 mb-2 producto-item-disponible" 
+                                     data-id="{{ prod.id }}" 
+                                     data-nombre="{{ prod.nombre }}" 
+                                     data-precio="{{ prod.precio_venta }}" 
+                                     data-stock="{{ prod.stock }}" 
+                                     data-codigo="{{ prod.codigo }}">
+                                    <div class="card p-2">
+                                        <div class="d-flex justify-content-between">
+                                            <div>
+                                                <h6 class="card-title mb-0">{{ prod.nombre }}</h6>
+                                                <small class="text-muted">Código: {{ prod.codigo }}</small>
+                                            </div>
+                                            <div class="text-end">
+                                                <span class="badge bg-primary">${{ "{:,.0f}".format(prod.precio_venta) }}</span><br>
+                                                <small class="text-muted">Stock: {{ prod.stock }}</small>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="col-12">
+                                <p class="text-center p-3">No hay productos disponibles o que coincidan con la búsqueda.</p>
                             </div>
-                        {% endfor %}
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -180,246 +197,221 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Script para el buscador de clientes
+    // Buscador de Clientes
     const buscarClienteInput = document.getElementById('buscar-cliente-input');
-    const clienteSelect = document.getElementById('cliente-select'); // Asegúrate que tu form.cliente tenga id="cliente-select"
-    
+    const clienteSelect = document.getElementById('cliente-select');
     if (buscarClienteInput && clienteSelect) {
         buscarClienteInput.addEventListener('input', function() {
             const busqueda = this.value.toLowerCase().trim();
             Array.from(clienteSelect.options).forEach(option => {
+                if (option.value === "") return; // No ocultar la opción "Seleccione un cliente" si existe
                 const textoOpcion = option.text.toLowerCase();
-                if (textoOpcion.includes(busqueda)) {
-                    option.style.display = '';
-                } else {
-                    option.style.display = 'none';
-                }
+                option.style.display = textoOpcion.includes(busqueda) ? '' : 'none';
             });
-            // Para resetear el filtro si el campo de búsqueda está vacío
-            if (busqueda === '') {
-                 Array.from(clienteSelect.options).forEach(option => {
-                    option.style.display = '';
-                });
+            if (busqueda === '') { // Mostrar todas las opciones si la búsqueda está vacía
+                Array.from(clienteSelect.options).forEach(option => option.style.display = '');
             }
         });
     }
 
-    // Variables globales para almacenar datos de la venta
-    let productosSeleccionados = [];
+    // Lógica de la Venta
+    let productosSeleccionadosParaVenta = [];
+    const productosDisponiblesContainer = document.getElementById('productos-disponibles-container');
+    const tablaProductosVentaBody = document.getElementById('tabla-productos').getElementsByTagName('tbody')[0];
+    const inputJsonProductosOculto = document.getElementById('productos_json_hidden_input'); // Usamos el input hidden explícito
+    const displayTotalVenta = document.getElementById('total-venta');
+    const inputBuscarProductoDisponible = document.getElementById('buscar-producto-disponible');
+    const formularioVenta = document.getElementById('ventaForm');
     
-    // Elementos del DOM para la lógica de productos y venta
-    const productosContainer = document.getElementById('productos-container');
-    const tablaProductosBody = document.getElementById('tabla-productos').getElementsByTagName('tbody')[0];
-    const productosJsonInput = document.getElementById('productos_json'); // Campo oculto para enviar JSON al backend
-    const totalVentaDisplay = document.getElementById('total-venta');
-    const buscarProductoDisponibleInput = document.getElementById('buscar-producto-disponible');
-    const ventaForm = document.getElementById('ventaForm');
-    
-    const tipoVentaSelect = document.getElementById('tipo_venta');
-    const seccionCreditoDiv = document.getElementById('seccion_credito');
-    const resumenCreditoDiv = document.getElementById('resumen_credito');
-    const frecuenciaPagoSelect = document.getElementById('frecuencia_pago');
-    const numeroCuotasInput = document.getElementById('numero_cuotas');
-    
-    // Mostrar/ocultar opciones de crédito según el tipo de venta
-    if (tipoVentaSelect) {
-        tipoVentaSelect.addEventListener('change', function() {
-            if (this.value === 'credito') {
-                seccionCreditoDiv.style.display = 'flex'; // 'flex' para que los elementos row se comporten como se espera
-                actualizarResumenCredito(); // Actualizar si ya hay productos
-            } else {
-                seccionCreditoDiv.style.display = 'none';
-                resumenCreditoDiv.style.display = 'none';
+    const selectTipoVenta = document.getElementById('tipo_venta');
+    const divSeccionCredito = document.getElementById('seccion_credito');
+    const divResumenCredito = document.getElementById('resumen_credito');
+    const selectFrecuenciaPago = document.getElementById('frecuencia_pago');
+    const inputNumeroCuotas = document.getElementById('numero_cuotas');
+
+    // Formateador de moneda
+    const currencyFormatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    // Mostrar/ocultar sección de crédito
+    if (selectTipoVenta) {
+        selectTipoVenta.addEventListener('change', function() {
+            const esCredito = this.value === 'credito';
+            divSeccionCredito.style.display = esCredito ? 'flex' : 'none';
+            divResumenCredito.style.display = 'none'; // Ocultar resumen hasta que se actualice
+            if (esCredito) {
+                actualizarResumenVentaCredito();
             }
         });
     }
-    
-    // Función para actualizar el resumen de la venta a crédito
-    function actualizarResumenCredito() {
-        if (!tipoVentaSelect || tipoVentaSelect.value !== 'credito' || productosSeleccionados.length === 0) {
-            resumenCreditoDiv.style.display = 'none';
+
+    function actualizarResumenVentaCredito() {
+        if (!selectTipoVenta || selectTipoVenta.value !== 'credito' || productosSeleccionadosParaVenta.length === 0) {
+            divResumenCredito.style.display = 'none';
             return;
         }
-        
-        const clienteSeleccionado = clienteSelect.options[clienteSelect.selectedIndex];
-        const clienteText = clienteSeleccionado ? clienteSeleccionado.text : 'N/A';
-        const frecuenciaText = frecuenciaPagoSelect.options[frecuenciaPagoSelect.selectedIndex].text;
-        const cuotas = parseInt(numeroCuotasInput.value) || 1; // Default a 1 si no es un número válido
+
+        const opcionClienteSeleccionado = clienteSelect.options[clienteSelect.selectedIndex];
+        const nombreCliente = opcionClienteSeleccionado && opcionClienteSeleccionado.value ? opcionClienteSeleccionado.text.split(' - ')[0] : 'N/A';
+        const textoFrecuencia = selectFrecuenciaPago.options[selectFrecuenciaPago.selectedIndex].text;
+        const numCuotas = parseInt(inputNumeroCuotas.value) || 1;
+        const totalVentaActual = productosSeleccionadosParaVenta.reduce((sum, p) => sum + (p.precio * p.cantidad), 0);
+
+        document.getElementById('resumen_cliente_nombre').textContent = nombreCliente;
+        document.getElementById('resumen_frecuencia_pago').textContent = textoFrecuencia;
+        document.getElementById('resumen_numero_cuotas').textContent = numCuotas;
+        document.getElementById('resumen_valor_cuota').textContent = currencyFormatter.format(numCuotas > 0 ? totalVentaActual / numCuotas : totalVentaActual);
         
         const hoy = new Date();
-        let diasPlazo = 30; // Default mensual
-        if (frecuenciaPagoSelect.value === 'semanal') diasPlazo = 7;
-        if (frecuenciaPagoSelect.value === 'quincenal') diasPlazo = 15;
+        let diasParaPrimerPago = 30; // mensual por defecto
+        if (selectFrecuenciaPago.value === 'semanal') diasParaPrimerPago = 7;
+        else if (selectFrecuenciaPago.value === 'quincenal') diasParaPrimerPago = 15;
         
-        const fechaPago = new Date(hoy.setDate(hoy.getDate() + diasPlazo)); // Se modifica 'hoy' aquí, cuidado si se reutiliza 'hoy'
-        const fechaFormateada = `${fechaPago.getDate().toString().padStart(2, '0')}/${(fechaPago.getMonth() + 1).toString().padStart(2, '0')}/${fechaPago.getFullYear()}`;
+        const fechaPrimerPago = new Date(hoy.setDate(hoy.getDate() + diasParaPrimerPago));
+        document.getElementById('resumen_fecha_primer_pago').textContent = `${fechaPrimerPago.getDate().toString().padStart(2, '0')}/${(fechaPrimerPago.getMonth() + 1).toString().padStart(2, '0')}/${fechaPrimerPago.getFullYear()}`;
+        document.getElementById('resumen_total_venta_credito').textContent = currencyFormatter.format(totalVentaActual);
         
-        const totalValorVenta = productosSeleccionados.reduce((acc, prod) => acc + (prod.precio * prod.cantidad), 0);
-        const valorCuota = cuotas > 0 ? totalValorVenta / cuotas : totalValorVenta;
-        
-        document.getElementById('resumen_cliente').textContent = clienteText;
-        document.getElementById('resumen_frecuencia').textContent = frecuenciaText;
-        document.getElementById('resumen_valor_cuota').textContent = `$${valorCuota.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-        document.getElementById('resumen_cuotas').textContent = cuotas;
-        document.getElementById('resumen_fecha').textContent = fechaFormateada;
-        document.getElementById('resumen_total_credito').textContent = `$${totalValorVenta.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-        
-        resumenCreditoDiv.style.display = 'block';
+        divResumenCredito.style.display = 'block';
     }
-    
-    // Actualizar resumen cuando cambian los valores de crédito
-    if (frecuenciaPagoSelect) frecuenciaPagoSelect.addEventListener('change', actualizarResumenCredito);
-    if (numeroCuotasInput) numeroCuotasInput.addEventListener('input', actualizarResumenCredito);
-    if (clienteSelect) clienteSelect.addEventListener('change', actualizarResumenCredito);
+
+    if (selectFrecuenciaPago) selectFrecuenciaPago.addEventListener('change', actualizarResumenVentaCredito);
+    if (inputNumeroCuotas) inputNumeroCuotas.addEventListener('input', actualizarResumenVentaCredito);
+    if (clienteSelect) clienteSelect.addEventListener('change', actualizarResumenVentaCredito);
 
 
-    // Evento para agregar productos al hacer clic en la lista de disponibles
-    if (productosContainer) {
-        productosContainer.addEventListener('click', function(e) {
-            const item = e.target.closest('.producto-item');
-            if (item) {
-                const id = parseInt(item.dataset.id);
-                const nombre = item.dataset.nombre;
-                const precio = parseFloat(item.dataset.precio);
-                const stock = parseInt(item.dataset.stock);
-                const codigo = item.dataset.codigo; // Añadido para mostrar código
-                
-                const productoExistente = productosSeleccionados.find(p => p.id === id);
-                
-                if (productoExistente) {
-                    if (productoExistente.cantidad < stock) {
-                        productoExistente.cantidad++;
+    if (productosDisponiblesContainer) {
+        productosDisponiblesContainer.addEventListener('click', function(e) {
+            const itemProducto = e.target.closest('.producto-item-disponible');
+            if (itemProducto) {
+                const id = parseInt(itemProducto.dataset.id);
+                const nombre = itemProducto.dataset.nombre;
+                const precio = parseFloat(itemProducto.dataset.precio);
+                const stock = parseInt(itemProducto.dataset.stock);
+                const codigo = itemProducto.dataset.codigo;
+
+                const productoYaSeleccionado = productosSeleccionadosParaVenta.find(p => p.id === id);
+
+                if (productoYaSeleccionado) {
+                    if (productoYaSeleccionado.cantidad < stock) {
+                        productoYaSeleccionado.cantidad++;
                     } else {
                         alert('No hay más stock disponible para este producto.');
                     }
                 } else {
                     if (stock > 0) {
-                        productosSeleccionados.push({
-                            id: id,
-                            codigo: codigo, // Añadido
-                            nombre: nombre,
-                            precio: precio,
-                            cantidad: 1,
-                            stockMax: stock // Guardar stock máximo para validación
-                        });
+                        productosSeleccionadosParaVenta.push({ id, codigo, nombre, precio, cantidad: 1, stockMax: stock });
                     } else {
-                        alert('Este producto no tiene stock disponible.');
+                        alert('Este producto está agotado.');
                     }
                 }
-                actualizarTablaYResumen();
+                renderTablaProductosSeleccionados();
             }
         });
     }
-    
-    // Función para actualizar la tabla de productos seleccionados y el resumen de crédito
-    function actualizarTablaYResumen() {
-        actualizarTablaProductos();
-        if (tipoVentaSelect && tipoVentaSelect.value === 'credito') {
-            actualizarResumenCredito();
-        }
-    }
 
-    // Función para actualizar la tabla de productos seleccionados
-    function actualizarTablaProductos() {
-        tablaProductosBody.innerHTML = ''; // Limpiar tabla
-        
-        productosSeleccionados.forEach((producto, index) => {
+    function renderTablaProductosSeleccionados() {
+        tablaProductosVentaBody.innerHTML = '';
+        let granTotal = 0;
+
+        productosSeleccionadosParaVenta.forEach((producto, index) => {
             const subtotal = producto.precio * producto.cantidad;
-            
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
+            granTotal += subtotal;
+
+            const fila = tablaProductosVentaBody.insertRow();
+            fila.innerHTML = `
                 <td>${producto.codigo}</td>
                 <td>${producto.nombre}</td>
                 <td>
-                    <input type="number" class="form-control form-control-sm cantidad-input" 
+                    <input type="number" class="form-control form-control-sm cantidad-item-venta" 
                            value="${producto.cantidad}" min="1" max="${producto.stockMax}" 
                            data-index="${index}">
                 </td>
-                <td>$${producto.precio.toLocaleString('es-CO')}</td>
-                <td>$${subtotal.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                <td>${currencyFormatter.format(producto.precio)}</td>
+                <td>${currencyFormatter.format(subtotal)}</td>
                 <td>
-                    <button type="button" class="btn btn-sm btn-danger eliminar-btn" data-index="${index}">
+                    <button type="button" class="btn btn-sm btn-danger eliminar-item-venta" data-index="${index}">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
             `;
-            tablaProductosBody.appendChild(tr);
         });
+
+        displayTotalVenta.textContent = currencyFormatter.format(granTotal);
         
-        const total = productosSeleccionados.reduce((acc, prod) => acc + (prod.precio * prod.cantidad), 0);
-        totalVentaDisplay.textContent = `$${total.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+        // Prepara el JSON para el backend
+        const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
+            id: p.id,
+            cantidad: p.cantidad,
+            precio_venta: p.precio // Asegúrate que este sea el precio al que se vende
+        }));
+        inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
         
-        productosJsonInput.value = JSON.stringify(productosSeleccionados.map(p => ({ id: p.id, cantidad: p.cantidad, precio_venta: p.precio }) ));
-        
-        agregarEventosTabla();
+        actualizarResumenVentaCredito(); // Actualizar resumen si es crédito
+        bindEventosItemsTabla();
     }
-    
-    // Agregar eventos a los elementos de la tabla (inputs de cantidad y botones de eliminar)
-    function agregarEventosTabla() {
-        document.querySelectorAll('.cantidad-input').forEach(input => {
+
+    function bindEventosItemsTabla() {
+        document.querySelectorAll('.cantidad-item-venta').forEach(input => {
             input.addEventListener('change', function() {
                 const index = parseInt(this.dataset.index);
                 let nuevaCantidad = parseInt(this.value);
-                const producto = productosSeleccionados[index];
+                const producto = productosSeleccionadosParaVenta[index];
 
                 if (isNaN(nuevaCantidad) || nuevaCantidad < 1) {
-                    nuevaCantidad = 1; // Cantidad mínima 1
+                    nuevaCantidad = 1;
                 }
                 if (nuevaCantidad > producto.stockMax) {
-                    nuevaCantidad = producto.stockMax; // No exceder el stock
+                    nuevaCantidad = producto.stockMax;
                     alert('La cantidad no puede exceder el stock disponible.');
                 }
                 
                 producto.cantidad = nuevaCantidad;
-                this.value = nuevaCantidad; // Actualizar el valor del input si se corrigió
-                actualizarTablaYResumen();
+                this.value = nuevaCantidad;
+                renderTablaProductosSeleccionados();
             });
         });
-        
-        document.querySelectorAll('.eliminar-btn').forEach(btn => {
+
+        document.querySelectorAll('.eliminar-item-venta').forEach(btn => {
             btn.addEventListener('click', function() {
                 const index = parseInt(this.dataset.index);
-                productosSeleccionados.splice(index, 1);
-                actualizarTablaYResumen();
+                productosSeleccionadosParaVenta.splice(index, 1);
+                renderTablaProductosSeleccionados();
             });
         });
     }
-    
-    // Buscador de productos disponibles
-    if (buscarProductoDisponibleInput) {
-        buscarProductoDisponibleInput.addEventListener('input', function() {
+
+    if (inputBuscarProductoDisponible) {
+        inputBuscarProductoDisponible.addEventListener('input', function() {
             const busqueda = this.value.toLowerCase().trim();
-            document.querySelectorAll('#productos-container .producto-item').forEach(item => {
+            document.querySelectorAll('#productos-disponibles-container .producto-item-disponible').forEach(item => {
                 const nombre = item.dataset.nombre.toLowerCase();
                 const codigo = item.dataset.codigo.toLowerCase();
-                if (nombre.includes(busqueda) || codigo.includes(busqueda)) {
-                    item.style.display = 'block'; // O el display original, ej. 'flex' si usas d-flex en el item
-                } else {
-                    item.style.display = 'none';
-                }
+                item.style.display = (nombre.includes(busqueda) || codigo.includes(busqueda)) ? 'block' : 'none';
             });
         });
     }
-    
-    // Validar formulario antes de enviar
-    if (ventaForm) {
-        ventaForm.addEventListener('submit', function(e) {
-            if (productosSeleccionados.length === 0) {
+
+    if (formularioVenta) {
+        formularioVenta.addEventListener('submit', function(e) {
+            if (productosSeleccionadosParaVenta.length === 0) {
                 e.preventDefault();
                 alert('Debe seleccionar al menos un producto para crear la venta.');
                 return;
             }
-            // Actualizar el campo JSON una última vez antes de enviar
-            productosJsonInput.value = JSON.stringify(productosSeleccionados.map(p => ({ id: p.id, cantidad: p.cantidad, precio_venta: p.precio }) ));
+            // Asegurar que el JSON esté actualizado justo antes del submit
+            const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
+                id: p.id,
+                cantidad: p.cantidad,
+                precio_venta: p.precio
+            }));
+            inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
         });
     }
-
-    // Inicializar el estado de la sección de crédito si el tipo de venta ya está seleccionado al cargar la página
-    if (tipoVentaSelect && tipoVentaSelect.value === 'credito') {
-        seccionCreditoDiv.style.display = 'flex';
-        // No llamar a actualizarResumenCredito aquí directamente sin productos
+    
+    // Llamada inicial si el tipo de venta es crédito al cargar
+    if (selectTipoVenta && selectTipoVenta.value === 'credito') {
+        divSeccionCredito.style.display = 'flex';
+        // No es necesario llamar a actualizarResumenVentaCredito() aquí si no hay productos aún
     }
-
 });
 </script>
 {% endblock %}
