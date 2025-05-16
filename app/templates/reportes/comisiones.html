@@ -17,20 +17,22 @@
             <form method="POST" id="reporteForm">
                 {{ form.hidden_tag() }}
                 
-                <div class="row g-3">
-                    <div class="col-md-3">
-                        {{ form.usuario_id.label(class="form-label") }}
-                        {% if form.usuario_id.errors %}
-                            {{ form.usuario_id(class="form-select is-invalid") }}
-                            <div class="invalid-feedback">
-                                {% for error in form.usuario_id.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            {{ form.usuario_id(class="form-select") }}
-                        {% endif %}
-                    </div>
+                <div class="col-md-3">
+    {{ form.usuario_id.label(class="form-label") }}
+    <select name="usuario_id" id="usuario_id" class="form-select {% if form.usuario_id.errors %}is-invalid{% endif %}">
+        <option value="0" selected>Todos</option>
+        {% for id, nombre in form.usuario_id.choices[1:] %}
+            <option value="{{ id }}" {% if form.usuario_id.data == id %}selected{% endif %}>{{ nombre }}</option>
+        {% endfor %}
+    </select>
+    {% if form.usuario_id.errors %}
+        <div class="invalid-feedback">
+            {% for error in form.usuario_id.errors %}
+                {{ error }}
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
                     
                     <div class="col-md-3">
                         {{ form.fecha_inicio.label(class="form-label") }}
