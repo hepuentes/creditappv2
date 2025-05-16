@@ -73,7 +73,24 @@ with app.app_context():
             print("La tabla 'cajas' no existe. Será creada al ejecutar db.create_all().")
     except Exception as e:
         print(f"Error al reparar la tabla 'cajas': {e}")
-    
+      
+    try:
+    print("Verificando tabla 'abonos'...")
+    if table_exists('abonos'):
+        columns = get_columns('abonos')
+        
+        with db.engine.begin() as connection:
+            # Verificar si falta la columna 'venta_id'
+            if 'venta_id' not in columns:
+                print("La columna 'venta_id' no existe en la tabla 'abonos'. Agregando...")
+                connection.execute(text("ALTER TABLE abonos ADD COLUMN venta_id INTEGER"))
+                connection.execute(text("ALTER TABLE abonos ADD CONSTRAINT fk_abonos_venta_id FOREIGN KEY (venta_id) REFERENCES ventas(id)"))
+                print("Columna 'venta_id' agregada.")
+    else:
+        print("La tabla 'abonos' no existe. Será creada al ejecutar db.create_all().")
+except Exception as e:
+    print(f"Error al reparar la tabla 'abonos': {e}")
+
     # Verificar y corregir la tabla movimiento_caja
     try:
         print("Verificando tabla 'movimiento_caja'...")
