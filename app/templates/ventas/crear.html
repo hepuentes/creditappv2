@@ -14,7 +14,50 @@
     </div>
 
     <div class="row">
-        <div class="col-md-8">
+        <!-- Reordenado para mejor visualización en móvil -->
+        <div class="col-md-4 order-md-2 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Productos Disponibles</h5>
+                    <div class="input-group mt-2">
+                        <input type="text" class="form-control" id="buscar-producto-disponible" placeholder="Buscar por nombre o código...">
+                    </div>
+                </div>
+                <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
+                    <div class="row m-2" id="productos-disponibles-container">
+                        {% if productos %}
+                            {% for prod in productos %}
+                                <div class="col-12 mb-2 producto-item-disponible" 
+                                     data-id="{{ prod.id }}" 
+                                     data-nombre="{{ prod.nombre }}" 
+                                     data-precio="{{ prod.precio_venta }}" 
+                                     data-stock="{{ prod.stock }}" 
+                                     data-codigo="{{ prod.codigo }}">
+                                    <div class="card p-2">
+                                        <div class="d-flex justify-content-between">
+                                            <div>
+                                                <h6 class="card-title mb-0">{{ prod.nombre }}</h6>
+                                                <small class="text-muted">Código: {{ prod.codigo }}</small>
+                                            </div>
+                                            <div class="text-end">
+                                                <span class="badge bg-primary">${{ "{:,.0f}".format(prod.precio_venta) }}</span><br>
+                                                <small class="text-muted">Stock: {{ prod.stock }}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="col-12">
+                                <p class="text-center p-3">No hay productos disponibles.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8 order-md-1">
             <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">Datos de la Venta</h5>
@@ -114,48 +157,6 @@
                 </div>
             </div>
         </div>
-        
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Productos Disponibles</h5>
-                    <div class="input-group mt-2">
-                        <input type="text" class="form-control" id="buscar-producto-disponible" placeholder="Buscar por nombre o código...">
-                    </div>
-                </div>
-                <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
-                    <div class="row m-2" id="productos-disponibles-container">
-                        {% if productos %}
-                            {% for prod in productos %}
-                                <div class="col-12 mb-2 producto-item-disponible" 
-                                     data-id="{{ prod.id }}" 
-                                     data-nombre="{{ prod.nombre }}" 
-                                     data-precio="{{ prod.precio_venta }}" 
-                                     data-stock="{{ prod.stock }}" 
-                                     data-codigo="{{ prod.codigo }}">
-                                    <div class="card p-2">
-                                        <div class="d-flex justify-content-between">
-                                            <div>
-                                                <h6 class="card-title mb-0">{{ prod.nombre }}</h6>
-                                                <small class="text-muted">Código: {{ prod.codigo }}</small>
-                                            </div>
-                                            <div class="text-end">
-                                                <span class="badge bg-primary">${{ "{:,.0f}".format(prod.precio_venta) }}</span><br>
-                                                <small class="text-muted">Stock: {{ prod.stock }}</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="col-12">
-                                <p class="text-center p-3">No hay productos disponibles.</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 {% endblock %}
@@ -242,17 +243,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (productoYaSeleccionado) {
                     if (productoYaSeleccionado.cantidad < stock) {
                         productoYaSeleccionado.cantidad++;
+                        renderTablaProductosSeleccionados();
                     } else {
                         alert('No hay más stock disponible para este producto.');
                     }
                 } else {
                     if (stock > 0) {
                         productosSeleccionadosParaVenta.push({ id, codigo, nombre, precio, cantidad: 1, stockMax: stock });
+                        renderTablaProductosSeleccionados();
                     } else {
                         alert('Este producto está agotado.');
                     }
                 }
-                renderTablaProductosSeleccionados();
             }
         });
     }
