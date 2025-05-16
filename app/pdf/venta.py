@@ -14,4 +14,10 @@ def generar_pdf_venta(venta):
         pdf.cell(0, 8, txt=f"- {det.cantidad} x {det.producto.nombre} @ {det.precio_unitario}", ln=1)
     pdf.ln(5)
     pdf.cell(0, 10, txt=f"Total: {venta.total}", ln=1)
-    return pdf.output(dest='S').encode('latin1')
+    
+    # Modificación: Comprobar el tipo de retorno y manejar adecuadamente
+    output = pdf.output(dest='S')
+    if isinstance(output, bytearray) or isinstance(output, bytes):
+        return output
+    else:
+        return output.encode('latin1')
