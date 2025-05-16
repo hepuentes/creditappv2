@@ -3,7 +3,7 @@ from fpdf import FPDF
 def generar_pdf_venta(venta):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Helvetica", size=12)  # Cambiado de Arial a Helvetica para evitar warnings
+    pdf.set_font("Helvetica", size=12)
     pdf.cell(0, 10, txt=f"Venta ID: {venta.id}", ln=1)
     pdf.cell(0, 10, txt=f"Cliente: {venta.cliente.nombre}", ln=1)
     pdf.cell(0, 10, txt=f"Tipo: {venta.tipo}", ln=1)
@@ -15,5 +15,8 @@ def generar_pdf_venta(venta):
     pdf.ln(5)
     pdf.cell(0, 10, txt=f"Total: {venta.total}", ln=1)
     
-    # Corrección: Convertir a bytes, no bytesarray
-    return pdf.output(dest='S').encode('latin1')
+    # Corrección para manejar los bytes correctamente
+    pdf_bytes = pdf.output(dest='S')
+    if isinstance(pdf_bytes, str):
+        return pdf_bytes.encode('latin1')
+    return bytes(pdf_bytes)  # Convertir bytearray a bytes
