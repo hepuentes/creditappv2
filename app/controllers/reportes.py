@@ -36,8 +36,8 @@ def comisiones():
 
         # Consulta de comisiones
         query = Comision.query.filter(
-            Comision.fecha_generacion >= fecha_inicio,  # Cambiado de fecha a fecha_generacion
-            Comision.fecha_generacion <= fecha_fin      # Cambiado de fecha a fecha_generacion
+            Comision.fecha_generacion >= fecha_inicio,
+            Comision.fecha_generacion <= fecha_fin
         )
 
         if usuario_id:
