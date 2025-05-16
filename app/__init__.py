@@ -1,3 +1,4 @@
+from app.controllers.public import public_bp
 import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
