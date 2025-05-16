@@ -94,22 +94,15 @@
                         {% endif %}
                     </div> {# Cierre del <div class="row"> de acciones #}
 
-                    <div class="mt-3">
-                        <p class="mb-2">Compartir Factura por WhatsApp:</p>
-                        {# Aquí la indentación y estructura es importante. Asumo que la ruta 'ventas.compartir' existe.
-                           Si no tienes una ruta 'ventas.compartir' que genere el QR o el mensaje,
-                           puedes enlazar directamente al PDF como se muestra en la opción comentada abajo.
-                        #}
-                        <div class="text-center mt-2">
-                             {# Si 'ventas.compartir' genera un QR o maneja la redirección: #}
-                            <a href="{{ url_for('ventas.compartir', id=venta.id) }}" target="_blank" class="btn btn-success">
-                                <i class="fab fa-whatsapp"></i> Compartir PDF
-                            </a>
-                            {# Alternativamente, si quieres un enlace directo al PDF para WhatsApp Web:
-                            <a href="https://wa.me/?text=Consulte su factura: {{ url_for('ventas.pdf', id=venta.id, _external=True) | urlencode }}" target="_blank" class="btn btn-success">
-                                <i class="fab fa-whatsapp"></i> Compartir Enlace Directo
-                            </a>
-                            #}
+                    <!-- Opciones de compartir por WhatsApp -->
+<div class="mt-3">
+    <p class="mb-2">Compartir por WhatsApp:</p>
+    <div class="text-center mt-2">
+        <a href="{{ url_for('ventas.compartir', id=venta.id) }}" target="_blank" class="btn btn-success">
+            <i class="fab fa-whatsapp"></i> Compartir PDF
+        </a>
+    </div>
+</div>
                         </div>
                     </div>
                 </div>
