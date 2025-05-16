@@ -146,7 +146,10 @@ class ConfiguracionForm(FlaskForm):
     telefono = StringField('Teléfono', validators=[Optional(), Length(max=20)])
     logo = FileField('Logo de la Empresa')
     moneda = StringField('Símbolo de Moneda', validators=[DataRequired(), Length(max=5)])
-    iva = FloatField('IVA (%)', validators=[DataRequired(), NumberRange(min=0, max=100)])
+    iva = FloatField(
+        'IVA (%)', 
+        validators=[DataRequired(), NumberRange(min=0, max=100)]  # Changed min from something positive to 0
+    )
     porcentaje_comision = FloatField(
         'Comisión (%)',
         validators=[DataRequired(), NumberRange(min=0, max=100)]
