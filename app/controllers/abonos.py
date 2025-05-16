@@ -28,27 +28,38 @@ def crear():
     if form.validate_on_submit():
         # Crear un abono
         abono = Abono(
-            cliente_id=form.cliente.data,
+            venta_id=form.venta_id.data,  # Asegúrate de que este campo exista en el formulario
             # Decidir qué tipo de crédito es según el formulario
-            credito_id=form.credito.data if form.tipo_credito.data == 'credito' else None,
-            credito_venta_id=form.credito.data if form.tipo_credito.data == 'venta' else None,
+            credito_id=form.credito_id.data if form.tipo_credito.data == 'credito' else None,
+            credito_venta_id=form.credito_venta_id.data if form.tipo_credito.data == 'venta' else None,
             monto=form.monto.data,
-            caja_id=form.caja.data,
+            caja_id=form.caja_id.data,
             cobrador_id=current_user.id,
+            notas=form.notas.data if hasattr(form, 'notas') else None,
             fecha=datetime.utcnow()
         )
         # Registrar movimiento en la caja
         registrar_movimiento_caja(
-            caja_id=abono.caja_id,
-            monto=abono.monto,
-            tipo='salida',
-            descripcion=f'Abono crédito #{abono.credito_id}'
+            caja_id=form.caja_id.data,
+            tipo='entrada',  # Corregido: debería ser 'entrada' ya que es dinero que ingresa a la caja
+            monto=form.monto.data,
+            concepto=f'Abono venta #{form.venta_id.data}',
+            abono_id=abono.id
         )
         db.session.add(abono)
         db.session.commit()
 
+        # Actualizar el saldo pendiente de la venta
+        if abono.venta_id:
+            venta = Venta.query.get(abono.venta_id)
+            if venta:
+                venta.saldo_pendiente -= abono.monto
+                if venta.saldo_pendiente <= 0:
+                    venta.estado = 'pagado'
+                db.session.commit()
+
         # Generar comisión si aplica
-        comision = calcular_comision(abono.monto, current_user.id)
+        calcular_comision(abono.monto, current_user.id)
 
         # Generar PDF para compartir
         pdf_bytes = generar_pdf_abono(abono)
