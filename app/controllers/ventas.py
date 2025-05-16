@@ -98,7 +98,7 @@ def crear():
             
             # CORRECCIÓN: Establecer estado según tipo de venta
             if tipo_venta == 'contado':
-                nueva_venta.estado = 'pagado'  # Corregido: ventas de contado son pagadas
+                nueva_venta.estado = 'pagado'  # Ventas de contado son pagadas inmediatamente
             else:
                 nueva_venta.estado = 'pendiente'
             
@@ -171,6 +171,7 @@ def crear():
             db.session.rollback()
             flash(f'Error al crear la venta: {str(e)}', 'danger')
             current_app.logger.error(f"Error creando venta: {e}")
+            import traceback
             current_app.logger.error(traceback.format_exc())
     
     return render_template('ventas/crear.html', form=form, productos=productos_disponibles, titulo='Nueva Venta')
