@@ -8,22 +8,20 @@ document.addEventListener('DOMContentLoaded', () => {
   if (sidebarToggleBtns.length > 0 && sidebar && mainContent) {
     sidebarToggleBtns.forEach(btn => {
       btn.addEventListener('click', () => {
-        // Modificar para alternar la clase 'active' en lugar de añadirla/eliminarla
+        // Toggle sidebar visibility
         sidebar.classList.toggle('active');
         
-        // Importante: No cambiar completamente la visibilidad
-        // Solo ajustar el margen/ancho para el colapso
-        if (sidebar.classList.contains('active')) {
-          mainContent.style.marginLeft = '0';
-          mainContent.style.width = '100%';
-        } else {
-          mainContent.style.marginLeft = '250px';
-          mainContent.style.width = 'calc(100% - 250px)';
-        }
+        // Adjust main content
+        mainContent.classList.toggle('expanded');
         
-        // Esta línea asegura que el botón hamburguesa permanezca visible
-        if (document.querySelector('.navbar-toggler')) {
-          document.querySelector('.navbar-toggler').style.display = 'block';
+        // Ensure the toggle button remains visible
+        if (window.innerWidth < 768) {
+          // For mobile view, ensure the button stays in view
+          btn.style.display = 'block';
+          btn.style.position = 'fixed';
+          btn.style.top = '10px';
+          btn.style.left = sidebar.classList.contains('active') ? '10px' : '265px';
+          btn.style.zIndex = '2000';
         }
       });
     });
@@ -33,9 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const sidebarLinks = document.querySelectorAll('#sidebar a');
   sidebarLinks.forEach(link => {
     link.addEventListener('click', () => {
-      if (window.innerWidth < 768 && sidebar.classList.contains('active')) {
-        sidebar.classList.remove('active');
-        document.body.classList.remove('sidebar-open');
+      if (window.innerWidth < 768 && !sidebar.classList.contains('active')) {
+        sidebar.classList.add('active');
+        mainContent.classList.add('expanded');
       }
     });
   });
