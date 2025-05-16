@@ -26,16 +26,24 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 {{ form.cliente.label(class="form-label") }}
-                                {% if form.cliente.errors %}
-                                    {{ form.cliente(class="form-select is-invalid") }}
-                                    <div class="invalid-feedback">
-                                        {% for error in form.cliente.errors %}
-                                            {{ error }}
-                                        {% endfor %}
-                                    </div>
-                                {% else %}
-                                    {{ form.cliente(class="form-select") }}
-                                {% endif %}
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="buscar-cliente-input" placeholder="Buscar cliente...">
+                                    <button class="btn btn-outline-primary" type="button" id="btn-buscar-cliente">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                                <div class="mt-2">
+                                    {% if form.cliente.errors %}
+                                        {{ form.cliente(class="form-select is-invalid", id="cliente-select") }}
+                                        <div class="invalid-feedback">
+                                            {% for error in form.cliente.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        {{ form.cliente(class="form-select", id="cliente-select") }}
+                                    {% endif %}
+                                </div>
                             </div>
                             
                             <div class="col-md-6">
@@ -53,66 +61,33 @@
                             </div>
                         </div>
                         
-                        <div class="mb-3">
-    {{ form.cliente.label(class="form-label") }}
-    <div class="input-group">
-        <input type="text" class="form-control" id="buscar-cliente" placeholder="Buscar cliente...">
-        <button class="btn btn-outline-primary" type="button" id="btn-buscar-cliente">
-            <i class="fas fa-search"></i>
-        </button>
-    </div>
-    <div class="mt-2">
-        {% if form.cliente.errors %}
-            {{ form.cliente(class="form-select is-invalid") }}
-            <div class="invalid-feedback">
-                {% for error in form.cliente.errors %}
-                    {{ error }}
-                {% endfor %}
-            </div>
-        {% else %}
-            {{ form.cliente(class="form-select") }}
-        {% endif %}
-    </div>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const buscarInput = document.getElementById('buscar-cliente');
-    const clienteSelect = document.querySelector('[name="cliente"]');
-    
-    buscarInput.addEventListener('input', function() {
-        const busqueda = this.value.toLowerCase();
-        Array.from(clienteSelect.options).forEach(option => {
-            const texto = option.text.toLowerCase();
-            if (texto.includes(busqueda)) {
-                option.style.display = '';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-    });
-});
-</script>
-                        
-                        <!-- Sección adicional para créditos (inicialmente oculta) -->
-                        <div id="seccion_credito" style="display: none;" class="row mb-3">
-    <div class="col-md-6">
-        <label class="form-label">Frecuencia de pago</label>
-        <select class="form-select" id="frecuencia_pago">
-            <option value="semanal">Semanal</option>
-            <option value="quincenal">Quincenal</option>
-            <option value="mensual">Mensual</option>
-        </select>
-    </div>
+                        <div class="row mb-3">
                             <div class="col-md-6">
-                                <label class="form-label">Número de cuotas</label>
-                                <input type="number" class="form-control" id="numero_cuotas" min="1" value="1">
+                                <label for="tipo_venta" class="form-label">Tipo de Venta</label>
+                                <select class="form-select" id="tipo_venta" name="tipo_venta">
+                                    <option value="contado" selected>Contado</option>
+                                    <option value="credito">Crédito</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="seccion_credito" style="display: none;" class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="frecuencia_pago">Frecuencia de pago</label>
+                                <select class="form-select" id="frecuencia_pago" name="frecuencia_pago">
+                                    <option value="semanal">Semanal</option>
+                                    <option value="quincenal">Quincenal</option>
+                                    <option value="mensual">Mensual</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="numero_cuotas">Número de cuotas</label>
+                                <input type="number" class="form-control" id="numero_cuotas" name="numero_cuotas" min="1" value="1">
                             </div>
                         </div>
                         
-                        {{ form.productos(id="productos_json") }}
+                        {{ form.productos(id="productos_json", class="d-none") }} 
                         
-                        <!-- Tabla de productos seleccionados -->
                         <div class="table-responsive mt-4">
                             <table class="table table-striped" id="tabla-productos">
                                 <thead class="table-light">
@@ -126,8 +101,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <!-- Aquí se agregarán los productos seleccionados -->
-                                </tbody>
+                                    </tbody>
                                 <tfoot>
                                     <tr>
                                         <th colspan="4" class="text-end">Total:</th>
@@ -138,9 +112,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             </table>
                         </div>
                         
-                        <!-- Resumen de venta a crédito (inicialmente oculto) -->
                         <div id="resumen_credito" class="mt-4" style="display: none;">
-                            <h5 class="mb-3">Resumen de la venta</h5>
+                            <h5 class="mb-3">Resumen de la Venta a Crédito</h5>
                             <div class="row">
                                 <div class="col-md-6">
                                     <p><strong>Cliente:</strong> <span id="resumen_cliente"></span></p>
@@ -153,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <p><strong>Fecha primer pago:</strong> <span id="resumen_fecha"></span></p>
                                 </div>
                             </div>
-                            <p class="fw-bold mt-2">Total de la venta: <span id="resumen_total"></span></p>
+                            <p class="fw-bold mt-2">Total de la venta: <span id="resumen_total_credito"></span></p>
                         </div>
                         
                         <div class="d-flex justify-content-end mt-4">
@@ -172,8 +145,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="card-header">
                     <h5 class="mb-0">Productos Disponibles</h5>
                     <div class="input-group mt-2">
-                        <input type="text" class="form-control" id="buscar-producto" placeholder="Buscar producto...">
-                        <button class="btn btn-outline-primary" type="button" id="btn-buscar">
+                        <input type="text" class="form-control" id="buscar-producto-disponible" placeholder="Buscar producto...">
+                        <button class="btn btn-outline-primary" type="button" id="btn-buscar-producto-lista">
                             <i class="fas fa-search"></i>
                         </button>
                     </div>
@@ -181,20 +154,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
                     <div class="row m-2" id="productos-container">
                         {% for prod in productos %}
-                          <div class="col-12 mb-2 producto-item" data-id="{{ prod.id }}" data-nombre="{{ prod.nombre }}" data-precio="{{ prod.precio_venta }}" data-stock="{{ prod.stock }}">
-                            <div class="card p-2">
-                              <div class="d-flex justify-content-between">
-                                <div>
-                                  <h6 class="card-title mb-0">{{ prod.nombre }}</h6>
-                                  <small class="text-muted">{{ prod.codigo }}</small>
+                            <div class="col-12 mb-2 producto-item" data-id="{{ prod.id }}" data-nombre="{{ prod.nombre }}" data-precio="{{ prod.precio_venta }}" data-stock="{{ prod.stock }}" data-codigo="{{ prod.codigo }}">
+                                <div class="card p-2">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="card-title mb-0">{{ prod.nombre }}</h6>
+                                            <small class="text-muted">{{ prod.codigo }}</small>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="badge bg-primary">${{ "{:,}".format(prod.precio_venta) }}</span><br>
+                                            <small class="text-muted">Stock: {{ prod.stock }}</small>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="text-end">
-                                  <span class="badge bg-primary">${{ "{:,}".format(prod.precio_venta) }}</span><br>
-                                  <small class="text-muted">Stock: {{ prod.stock }}</small>
-                                </div>
-                              </div>
                             </div>
-                          </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -206,204 +179,247 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Variables globales para almacenar datos
-        let productosSeleccionados = [];
-        
-        // Elementos del DOM
-        const productosContainer = document.getElementById('productos-container');
-        const tablaProductos = document.getElementById('tabla-productos').getElementsByTagName('tbody')[0];
-        const productosJsonInput = document.getElementById('productos_json');
-        const totalVenta = document.getElementById('total-venta');
-        const buscarInput = document.getElementById('buscar-producto');
-        const ventaForm = document.getElementById('ventaForm');
-        const tipoVenta = document.getElementById('tipo_venta');
-        const seccionCredito = document.getElementById('seccion_credito');
-        const resumenCredito = document.getElementById('resumen_credito');
-        const frecuenciaPago = document.getElementById('frecuencia_pago');
-        const numeroCuotas = document.getElementById('numero_cuotas');
-        
-        // Mostrar/ocultar opciones de crédito según el tipo de venta
-        if (tipoVenta) {
-            tipoVenta.addEventListener('change', function() {
-                if (this.value === 'credito') {
-                    seccionCredito.style.display = 'flex';
-                    actualizarResumenCredito();
-                } else {
-                    seccionCredito.style.display = 'none';
-                    resumenCredito.style.display = 'none';
-                }
-            });
-        }
-        
-        // Actualizar resumen de crédito cuando cambian los valores
-        function actualizarResumenCredito() {
-            if (productosSeleccionados.length === 0) return;
-            
-            const clienteSelect = document.querySelector('[name="cliente"]');
-            const clienteText = clienteSelect.options[clienteSelect.selectedIndex].text;
-            const frecuenciaText = frecuenciaPago.options[frecuenciaPago.selectedIndex].text;
-            const cuotas = parseInt(numeroCuotas.value);
-            
-            // Calcular fecha del primer pago (30 días desde hoy si es mensual, 15 si es quincenal)
-            const hoy = new Date();
-            const diasPlazo = frecuenciaPago.value === 'mensual' ? 30 : 15;
-            const fechaPago = new Date(hoy.getTime() + (diasPlazo * 24 * 60 * 60 * 1000));
-            const fechaFormateada = `${fechaPago.getDate()}/${fechaPago.getMonth() + 1}/${fechaPago.getFullYear()}`;
-            
-            // Calcular valor de la cuota
-            const totalValor = productosSeleccionados.reduce((acc, prod) => acc + (prod.precio * prod.cantidad), 0);
-            const valorCuota = totalValor / cuotas;
-            
-            // Actualizar elementos del resumen
-            document.getElementById('resumen_cliente').textContent = clienteText;
-            document.getElementById('resumen_frecuencia').textContent = frecuenciaText;
-            document.getElementById('resumen_valor_cuota').textContent = `$${valorCuota.toLocaleString('es-CO')}`;
-            document.getElementById('resumen_cuotas').textContent = cuotas;
-            document.getElementById('resumen_fecha').textContent = fechaFormateada;
-            document.getElementById('resumen_total').textContent = `$${totalValor.toLocaleString('es-CO')}`;
-            
-            resumenCredito.style.display = 'block';
-        }
-        
-        // Actualizar resumen cuando cambian los valores
-        if (frecuenciaPago) frecuenciaPago.addEventListener('change', actualizarResumenCredito);
-        if (numeroCuotas) numeroCuotas.addEventListener('input', actualizarResumenCredito);
-        
-        // Evento para agregar productos al hacer clic
-        if (productosContainer) {
-            productosContainer.addEventListener('click', function(e) {
-                const item = e.target.closest('.producto-item');
-                if (item) {
-                    const id = parseInt(item.dataset.id);
-                    const nombre = item.dataset.nombre;
-                    const precio = parseFloat(item.dataset.precio);
-                    const stock = parseInt(item.dataset.stock);
-                    
-                    // Verificar si ya existe en la lista
-                    const productoExistente = productosSeleccionados.find(p => p.id === id);
-                    
-                    if (productoExistente) {
-                        // Si ya existe, incrementar cantidad si hay stock disponible
-                        if (productoExistente.cantidad < stock) {
-                            productoExistente.cantidad++;
-                            actualizarTabla();
-                        } else {
-                            alert('No hay más stock disponible para este producto');
-                        }
-                    } else {
-                        // Si no existe, agregarlo
-                        if (stock > 0) {
-                            productosSeleccionados.push({
-                                id: id,
-                                nombre: nombre,
-                                precio: precio,
-                                cantidad: 1
-                            });
-                            actualizarTabla();
-                        } else {
-                            alert('Este producto no tiene stock disponible');
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Función para actualizar la tabla de productos seleccionados
-function actualizarTabla() {
-    // Limpiar tabla
-    tablaProductos.innerHTML = '';
+document.addEventListener('DOMContentLoaded', function() {
+    // Script para el buscador de clientes
+    const buscarClienteInput = document.getElementById('buscar-cliente-input');
+    const clienteSelect = document.getElementById('cliente-select'); // Asegúrate que tu form.cliente tenga id="cliente-select"
     
-    // Agregar cada producto a la tabla
-    productosSeleccionados.forEach((producto, index) => {
-        const subtotal = producto.precio * producto.cantidad;
-        
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${producto.id}</td>
-            <td>${producto.nombre}</td>
-            <td>
-                <input type="number" class="form-control form-control-sm cantidad-input" 
-                       value="${producto.cantidad}" min="1" 
-                       data-index="${index}">
-            </td>
-            <td>${producto.precio.toLocaleString('es-CO')}</td>
-            <td>${subtotal.toLocaleString('es-CO')}</td>
-            <td>
-                <button type="button" class="btn btn-sm btn-danger eliminar-btn" data-index="${index}">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-                
-                tablaProductos.appendChild(tr);
-            });
-            
-            // Actualizar el total
-            const total = productosSeleccionados.reduce((acc, prod) => acc + (prod.precio * prod.cantidad), 0);
-            totalVenta.textContent = `$${total.toLocaleString('es-CO')}`;
-            
-            // Actualizar campo oculto con datos JSON
-            productosJsonInput.value = JSON.stringify(productosSeleccionados);
-            
-            // Agregar eventos a los nuevos elementos
-            agregarEventosTabla();
-            
-            // Si es venta a crédito, actualizar resumen
-            if (tipoVenta && tipoVenta.value === 'credito') {
-                actualizarResumenCredito();
-            }
-        }
-        
-        // Agregar eventos a los elementos de la tabla
-        function agregarEventosTabla() {
-            // Evento para cambiar cantidad
-            document.querySelectorAll('.cantidad-input').forEach(input => {
-                input.addEventListener('change', function() {
-                    const index = parseInt(this.dataset.index);
-                    const nuevaCantidad = parseInt(this.value);
-                    
-                    if (nuevaCantidad > 0) {
-                        productosSeleccionados[index].cantidad = nuevaCantidad;
-                        actualizarTabla();
-                    }
-                });
-            });
-            
-            // Evento para eliminar producto
-            document.querySelectorAll('.eliminar-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const index = parseInt(this.dataset.index);
-                    productosSeleccionados.splice(index, 1);
-                    actualizarTabla();
-                });
-            });
-        }
-        
-        // Buscador de productos
-        if (buscarInput) {
-            buscarInput.addEventListener('input', function() {
-                const busqueda = this.value.toLowerCase();
-                document.querySelectorAll('.producto-item').forEach(item => {
-                    const nombre = item.dataset.nombre.toLowerCase();
-                    if (nombre.includes(busqueda)) {
-                        item.style.display = 'block';
-                    } else {
-                        item.style.display = 'none';
-                    }
-                });
-            });
-        }
-        
-        // Validar formulario antes de enviar
-        if (ventaForm) {
-            ventaForm.addEventListener('submit', function(e) {
-                if (productosSeleccionados.length === 0) {
-                    e.preventDefault();
-                    alert('Debe seleccionar al menos un producto para crear la venta');
+    if (buscarClienteInput && clienteSelect) {
+        buscarClienteInput.addEventListener('input', function() {
+            const busqueda = this.value.toLowerCase().trim();
+            Array.from(clienteSelect.options).forEach(option => {
+                const textoOpcion = option.text.toLowerCase();
+                if (textoOpcion.includes(busqueda)) {
+                    option.style.display = '';
+                } else {
+                    option.style.display = 'none';
                 }
             });
+            // Para resetear el filtro si el campo de búsqueda está vacío
+            if (busqueda === '') {
+                 Array.from(clienteSelect.options).forEach(option => {
+                    option.style.display = '';
+                });
+            }
+        });
+    }
+
+    // Variables globales para almacenar datos de la venta
+    let productosSeleccionados = [];
+    
+    // Elementos del DOM para la lógica de productos y venta
+    const productosContainer = document.getElementById('productos-container');
+    const tablaProductosBody = document.getElementById('tabla-productos').getElementsByTagName('tbody')[0];
+    const productosJsonInput = document.getElementById('productos_json'); // Campo oculto para enviar JSON al backend
+    const totalVentaDisplay = document.getElementById('total-venta');
+    const buscarProductoDisponibleInput = document.getElementById('buscar-producto-disponible');
+    const ventaForm = document.getElementById('ventaForm');
+    
+    const tipoVentaSelect = document.getElementById('tipo_venta');
+    const seccionCreditoDiv = document.getElementById('seccion_credito');
+    const resumenCreditoDiv = document.getElementById('resumen_credito');
+    const frecuenciaPagoSelect = document.getElementById('frecuencia_pago');
+    const numeroCuotasInput = document.getElementById('numero_cuotas');
+    
+    // Mostrar/ocultar opciones de crédito según el tipo de venta
+    if (tipoVentaSelect) {
+        tipoVentaSelect.addEventListener('change', function() {
+            if (this.value === 'credito') {
+                seccionCreditoDiv.style.display = 'flex'; // 'flex' para que los elementos row se comporten como se espera
+                actualizarResumenCredito(); // Actualizar si ya hay productos
+            } else {
+                seccionCreditoDiv.style.display = 'none';
+                resumenCreditoDiv.style.display = 'none';
+            }
+        });
+    }
+    
+    // Función para actualizar el resumen de la venta a crédito
+    function actualizarResumenCredito() {
+        if (!tipoVentaSelect || tipoVentaSelect.value !== 'credito' || productosSeleccionados.length === 0) {
+            resumenCreditoDiv.style.display = 'none';
+            return;
         }
-    });
+        
+        const clienteSeleccionado = clienteSelect.options[clienteSelect.selectedIndex];
+        const clienteText = clienteSeleccionado ? clienteSeleccionado.text : 'N/A';
+        const frecuenciaText = frecuenciaPagoSelect.options[frecuenciaPagoSelect.selectedIndex].text;
+        const cuotas = parseInt(numeroCuotasInput.value) || 1; // Default a 1 si no es un número válido
+        
+        const hoy = new Date();
+        let diasPlazo = 30; // Default mensual
+        if (frecuenciaPagoSelect.value === 'semanal') diasPlazo = 7;
+        if (frecuenciaPagoSelect.value === 'quincenal') diasPlazo = 15;
+        
+        const fechaPago = new Date(hoy.setDate(hoy.getDate() + diasPlazo)); // Se modifica 'hoy' aquí, cuidado si se reutiliza 'hoy'
+        const fechaFormateada = `${fechaPago.getDate().toString().padStart(2, '0')}/${(fechaPago.getMonth() + 1).toString().padStart(2, '0')}/${fechaPago.getFullYear()}`;
+        
+        const totalValorVenta = productosSeleccionados.reduce((acc, prod) => acc + (prod.precio * prod.cantidad), 0);
+        const valorCuota = cuotas > 0 ? totalValorVenta / cuotas : totalValorVenta;
+        
+        document.getElementById('resumen_cliente').textContent = clienteText;
+        document.getElementById('resumen_frecuencia').textContent = frecuenciaText;
+        document.getElementById('resumen_valor_cuota').textContent = `$${valorCuota.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+        document.getElementById('resumen_cuotas').textContent = cuotas;
+        document.getElementById('resumen_fecha').textContent = fechaFormateada;
+        document.getElementById('resumen_total_credito').textContent = `$${totalValorVenta.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+        
+        resumenCreditoDiv.style.display = 'block';
+    }
+    
+    // Actualizar resumen cuando cambian los valores de crédito
+    if (frecuenciaPagoSelect) frecuenciaPagoSelect.addEventListener('change', actualizarResumenCredito);
+    if (numeroCuotasInput) numeroCuotasInput.addEventListener('input', actualizarResumenCredito);
+    if (clienteSelect) clienteSelect.addEventListener('change', actualizarResumenCredito);
+
+
+    // Evento para agregar productos al hacer clic en la lista de disponibles
+    if (productosContainer) {
+        productosContainer.addEventListener('click', function(e) {
+            const item = e.target.closest('.producto-item');
+            if (item) {
+                const id = parseInt(item.dataset.id);
+                const nombre = item.dataset.nombre;
+                const precio = parseFloat(item.dataset.precio);
+                const stock = parseInt(item.dataset.stock);
+                const codigo = item.dataset.codigo; // Añadido para mostrar código
+                
+                const productoExistente = productosSeleccionados.find(p => p.id === id);
+                
+                if (productoExistente) {
+                    if (productoExistente.cantidad < stock) {
+                        productoExistente.cantidad++;
+                    } else {
+                        alert('No hay más stock disponible para este producto.');
+                    }
+                } else {
+                    if (stock > 0) {
+                        productosSeleccionados.push({
+                            id: id,
+                            codigo: codigo, // Añadido
+                            nombre: nombre,
+                            precio: precio,
+                            cantidad: 1,
+                            stockMax: stock // Guardar stock máximo para validación
+                        });
+                    } else {
+                        alert('Este producto no tiene stock disponible.');
+                    }
+                }
+                actualizarTablaYResumen();
+            }
+        });
+    }
+    
+    // Función para actualizar la tabla de productos seleccionados y el resumen de crédito
+    function actualizarTablaYResumen() {
+        actualizarTablaProductos();
+        if (tipoVentaSelect && tipoVentaSelect.value === 'credito') {
+            actualizarResumenCredito();
+        }
+    }
+
+    // Función para actualizar la tabla de productos seleccionados
+    function actualizarTablaProductos() {
+        tablaProductosBody.innerHTML = ''; // Limpiar tabla
+        
+        productosSeleccionados.forEach((producto, index) => {
+            const subtotal = producto.precio * producto.cantidad;
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${producto.codigo}</td>
+                <td>${producto.nombre}</td>
+                <td>
+                    <input type="number" class="form-control form-control-sm cantidad-input" 
+                           value="${producto.cantidad}" min="1" max="${producto.stockMax}" 
+                           data-index="${index}">
+                </td>
+                <td>$${producto.precio.toLocaleString('es-CO')}</td>
+                <td>$${subtotal.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-danger eliminar-btn" data-index="${index}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tablaProductosBody.appendChild(tr);
+        });
+        
+        const total = productosSeleccionados.reduce((acc, prod) => acc + (prod.precio * prod.cantidad), 0);
+        totalVentaDisplay.textContent = `$${total.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+        
+        productosJsonInput.value = JSON.stringify(productosSeleccionados.map(p => ({ id: p.id, cantidad: p.cantidad, precio_venta: p.precio }) ));
+        
+        agregarEventosTabla();
+    }
+    
+    // Agregar eventos a los elementos de la tabla (inputs de cantidad y botones de eliminar)
+    function agregarEventosTabla() {
+        document.querySelectorAll('.cantidad-input').forEach(input => {
+            input.addEventListener('change', function() {
+                const index = parseInt(this.dataset.index);
+                let nuevaCantidad = parseInt(this.value);
+                const producto = productosSeleccionados[index];
+
+                if (isNaN(nuevaCantidad) || nuevaCantidad < 1) {
+                    nuevaCantidad = 1; // Cantidad mínima 1
+                }
+                if (nuevaCantidad > producto.stockMax) {
+                    nuevaCantidad = producto.stockMax; // No exceder el stock
+                    alert('La cantidad no puede exceder el stock disponible.');
+                }
+                
+                producto.cantidad = nuevaCantidad;
+                this.value = nuevaCantidad; // Actualizar el valor del input si se corrigió
+                actualizarTablaYResumen();
+            });
+        });
+        
+        document.querySelectorAll('.eliminar-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const index = parseInt(this.dataset.index);
+                productosSeleccionados.splice(index, 1);
+                actualizarTablaYResumen();
+            });
+        });
+    }
+    
+    // Buscador de productos disponibles
+    if (buscarProductoDisponibleInput) {
+        buscarProductoDisponibleInput.addEventListener('input', function() {
+            const busqueda = this.value.toLowerCase().trim();
+            document.querySelectorAll('#productos-container .producto-item').forEach(item => {
+                const nombre = item.dataset.nombre.toLowerCase();
+                const codigo = item.dataset.codigo.toLowerCase();
+                if (nombre.includes(busqueda) || codigo.includes(busqueda)) {
+                    item.style.display = 'block'; // O el display original, ej. 'flex' si usas d-flex en el item
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    }
+    
+    // Validar formulario antes de enviar
+    if (ventaForm) {
+        ventaForm.addEventListener('submit', function(e) {
+            if (productosSeleccionados.length === 0) {
+                e.preventDefault();
+                alert('Debe seleccionar al menos un producto para crear la venta.');
+                return;
+            }
+            // Actualizar el campo JSON una última vez antes de enviar
+            productosJsonInput.value = JSON.stringify(productosSeleccionados.map(p => ({ id: p.id, cantidad: p.cantidad, precio_venta: p.precio }) ));
+        });
+    }
+
+    // Inicializar el estado de la sección de crédito si el tipo de venta ya está seleccionado al cargar la página
+    if (tipoVentaSelect && tipoVentaSelect.value === 'credito') {
+        seccionCreditoDiv.style.display = 'flex';
+        // No llamar a actualizarResumenCredito aquí directamente sin productos
+    }
+
+});
 </script>
 {% endblock %}
