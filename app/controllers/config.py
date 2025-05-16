@@ -25,11 +25,14 @@ def editar():
         config.direccion = form.direccion.data
         config.telefono = form.telefono.data
         config.moneda = form.moneda.data
-        config.iva = int(form.iva.data)  # Convertir explícitamente a entero para asegurar que 0 se procese correctamente
+        
+        # Asegurarnos de que el IVA sea un entero y pueda ser 0
+        config.iva = int(form.iva.data) if form.iva.data is not None else 0
+        
         config.porcentaje_comision = form.porcentaje_comision.data
         config.periodo_comision = form.periodo_comision.data
         config.min_password = form.min_password.data
-            
+        
         # Procesar logo si se subió uno nuevo
         logo = form.logo.data
         if logo and logo.filename:
