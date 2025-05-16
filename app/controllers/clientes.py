@@ -28,6 +28,12 @@ def index():
 def crear():
     form = ClienteForm()
     if form.validate_on_submit():
+        # Verificar si la cédula ya existe
+        cliente_existente = Cliente.query.filter_by(cedula=form.cedula.data).first()
+        if cliente_existente:
+            flash('Error: Ya existe un cliente con esta cédula/NIT. Por favor verifique e intente nuevamente.', 'danger')
+            return render_template('clientes/crear.html', form=form, titulo='Nuevo Cliente')
+        
         cliente = Cliente(
             nombre=form.nombre.data,
             cedula=form.cedula.data,
