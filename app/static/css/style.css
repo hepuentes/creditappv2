@@ -390,3 +390,55 @@ body {
     background-position: center center;
     background-size: 100% 100%;
 }
+/* Mejoras para el menú lateral */
+#content.expanded {
+  width: 100% !important;
+  margin-left: 0 !important;
+}
+
+/* Asegurar que el botón hamburguesa siempre sea visible */
+.navbar-toggler {
+  display: block !important;
+  z-index: 2001 !important;
+}
+
+/* Para dispositivos móviles */
+@media (max-width: 767.98px) {
+  .navbar-toggler {
+    position: fixed !important;
+    top: 10px !important;
+    left: 10px !important;
+    z-index: 2001;
+    display: block !important; 
+  }
+  
+  .sidebar {
+    min-width: 250px;
+    max-width: 250px;
+    background: #343a40;
+    color: #fff;
+    transition: all 0.3s;
+    height: 100vh;
+    position: fixed;
+    z-index: 1000;
+    overflow-y: auto;
+    left: 0; /* Asegurar que siempre empiece desde la izquierda */
+}
+
+.sidebar.active {
+    margin-left: -250px;
+    /* No usar transform aquí, puede causar problemas */
+}
+
+#content {
+    width: calc(100% - 250px);
+    margin-left: 250px;
+    transition: all 0.3s;
+    min-height: 100vh;
+}
+
+#content.expanded {
+    width: 100%;
+    margin-left: 0;
+}
+}
