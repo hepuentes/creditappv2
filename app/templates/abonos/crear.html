@@ -23,6 +23,17 @@
                     <form method="POST">
                         {{ form.hidden_tag() }}
 
+                        <!-- Búsqueda de cliente -->
+                        <div class="mb-3">
+                            <label class="form-label">Buscar Cliente</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="buscar-cliente-input" placeholder="Buscar cliente por nombre o cédula...">
+                                <button class="btn btn-outline-primary" type="button" id="btn-buscar-cliente">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             {{ form.cliente_id.label(class="form-label") }}
                             {% if form.cliente_id.errors %}
@@ -112,18 +123,40 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        const buscarClienteInput = document.getElementById('buscar-cliente-input');
         const clienteSelect = document.getElementById('cliente_select');
         const ventaSelect = document.getElementById('venta_select');
         const montoInput = document.getElementById('monto_input');
         const saldoInfo = document.getElementById('saldo_info');
+        const btnBuscarCliente = document.getElementById('btn-buscar-cliente');
 
         // Variable para almacenar el saldo pendiente de la venta seleccionada
         let saldoPendiente = 0;
 
+        // Función para filtrar clientes
+        function filtrarClientes() {
+            const busqueda = buscarClienteInput.value.toLowerCase().trim();
+            Array.from(clienteSelect.options).forEach(option => {
+                if (option.value === "") return; // No ocultar la opción predeterminada
+                const textoOpcion = option.text.toLowerCase();
+                option.style.display = textoOpcion.includes(busqueda) ? '' : 'none';
+            });
+        }
+
+        // Evento para buscar clientes al escribir
+        if (buscarClienteInput) {
+            buscarClienteInput.addEventListener('input', filtrarClientes);
+        }
+
+        // Evento para el botón de búsqueda
+        if (btnBuscarCliente) {
+            btnBuscarCliente.addEventListener('click', filtrarClientes);
+        }
+
         // Función para actualizar el saldo info
         function actualizarSaldoInfo() {
             const ventaOption = ventaSelect.options[ventaSelect.selectedIndex];
-            if (ventaOption) {
+            if (ventaOption && ventaOption.value) {
                 const texto = ventaOption.text;
                 const match = texto.match(/Saldo: \$([\d,]+\.\d+)/);
                 if (match) {
@@ -142,51 +175,58 @@
         }
 
         // Actualizar ventas cuando cambia el cliente
-        clienteSelect.addEventListener('change', function() {
-            const clienteId = this.value;
+        if (clienteSelect) {
+            clienteSelect.addEventListener('change', function() {
+                const clienteId = this.value;
+                if (!clienteId) return;
 
-            // Limpiar el select de ventas
-            ventaSelect.innerHTML = '<option value="" selected disabled>Cargando ventas...</option>';
+                // Limpiar el select de ventas
+                ventaSelect.innerHTML = '<option value="" selected disabled>Cargando ventas...</option>';
 
-            // Cargar las ventas del cliente seleccionado
-            fetch(`/abonos/cargar-ventas/${clienteId}`)
-                .then(response => response.json())
-                .then(ventas => {
-                    ventaSelect.innerHTML = '';
+                // Cargar las ventas del cliente seleccionado
+                fetch(`/abonos/cargar-ventas/${clienteId}`)
+                    .then(response => response.json())
+                    .then(ventas => {
+                        ventaSelect.innerHTML = '';
 
-                    if (ventas.length === 0) {
-                        ventaSelect.innerHTML = '<option value="" selected disabled>No hay ventas pendientes</option>';
-                        return;
-                    }
+                        if (ventas.length === 0) {
+                            ventaSelect.innerHTML = '<option value="" selected disabled>No hay ventas pendientes</option>';
+                            return;
+                        }
 
-                    ventas.forEach(venta => {
-                        const option = document.createElement('option');
-                        option.value = venta.id;
-                        option.textContent = venta.texto;
-                        ventaSelect.appendChild(option);
+                        ventas.forEach(venta => {
+                            const option = document.createElement('option');
+                            option.value = venta.id;
+                            option.textContent = venta.texto;
+                            ventaSelect.appendChild(option);
+                        });
+
+                        // Actualizar la información de saldo
+                        actualizarSaldoInfo();
+                    })
+                    .catch(error => {
+                        console.error('Error al cargar ventas:', error);
+                        ventaSelect.innerHTML = '<option value="" selected disabled>Error al cargar ventas</option>';
                     });
-
-                    // Actualizar la información de saldo
-                    actualizarSaldoInfo();
-                })
-                .catch(error => {
-                    console.error('Error al cargar ventas:', error);
-                    ventaSelect.innerHTML = '<option value="" selected disabled>Error al cargar ventas</option>';
-                });
-        });
+            });
+        }
 
         // Actualizar saldo cuando cambia la venta
-        ventaSelect.addEventListener('change', actualizarSaldoInfo);
+        if (ventaSelect) {
+            ventaSelect.addEventListener('change', actualizarSaldoInfo);
+        }
 
         // Validar que el monto no exceda el saldo pendiente
-        montoInput.addEventListener('input', function() {
-            const monto = parseFloat(this.value) || 0;
+        if (montoInput) {
+            montoInput.addEventListener('input', function() {
+                const monto = parseFloat(this.value) || 0;
 
-            if (monto > saldoPendiente) {
-                this.value = saldoPendiente;
-                alert(`El monto no puede ser mayor al saldo pendiente ($${saldoPendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})})`);
-            }
-        });
+                if (monto > saldoPendiente) {
+                    this.value = saldoPendiente;
+                    alert(`El monto no puede ser mayor al saldo pendiente ($${saldoPendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})})`);
+                }
+            });
+        }
 
         // Inicializar la información de saldo
         actualizarSaldoInfo();
