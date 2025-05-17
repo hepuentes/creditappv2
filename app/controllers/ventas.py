@@ -74,71 +74,55 @@ def index():
 @login_required
 @vendedor_required
 def crear():
+    # Inicializar el formulario
     form = VentaForm()
     
-    # Cargar clientes para el formulario
+    # Cargar opciones para los selectores
     clientes = Cliente.query.order_by(Cliente.nombre).all()
     form.cliente.choices = [(c.id, f"{c.nombre} - {c.cedula}") for c in clientes]
     
-    # Cargar cajas para el formulario
     cajas = Caja.query.all()
     form.caja.choices = [(c.id, c.nombre) for c in cajas]
     
-    # Obtener productos disponibles para mostrar en la interfaz
+    # Obtener productos disponibles para la vista
     productos_disponibles = Producto.query.filter(Producto.stock > 0).order_by(Producto.nombre).all()
     
-    # Registramos los intentos de crear ventas para depurar
-    current_app.logger.info("Iniciando proceso de creación de venta")
-    
+    # Log para depuración
     if request.method == 'POST':
         current_app.logger.info(f"Datos del formulario recibidos: {request.form}")
-        current_app.logger.info(f"Productos JSON: {request.form.get('productos_json_hidden')}")
         
-        # Verificamos si hay productos seleccionados
-        productos_seleccionados_json = request.form.get('productos_json_hidden')
+    # Procesar el formulario cuando se envía
+    if form.validate_on_submit():
+        current_app.logger.info("Formulario validado correctamente")
         
-        if not productos_seleccionados_json or productos_seleccionados_json == '[]':
+        # Validar que se hayan seleccionado productos
+        if not form.productos.data or form.productos.data == '[]':
             flash('No se seleccionaron productos para la venta.', 'danger')
             return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
         
-        # Verificamos que se seleccionó un cliente
-        cliente_id = request.form.get('cliente')
-        if not cliente_id:
-            flash('Debe seleccionar un cliente para la venta.', 'danger')
-            return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
-        
-        # Verificamos que se seleccionó una caja
-        caja_id = request.form.get('caja')
-        if not caja_id:
-            flash('Debe seleccionar una caja para la venta.', 'danger')
-            return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
-        
         try:
-            # Obtenemos el tipo de venta
-            tipo_venta = request.form.get('tipo_venta', 'contado')
-            
-            # Creamos la venta principal
+            # Crear nueva venta
             nueva_venta = Venta(
-                cliente_id=int(cliente_id),
+                cliente_id=form.cliente.data,
                 vendedor_id=current_user.id,
-                tipo=tipo_venta,
+                tipo=form.tipo.data,
                 fecha=datetime.utcnow(),
                 total=0,  # Se calculará después
-                saldo_pendiente=0,  # Se calculará después
-                estado='pendiente'  # Por defecto todas empiezan pendientes
+                saldo_pendiente=0  # Se calculará después
             )
             
-            # Si es venta de contado, la marcamos como pagada desde el inicio
-            if tipo_venta == 'contado':
+            # Establecer estado según tipo de venta
+            if form.tipo.data == 'contado':
                 nueva_venta.estado = 'pagado'
+            else:
+                nueva_venta.estado = 'pendiente'
             
-            # Agregamos la venta a la sesión de la base de datos
             db.session.add(nueva_venta)
             db.session.flush()  # Para obtener el ID antes del commit
             
-            # Procesamos los productos seleccionados
+            # Procesar los productos seleccionados
             try:
-                productos_seleccionados = json.loads(productos_seleccionados_json)
+                productos_seleccionados = json.loads(form.productos.data)
                 current_app.logger.info(f"Productos decodificados: {productos_seleccionados}")
             except json.JSONDecodeError as e:
                 current_app.logger.error(f"Error al decodificar JSON: {e}")
@@ -146,73 +130,55 @@ def crear():
                 db.session.rollback()
                 return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
             
-            # Verificamos que la lista de productos no esté vacía
-            if not productos_seleccionados:
-                flash('La lista de productos está vacía.', 'danger')
-                db.session.rollback()
-                return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
-            
-            # Procesamos cada producto y creamos los detalles de la venta
+            # Calcular total y añadir detalles
             total_venta_calculado = 0
             
             for item in productos_seleccionados:
-                current_app.logger.info(f"Procesando producto: {item}")
                 producto_id = item.get('id')
-                cantidad = item.get('cantidad', 0)
-                precio_venta = item.get('precio_venta', 0)
+                cantidad = int(item.get('cantidad', 0))
+                precio_venta = float(item.get('precio_venta', 0))
                 
-                if not producto_id or not cantidad or not precio_venta:
-                    current_app.logger.error(f"Datos de producto incompletos: {item}")
-                    flash('Datos de producto incompletos.', 'danger')
-                    db.session.rollback()
-                    return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
-                
-                # Verificamos que el producto exista y tenga suficiente stock
+                # Verificar stock disponible
                 producto_db = Producto.query.get(producto_id)
                 if not producto_db:
-                    current_app.logger.error(f"Producto no encontrado: {producto_id}")
-                    flash(f"Producto ID {producto_id} no encontrado.", 'danger')
+                    flash(f"Producto no encontrado.", 'danger')
                     db.session.rollback()
                     return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
                 
-                if producto_db.stock < int(cantidad):
-                    current_app.logger.error(f"Stock insuficiente para {producto_db.nombre}: tiene {producto_db.stock}, se pidieron {cantidad}")
-                    flash(f"Stock insuficiente para el producto {producto_db.nombre}. Disponible: {producto_db.stock}, Solicitado: {cantidad}", 'danger')
+                if producto_db.stock < cantidad:
+                    flash(f"Stock insuficiente para {producto_db.nombre}. Disponible: {producto_db.stock}", 'danger')
                     db.session.rollback()
                     return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
                 
-                # Creamos el detalle de venta
-                subtotal = int(cantidad) * float(precio_venta)
+                # Crear detalle de venta
+                subtotal = cantidad * precio_venta
                 detalle = DetalleVenta(
                     venta_id=nueva_venta.id,
                     producto_id=producto_id,
-                    cantidad=int(cantidad),
-                    precio_unitario=float(precio_venta),
+                    cantidad=cantidad,
+                    precio_unitario=precio_venta,
                     subtotal=subtotal
                 )
-                
-                # Actualizamos el stock del producto
-                producto_db.stock -= int(cantidad)
-                
-                # Acumulamos el total de la venta
-                total_venta_calculado += subtotal
-                
-                # Agregamos el detalle a la sesión de la base de datos
                 db.session.add(detalle)
+                
+                # Actualizar stock
+                producto_db.stock -= cantidad
+                
+                # Sumar al total
+                total_venta_calculado += subtotal
             
-            # Actualizamos el total de la venta
+            # Actualizar total y saldo pendiente
             nueva_venta.total = total_venta_calculado
             
-            # Establecemos el saldo pendiente según el tipo de venta
-            if tipo_venta == 'credito':
+            if form.tipo.data == 'credito':
                 nueva_venta.saldo_pendiente = total_venta_calculado
-            else:  # Contado
+            else:  # contado
                 nueva_venta.saldo_pendiente = 0
                 
-                # Registramos el movimiento de caja para ventas de contado
+                # Registrar movimiento en caja para ventas de contado
                 try:
                     registrar_movimiento_caja(
-                        caja_id=int(caja_id),
+                        caja_id=form.caja.data,
                         tipo='entrada',
                         monto=total_venta_calculado,
                         concepto=f"Venta de contado #{nueva_venta.id}",
@@ -220,22 +186,24 @@ def crear():
                     )
                 except Exception as e:
                     current_app.logger.error(f"Error al registrar movimiento de caja: {e}")
-                    # Continuamos a pesar del error en el movimiento de caja
+                    # Continuar a pesar del error en la caja
             
-            # Confirmamos todos los cambios en la base de datos
+            # Confirmar cambios
             db.session.commit()
-            
-            current_app.logger.info(f"Venta {nueva_venta.id} creada exitosamente")
             flash(f'Venta #{nueva_venta.id} creada exitosamente!', 'success')
             
-            # Redirigimos a la lista de ventas
+            # Redireccionar a la lista de ventas
             return redirect(url_for('ventas.index'))
             
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error en la creación de venta: {e}")
+            current_app.logger.error(f"Error al crear venta: {e}")
             current_app.logger.error(traceback.format_exc())
             flash(f'Error al crear la venta: {str(e)}', 'danger')
+    elif request.method == 'POST':
+        # Si el formulario no se validó, mostrar errores
+        current_app.logger.warning(f"Errores de validación: {form.errors}")
+        flash('Por favor corrija los errores en el formulario.', 'warning')
     
     return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
 
