@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response, jsonify
 from flask_login import login_required, current_user
 from app import db
-from app.models import Abono, Cliente, Credito, CreditoVenta, Venta
+from app.models import Abono, Cliente, Credito, CreditoVenta, Venta, Caja
 from app.forms import AbonoForm
 from app.decorators import cobrador_required
 from app.utils import registrar_movimiento_caja, calcular_comision
@@ -14,80 +14,159 @@ abonos_bp = Blueprint('abonos', __name__, url_prefix='/abonos')
 @login_required
 @cobrador_required
 def index():
-    abonos = Abono.query.order_by(Abono.fecha.desc()).all()
-    return render_template('abonos/index.html', abonos=abonos)
+    # Obtener parámetros de filtro
+    busqueda = request.args.get('busqueda', '')
+    desde_str = request.args.get('desde', '')
+    hasta_str = request.args.get('hasta', '')
+
+    query = Abono.query
+    
+    if busqueda:
+        # Buscar por nombre de cliente
+        query = query.join(Venta).join(Cliente).filter(Cliente.nombre.ilike(f"%{busqueda}%"))
+    
+    if desde_str:
+        try:
+            desde_dt = datetime.strptime(desde_str, '%Y-%m-%d')
+            query = query.filter(Abono.fecha >= desde_dt)
+        except ValueError:
+            flash('Fecha "desde" inválida.', 'warning')
+    
+    if hasta_str:
+        try:
+            hasta_dt = datetime.strptime(hasta_str, '%Y-%m-%d')
+            hasta_dt_fin_dia = datetime.combine(hasta_dt, datetime.max.time())
+            query = query.filter(Abono.fecha <= hasta_dt_fin_dia)
+        except ValueError:
+            flash('Fecha "hasta" inválida.', 'warning')
+
+    abonos = query.order_by(Abono.fecha.desc()).all()
+    
+    # Calcular total
+    total_abonos = sum(a.monto for a in abonos)
+    
+    return render_template('abonos/index.html', 
+                          abonos=abonos, 
+                          busqueda=busqueda,
+                          desde=desde_str,
+                          hasta=hasta_str,
+                          total_abonos=total_abonos)
 
 @abonos_bp.route('/crear', methods=['GET', 'POST'])
 @login_required
 @cobrador_required
 def crear():
     form = AbonoForm()
-    # Modificar esta línea para incluir todos los clientes o los que tienen ventas a crédito:
-    clientes = Cliente.query.all()  # Mostrar todos los clientes
+    
+    # Cargar cajas disponibles
+    cajas = Caja.query.all()
+    form.caja_id.choices = [(c.id, f"{c.nombre} ({c.tipo})") for c in cajas]
+    
+    # Si se recibe un cliente_id o venta_id como parámetro, pre-seleccionarlo
+    cliente_id = request.args.get('cliente_id', type=int)
+    venta_id = request.args.get('venta_id', type=int)
+    
+    # Obtener todos los clientes que tienen ventas a crédito con saldo pendiente
+    clientes = db.session.query(Cliente).join(Venta).filter(
+        Venta.tipo == 'credito',
+        Venta.saldo_pendiente > 0
+    ).distinct().order_by(Cliente.nombre).all()
     
     if form.validate_on_submit():
-        # Crear un abono
-        abono = Abono(
-            venta_id=form.venta_id.data,  # Asegúrate de que este campo exista en el formulario
-            # Decidir qué tipo de crédito es según el formulario
-            credito_id=form.credito_id.data if form.tipo_credito.data == 'credito' else None,
-            credito_venta_id=form.credito_venta_id.data if form.tipo_credito.data == 'venta' else None,
-            monto=form.monto.data,
-            caja_id=form.caja_id.data,
-            cobrador_id=current_user.id,
-            notas=form.notas.data if hasattr(form, 'notas') else None,
-            fecha=datetime.utcnow()
-        )
-        # Registrar movimiento en la caja
-        registrar_movimiento_caja(
-            caja_id=form.caja_id.data,
-            tipo='entrada',  # Corregido: debería ser 'entrada' ya que es dinero que ingresa a la caja
-            monto=form.monto.data,
-            concepto=f'Abono venta #{form.venta_id.data}',
-            abono_id=abono.id
-        )
-        db.session.add(abono)
-        db.session.commit()
+        try:
+            venta = Venta.query.get(form.venta_id.data)
+            
+            if not venta:
+                flash('Venta no encontrada.', 'danger')
+                return render_template('abonos/crear.html', form=form, clientes=clientes)
+            
+            if venta.tipo != 'credito':
+                flash('Solo se pueden registrar abonos para ventas a crédito.', 'danger')
+                return render_template('abonos/crear.html', form=form, clientes=clientes)
+            
+            if venta.saldo_pendiente <= 0:
+                flash('Esta venta ya está pagada completamente.', 'success')
+                return render_template('abonos/crear.html', form=form, clientes=clientes)
+            
+            # Validar que el monto del abono no exceda el saldo pendiente
+            if form.monto.data > venta.saldo_pendiente:
+                form.monto.data = venta.saldo_pendiente
+                flash(f'El monto ha sido ajustado al saldo pendiente: ${venta.saldo_pendiente}', 'warning')
+            
+            # Crear un abono
+            abono = Abono(
+                venta_id=venta.id,
+                monto=form.monto.data,
+                cobrador_id=current_user.id,
+                caja_id=form.caja_id.data,
+                notas=form.notas.data,
+                fecha=datetime.utcnow()
+            )
+            
+            db.session.add(abono)
+            db.session.flush()  # Para obtener el ID antes del commit
+            
+            # Actualizar el saldo pendiente de la venta
+            venta.saldo_pendiente -= form.monto.data
+            
+            # Si el saldo pendiente es 0 o menos, marcar la venta como pagada
+            if venta.saldo_pendiente <= 0:
+                venta.estado = 'pagado'
+                venta.saldo_pendiente = 0  # Asegurar que no sea negativo
+            
+            # Registrar movimiento en la caja
+            try:
+                registrar_movimiento_caja(
+                    caja_id=form.caja_id.data,
+                    tipo='entrada',
+                    monto=form.monto.data,
+                    concepto=f'Abono a venta #{venta.id}',
+                    abono_id=abono.id
+                )
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error al registrar movimiento de caja: {str(e)}', 'danger')
+                return render_template('abonos/crear.html', form=form, clientes=clientes)
+            
+            # Calcular comisión si aplica
+            try:
+                calcular_comision(abono.monto, current_user.id)
+            except Exception as e:
+                # No interrumpir por error en comisión, pero registrarlo
+                print(f"Error al calcular comisión: {e}")
+            
+            db.session.commit()
+            
+            flash(f'Abono de ${form.monto.data:,.2f} registrado exitosamente.', 'success')
+            
+            # Generar PDF
+            try:
+                pdf_bytes = generar_pdf_abono(abono)
+                response = make_response(pdf_bytes)
+                response.headers['Content-Type'] = 'application/pdf'
+                response.headers['Content-Disposition'] = f'inline; filename=abono_{abono.id}.pdf'
+                return response
+            except Exception as e:
+                flash(f'Abono registrado pero hubo un error al generar el PDF: {str(e)}', 'warning')
+                return redirect(url_for('abonos.detalle', id=abono.id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al registrar el abono: {str(e)}', 'danger')
+            return render_template('abonos/crear.html', form=form, clientes=clientes)
 
-        # Actualizar el saldo pendiente de la venta
-        if abono.venta_id:
-            venta = Venta.query.get(abono.venta_id)
-            if venta:
-                venta.saldo_pendiente -= abono.monto
-                if venta.saldo_pendiente <= 0:
-                    venta.estado = 'pagado'
-                db.session.commit()
-
-        # Generar comisión si aplica
-        calcular_comision(abono.monto, current_user.id)
-
-        # Generar PDF para compartir
-        pdf_bytes = generar_pdf_abono(abono)
-        response = make_response(pdf_bytes)
-        response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'inline; filename=abono_{abono.id}.pdf'
-        return response
+    # Pre-seleccionar cliente o venta si vienen como parámetros
+    if cliente_id:
+        form.cliente_id.data = cliente_id
+    
+    if venta_id:
+        form.venta_id.data = venta_id
+        # Cargar la venta para mostrar información
+        venta = Venta.query.get(venta_id)
+        if venta:
+            form.cliente_id.data = venta.cliente_id
 
     return render_template('abonos/crear.html', form=form, clientes=clientes)
-
-@abonos_bp.route('/detalle/<int:id>')
-@login_required
-@cobrador_required
-def detalle(id):
-    abono = Abono.query.get_or_404(id)
-    return render_template('abonos/detalle.html', abono=abono)
-
-@abonos_bp.route('/pdf/<int:id>')
-@login_required
-def pdf(id):
-    abono = Abono.query.get_or_404(id)
-    pdf_bytes = generar_pdf_abono(abono)
-    
-    response = make_response(pdf_bytes)
-    response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'inline; filename=abono_{abono.id}.pdf'
-    
-    return response
 
 @abonos_bp.route('/cargar-ventas/<int:cliente_id>')
 @login_required
@@ -109,6 +188,27 @@ def cargar_ventas(cliente_id):
         })
     
     return jsonify(ventas_json)
+
+@abonos_bp.route('/<int:id>')
+@login_required
+@cobrador_required
+def detalle(id):
+    abono = Abono.query.get_or_404(id)
+    return render_template('abonos/detalle.html', abono=abono)
+
+@abonos_bp.route('/<int:id>/pdf')
+@login_required
+def pdf(id):
+    abono = Abono.query.get_or_404(id)
+    try:
+        pdf_bytes = generar_pdf_abono(abono)
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'inline; filename=abono_{abono.id}.pdf'
+        return response
+    except Exception as e:
+        flash(f"Error generando el PDF: {str(e)}", "danger")
+        return redirect(url_for('abonos.detalle', id=id))
 
 @abonos_bp.route('/<int:id>/share')
 @login_required
