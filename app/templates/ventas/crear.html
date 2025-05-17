@@ -2,6 +2,22 @@
 
 {% block title %}Nueva Venta - CreditApp{% endblock %}
 
+{% block extra_css %}
+<style>
+    .producto-item-disponible {
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .producto-item-disponible:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .cantidad-item-venta {
+        width: 70px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -28,12 +44,14 @@
                             <!-- Datos del cliente y venta -->
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Cliente *</label>
-                                <div class="input-group">
+                                <div class="input-group mb-2">
                                     {{ form.cliente(class="form-select") }}
                                 </div>
-                                <!-- Buscador de clientes -->
-                                <div class="mt-2">
-                                    <input type="text" class="form-control" id="buscar-cliente" placeholder="Buscar cliente por nombre o cédula...">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="buscar-cliente" placeholder="Buscar cliente...">
+                                    <button class="btn btn-outline-secondary" type="button" id="btn-buscar-cliente">
+                                        <i class="fas fa-search"></i>
+                                    </button>
                                 </div>
                             </div>
                             
@@ -64,7 +82,7 @@
 
                         <div class="row mb-3">
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">Caja</label>
+                                <label class="form-label">Caja *</label>
                                 {{ form.caja(class="form-select") }}
                             </div>
                         </div>
@@ -139,6 +157,9 @@
                     <h5 class="mb-0">Productos Disponibles</h5>
                     <div class="input-group mt-2">
                         <input type="text" class="form-control" id="buscar-producto-disponible" placeholder="Buscar por nombre o código...">
+                        <button class="btn btn-outline-primary" type="button" id="btn-buscar-producto">
+                            <i class="fas fa-search"></i>
+                        </button>
                     </div>
                 </div>
                 <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
@@ -188,8 +209,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const inputJsonProductosOculto = document.getElementById('productos_json_hidden_input');
     const displayTotalVenta = document.getElementById('total-venta');
     const inputBuscarProductoDisponible = document.getElementById('buscar-producto-disponible');
-    const formularioVenta = document.getElementById('ventaForm');
+    const btnBuscarProducto = document.getElementById('btn-buscar-producto');
     const inputBuscarCliente = document.getElementById('buscar-cliente');
+    const btnBuscarCliente = document.getElementById('btn-buscar-cliente');
+    const formularioVenta = document.getElementById('ventaForm');
+    const btnConfirmarVenta = document.getElementById('btnConfirmarVenta');
     
     const selectTipoVenta = document.getElementById('tipo_venta');
     const divSeccionCredito = document.getElementById('seccion_credito');
@@ -199,20 +223,29 @@ document.addEventListener('DOMContentLoaded', function() {
     const clienteSelect = document.querySelector('select[name="cliente"]');
 
     // Formateador de moneda
-    const currencyFormatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const currencyFormatter = new Intl.NumberFormat('es-CO', { 
+        style: 'currency', 
+        currency: 'COP', 
+        minimumFractionDigits: 0, 
+        maximumFractionDigits: 0 
+    });
 
-    // Filtrar opciones del select de clientes al escribir en el buscador
+    // Filtrar clientes al escribir en el buscador
     if (inputBuscarCliente && clienteSelect) {
-        inputBuscarCliente.addEventListener('input', function() {
-            const busqueda = this.value.toLowerCase();
-            const opciones = clienteSelect.options;
+        function filtrarClientes() {
+            const busqueda = inputBuscarCliente.value.toLowerCase().trim();
             
-            for (let i = 0; i < opciones.length; i++) {
-                const textoOpcion = opciones[i].text.toLowerCase();
-                const esVisible = textoOpcion.includes(busqueda);
-                opciones[i].style.display = esVisible ? '' : 'none';
+            for (let i = 0; i < clienteSelect.options.length; i++) {
+                const option = clienteSelect.options[i];
+                if (option.value === '') continue;  // Saltar la opción por defecto
+                
+                const texto = option.text.toLowerCase();
+                option.style.display = texto.includes(busqueda) ? '' : 'none';
             }
-        });
+        }
+        
+        inputBuscarCliente.addEventListener('input', filtrarClientes);
+        btnBuscarCliente.addEventListener('click', filtrarClientes);
     }
 
     // Mostrar/ocultar sección de crédito
@@ -260,6 +293,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (inputNumeroCuotas) inputNumeroCuotas.addEventListener('input', actualizarResumenVentaCredito);
     if (clienteSelect) clienteSelect.addEventListener('change', actualizarResumenVentaCredito);
 
+    // Manejar clic en productos disponibles para agregarlos
     if (productosDisponiblesContainer) {
         productosDisponiblesContainer.addEventListener('click', function(e) {
             const itemProducto = e.target.closest('.producto-item-disponible');
@@ -277,20 +311,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         productoYaSeleccionado.cantidad++;
                         renderTablaProductosSeleccionados();
                     } else {
-                        alert('No hay más stock disponible para este producto.');
+                        alert(`No hay más stock disponible para ${nombre}. Stock máximo: ${stock}`);
                     }
                 } else {
                     if (stock > 0) {
                         productosSeleccionadosParaVenta.push({ id, codigo, nombre, precio, cantidad: 1, stockMax: stock });
                         renderTablaProductosSeleccionados();
                     } else {
-                        alert('Este producto está agotado.');
+                        alert(`El producto ${nombre} está agotado.`);
                     }
                 }
             }
         });
     }
 
+    // Renderizar tabla de productos seleccionados
     function renderTablaProductosSeleccionados() {
         tablaProductosVentaBody.innerHTML = '';
         let granTotal = 0;
@@ -309,7 +344,7 @@ document.addEventListener('DOMContentLoaded', function() {
                            data-index="${index}">
                 </td>
                 <td class="text-end">${currencyFormatter.format(producto.precio)}</td>
-                <td class="text-end">${currencyFormatter.format(subtotal)}</td>
+                <td class="text-end subtotal">${currencyFormatter.format(subtotal)}</td>
                 <td>
                     <button type="button" class="btn btn-sm btn-danger eliminar-item-venta" data-index="${index}">
                         <i class="fas fa-trash"></i>
@@ -332,6 +367,7 @@ document.addEventListener('DOMContentLoaded', function() {
         bindEventosItemsTabla();
     }
 
+    // Agregar eventos a los elementos de la tabla de productos seleccionados
     function bindEventosItemsTabla() {
         document.querySelectorAll('.cantidad-item-venta').forEach(input => {
             input.addEventListener('change', function() {
@@ -346,7 +382,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (nuevaCantidad > producto.stockMax) {
                     nuevaCantidad = producto.stockMax;
                     this.value = producto.stockMax;
-                    alert('La cantidad no puede exceder el stock disponible.');
+                    alert(`La cantidad no puede exceder el stock disponible (${producto.stockMax}).`);
                 }
                 
                 producto.cantidad = nuevaCantidad;
@@ -363,39 +399,59 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    if (inputBuscarProductoDisponible) {
-        inputBuscarProductoDisponible.addEventListener('input', function() {
-            const busqueda = this.value.toLowerCase().trim();
-            document.querySelectorAll('#productos-disponibles-container .producto-item-disponible').forEach(item => {
-                const nombre = item.dataset.nombre.toLowerCase();
-                const codigo = item.dataset.codigo.toLowerCase();
-                item.style.display = (nombre.includes(busqueda) || codigo.includes(busqueda)) ? 'block' : 'none';
-            });
+    // Buscar productos disponibles
+    function buscarProductos() {
+        const busqueda = inputBuscarProductoDisponible.value.toLowerCase().trim();
+        document.querySelectorAll('#productos-disponibles-container .producto-item-disponible').forEach(item => {
+            const nombre = item.dataset.nombre.toLowerCase();
+            const codigo = item.dataset.codigo.toLowerCase();
+            item.style.display = (nombre.includes(busqueda) || codigo.includes(busqueda)) ? 'block' : 'none';
         });
     }
 
+    if (inputBuscarProductoDisponible) {
+        inputBuscarProductoDisponible.addEventListener('input', buscarProductos);
+    }
+    
+    if (btnBuscarProducto) {
+        btnBuscarProducto.addEventListener('click', buscarProductos);
+    }
+
+    // Validación del formulario al enviar
     if (formularioVenta) {
         formularioVenta.addEventListener('submit', function(e) {
+            // Evitar múltiples envíos
+            if (btnConfirmarVenta) {
+                btnConfirmarVenta.disabled = true;
+                setTimeout(() => { btnConfirmarVenta.disabled = false; }, 3000);
+            }
+            
+            // Verificar productos seleccionados
             if (productosSeleccionadosParaVenta.length === 0) {
                 e.preventDefault();
                 alert('Debe seleccionar al menos un producto para crear la venta.');
-                return;
+                if (btnConfirmarVenta) btnConfirmarVenta.disabled = false;
+                return false;
             }
             
-            // Verificar que exista cliente seleccionado
+            // Verificar cliente seleccionado
             if (!clienteSelect.value) {
                 e.preventDefault();
                 alert('Debe seleccionar un cliente para crear la venta.');
-                return;
+                if (btnConfirmarVenta) btnConfirmarVenta.disabled = false;
+                return false;
             }
             
-            // Asegurar que el JSON esté actualizado justo antes del submit
+            // Verificar que el JSON esté actualizado justo antes del submit
             const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
                 id: p.id,
                 cantidad: p.cantidad,
                 precio_venta: p.precio
             }));
             inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
+            
+            console.log('Enviando formulario con productos:', inputJsonProductosOculto.value);
+            return true;
         });
     }
     
