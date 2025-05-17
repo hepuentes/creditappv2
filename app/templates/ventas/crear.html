@@ -85,7 +85,8 @@
                         </div>
                         
                         <!-- Campo oculto para los productos JSON -->
-                        {{ form.productos(id="productos_json") }}
+                        <input type="hidden" name="productos_json" id="productos_json">
+                        {{ form.csrf_token }}
                         
                         <!-- Lista de productos seleccionados -->
                         <div class="table-responsive mt-4">
@@ -358,6 +359,7 @@ function renderTablaProductosSeleccionados() {
         cantidad: p.cantidad,
         precio_venta: p.precio
     }));
+    document.getElementById('productos_json').value = JSON.stringify(productosParaEnviar);
     inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
     
     actualizarResumenVentaCredito(); // Actualizar resumen si es crédito
