@@ -95,11 +95,15 @@ def crear():
     if form.validate_on_submit():
         current_app.logger.info("Formulario validado correctamente")
         
-        # Validar que se hayan seleccionado productos
-        productos_data = form.productos.data
-        if productos_data is None or productos_data == '' or productos_data == '[]':
-            flash('No se seleccionaron productos para la venta.', 'danger')
-            return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
+        # Obtener productos del nuevo campo oculto
+        productos_json = request.form.get('productos_json', '[]')
+        current_app.logger.info(f"Productos JSON: {productos_json}")
+        
+        try:
+            productos_seleccionados = json.loads(productos_json)
+            if not productos_seleccionados:
+                flash('No se seleccionaron productos para la venta.', 'danger')
+                return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
         
         try:
             # Decodificar productos seleccionados
