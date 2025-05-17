@@ -62,15 +62,56 @@ def crear():
     cajas = Caja.query.all()
     form.caja_id.choices = [(c.id, f"{c.nombre} ({c.tipo})") for c in cajas]
     
-    # Si se recibe un cliente_id o venta_id como parámetro, pre-seleccionarlo
-    cliente_id = request.args.get('cliente_id', type=int)
-    venta_id = request.args.get('venta_id', type=int)
-    
-    # Obtener todos los clientes que tienen ventas a crédito con saldo pendiente
+    # Obtener clientes con ventas a crédito pendientes
     clientes = db.session.query(Cliente).join(Venta).filter(
         Venta.tipo == 'credito',
         Venta.saldo_pendiente > 0
     ).distinct().order_by(Cliente.nombre).all()
+    
+    # Asegurar que el campo cliente_id tiene opciones válidas
+    if clientes:
+        form.cliente_id.choices = [(c.id, f"{c.nombre} - {c.cedula}") for c in clientes]
+    else:
+        form.cliente_id.choices = [(-1, "No hay clientes con créditos pendientes")]
+    
+    # Inicializar opciones para venta_id
+    form.venta_id.choices = [(-1, "Seleccione un cliente primero")]
+    
+    # Si se recibe un cliente_id o venta_id como parámetro, pre-seleccionarlo
+    cliente_id = request.args.get('cliente_id', type=int)
+    venta_id = request.args.get('venta_id', type=int)
+    
+    if cliente_id:
+        form.cliente_id.data = cliente_id
+        # Cargar ventas pendientes para este cliente
+        ventas_pendientes = Venta.query.filter_by(
+            cliente_id=cliente_id, 
+            tipo='credito'
+        ).filter(Venta.saldo_pendiente > 0).all()
+        
+        if ventas_pendientes:
+            form.venta_id.choices = [
+                (v.id, f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.2f}")
+                for v in ventas_pendientes
+            ]
+    
+    if venta_id:
+        form.venta_id.data = venta_id
+        # Obtener la venta para cargar el cliente también
+        venta = Venta.query.get(venta_id)
+        if venta:
+            form.cliente_id.data = venta.cliente_id
+            # Recargar las ventas de este cliente
+            ventas_pendientes = Venta.query.filter_by(
+                cliente_id=venta.cliente_id, 
+                tipo='credito'
+            ).filter(Venta.saldo_pendiente > 0).all()
+            
+            if ventas_pendientes:
+                form.venta_id.choices = [
+                    (v.id, f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.2f}")
+                    for v in ventas_pendientes
+                ]
     
     if form.validate_on_submit():
         try:
@@ -154,6 +195,8 @@ def crear():
             db.session.rollback()
             flash(f'Error al registrar el abono: {str(e)}', 'danger')
             return render_template('abonos/crear.html', form=form, clientes=clientes)
+
+    return render_template('abonos/crear.html', form=form, clientes=clientes)
 
     # Pre-seleccionar cliente o venta si vienen como parámetros
     if cliente_id:
