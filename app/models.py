@@ -154,7 +154,10 @@ class Caja(db.Model):
     saldo_actual = db.Column(db.Integer, nullable=False, default=0)
     fecha_apertura = db.Column(db.DateTime, default=datetime.utcnow)
 
-    movimientos = db.relationship('MovimientoCaja', backref='caja', lazy=True, cascade='all, delete-orphan')
+    # Modificar esta relación para especificar la clave foránea
+    movimientos = db.relationship('MovimientoCaja', back_populates='caja', 
+                                 foreign_keys='MovimientoCaja.caja_id',
+                                 lazy=True, cascade='all, delete-orphan')
 
 
 class MovimientoCaja(db.Model):
@@ -175,7 +178,11 @@ class MovimientoCaja(db.Model):
     abono_id = db.Column(db.Integer, db.ForeignKey('abonos.id'), nullable=True)
     abono = db.relationship('Abono', backref='movimientos_caja', foreign_keys=[abono_id])
     
-    caja_destino_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=True)
+    # Relación con caja (origen)
+    caja = db.relationship('Caja', back_populates='movimientos', foreign_keys=[caja_id])
+    
+    # Relación con caja destino (para transferencias)
+    caja_destino_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=True) 
     caja_destino = db.relationship('Caja', backref='transferencias_recibidas', foreign_keys=[caja_destino_id])
 
     def __repr__(self):
