@@ -87,6 +87,7 @@ def registrar_movimiento_caja(caja_id, tipo, monto, concepto=None, venta_id=None
     """Registra un movimiento en caja y actualiza saldos"""
     from app.models import Caja, MovimientoCaja
     from app import db
+    from datetime import datetime
     import logging
     
     logging.info(f"Registrando movimiento en caja {caja_id}: {tipo} por ${monto} - {concepto}")
