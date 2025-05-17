@@ -322,47 +322,47 @@ if (productosDisponiblesContainer) {
     });
 }
 
-    // Renderizar tabla de productos seleccionados
-    function renderTablaProductosSeleccionados() {
-        tablaProductosVentaBody.innerHTML = '';
-        let granTotal = 0;
+// Renderizar tabla de productos seleccionados
+function renderTablaProductosSeleccionados() {
+    tablaProductosVentaBody.innerHTML = '';
+    let granTotal = 0;
 
-        productosSeleccionadosParaVenta.forEach((producto, index) => {
-            const subtotal = producto.precio * producto.cantidad;
-            granTotal += subtotal;
+    productosSeleccionadosParaVenta.forEach((producto, index) => {
+        const subtotal = producto.precio * producto.cantidad;
+        granTotal += subtotal;
 
-            const fila = tablaProductosVentaBody.insertRow();
-            fila.innerHTML = `
-                <td>${producto.codigo}</td>
-                <td>${producto.nombre}</td>
-                <td>
-                    <input type="number" class="form-control form-control-sm cantidad-item-venta" 
-                           value="${producto.cantidad}" min="1" max="${producto.stockMax}" 
-                           data-index="${index}">
-                </td>
-                <td class="text-end">${currencyFormatter.format(producto.precio)}</td>
-                <td class="text-end subtotal">${currencyFormatter.format(subtotal)}</td>
-                <td>
-                    <button type="button" class="btn btn-sm btn-danger eliminar-item-venta" data-index="${index}">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </td>
-            `;
-        });
+        const fila = tablaProductosVentaBody.insertRow();
+        fila.innerHTML = `
+            <td>${producto.codigo}</td>
+            <td>${producto.nombre}</td>
+            <td>
+                <input type="number" class="form-control form-control-sm cantidad-item-venta" 
+                       value="${producto.cantidad}" min="1" max="${producto.stockMax}" 
+                       data-index="${index}">
+            </td>
+            <td class="text-end">${currencyFormatter.format(producto.precio)}</td>
+            <td class="text-end subtotal">${currencyFormatter.format(subtotal)}</td>
+            <td>
+                <button type="button" class="btn btn-sm btn-danger eliminar-item-venta" data-index="${index}">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+    });
 
-        displayTotalVenta.textContent = currencyFormatter.format(granTotal);
-        
-        // Prepara el JSON para el backend
-        const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
-            id: p.id,
-            cantidad: p.cantidad,
-            precio_venta: p.precio
-        }));
-        inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
-        
-        actualizarResumenVentaCredito(); // Actualizar resumen si es crédito
-        bindEventosItemsTabla();
-    }
+    displayTotalVenta.textContent = currencyFormatter.format(granTotal);
+    
+    // Prepara el JSON para el backend
+    const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
+        id: p.id,
+        cantidad: p.cantidad,
+        precio_venta: p.precio
+    }));
+    inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
+    
+    actualizarResumenVentaCredito(); // Actualizar resumen si es crédito
+    bindEventosItemsTabla();
+}
 
     // Agregar eventos a los elementos de la tabla de productos seleccionados
     function bindEventosItemsTabla() {
