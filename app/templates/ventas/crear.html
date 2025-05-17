@@ -49,7 +49,7 @@
                                 </div>
                                 <div class="input-group">
                                     <input type="text" class="form-control" id="buscar-cliente" placeholder="Buscar cliente...">
-                                    <button class="btn btn-outline-secondary" type="button" id="btn-buscar-cliente">
+                                    <button type="button" class="btn btn-outline-secondary" id="btn-buscar-cliente">
                                         <i class="fas fa-search"></i>
                                     </button>
                                 </div>
@@ -57,10 +57,7 @@
                             
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Tipo de Venta *</label>
-                                <select class="form-select" id="tipo_venta" name="tipo_venta">
-                                    <option value="contado" selected>Contado</option>
-                                    <option value="credito">Crédito</option>
-                                </select>
+                                {{ form.tipo(class="form-select") }}
                             </div>
                         </div>
 
@@ -87,7 +84,8 @@
                             </div>
                         </div>
                         
-                        <input type="hidden" name="productos_json_hidden" id="productos_json_hidden_input">
+                        <!-- Campo oculto para los productos JSON -->
+                        {{ form.productos(id="productos_json") }}
                         
                         <!-- Lista de productos seleccionados -->
                         <div class="table-responsive mt-4">
@@ -141,9 +139,7 @@
                         
                         <div class="d-flex justify-content-end mt-4">
                             <a href="{{ url_for('ventas.index') }}" class="btn btn-secondary me-2">Cancelar</a>
-                            <button type="submit" class="btn btn-success" id="btnConfirmarVenta">
-                                <i class="fas fa-check"></i> Confirmar Venta
-                            </button>
+                            {{ form.submit(class="btn btn-success") }}
                         </div>
                     </form>
                 </div>
@@ -157,7 +153,7 @@
                     <h5 class="mb-0">Productos Disponibles</h5>
                     <div class="input-group mt-2">
                         <input type="text" class="form-control" id="buscar-producto-disponible" placeholder="Buscar por nombre o código...">
-                        <button class="btn btn-outline-primary" type="button" id="btn-buscar-producto">
+                        <button type="button" class="btn btn-outline-primary" id="btn-buscar-producto">
                             <i class="fas fa-search"></i>
                         </button>
                     </div>
@@ -206,16 +202,15 @@ document.addEventListener('DOMContentLoaded', function() {
     let productosSeleccionadosParaVenta = [];
     const productosDisponiblesContainer = document.getElementById('productos-disponibles-container');
     const tablaProductosVentaBody = document.getElementById('tabla-productos').getElementsByTagName('tbody')[0];
-    const inputJsonProductosOculto = document.getElementById('productos_json_hidden_input');
+    const inputJsonProductosOculto = document.getElementById('productos_json');
     const displayTotalVenta = document.getElementById('total-venta');
     const inputBuscarProductoDisponible = document.getElementById('buscar-producto-disponible');
     const btnBuscarProducto = document.getElementById('btn-buscar-producto');
     const inputBuscarCliente = document.getElementById('buscar-cliente');
     const btnBuscarCliente = document.getElementById('btn-buscar-cliente');
     const formularioVenta = document.getElementById('ventaForm');
-    const btnConfirmarVenta = document.getElementById('btnConfirmarVenta');
     
-    const selectTipoVenta = document.getElementById('tipo_venta');
+    const selectTipoVenta = document.querySelector('select[name="tipo"]');
     const divSeccionCredito = document.getElementById('seccion_credito');
     const divResumenCredito = document.getElementById('resumen_credito');
     const selectFrecuenciaPago = document.getElementById('frecuencia_pago');
@@ -245,7 +240,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         inputBuscarCliente.addEventListener('input', filtrarClientes);
-        btnBuscarCliente.addEventListener('click', filtrarClientes);
+        if (btnBuscarCliente) {
+            btnBuscarCliente.addEventListener('click', filtrarClientes);
+        }
     }
 
     // Mostrar/ocultar sección de crédito
@@ -420,17 +417,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Validación del formulario al enviar
     if (formularioVenta) {
         formularioVenta.addEventListener('submit', function(e) {
-            // Evitar múltiples envíos
-            if (btnConfirmarVenta) {
-                btnConfirmarVenta.disabled = true;
-                setTimeout(() => { btnConfirmarVenta.disabled = false; }, 3000);
-            }
-            
             // Verificar productos seleccionados
             if (productosSeleccionadosParaVenta.length === 0) {
                 e.preventDefault();
                 alert('Debe seleccionar al menos un producto para crear la venta.');
-                if (btnConfirmarVenta) btnConfirmarVenta.disabled = false;
                 return false;
             }
             
@@ -438,7 +428,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!clienteSelect.value) {
                 e.preventDefault();
                 alert('Debe seleccionar un cliente para crear la venta.');
-                if (btnConfirmarVenta) btnConfirmarVenta.disabled = false;
                 return false;
             }
             
