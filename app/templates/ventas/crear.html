@@ -291,36 +291,36 @@ document.addEventListener('DOMContentLoaded', function() {
     if (clienteSelect) clienteSelect.addEventListener('change', actualizarResumenVentaCredito);
 
     // Manejar clic en productos disponibles para agregarlos
-    if (productosDisponiblesContainer) {
-        productosDisponiblesContainer.addEventListener('click', function(e) {
-            const itemProducto = e.target.closest('.producto-item-disponible');
-            if (itemProducto) {
-                const id = parseInt(itemProducto.dataset.id);
-                const nombre = itemProducto.dataset.nombre;
-                const precio = parseFloat(itemProducto.dataset.precio);
-                const stock = parseInt(itemProducto.dataset.stock);
-                const codigo = itemProducto.dataset.codigo;
+if (productosDisponiblesContainer) {
+    productosDisponiblesContainer.addEventListener('click', function(e) {
+        const itemProducto = e.target.closest('.producto-item-disponible');
+        if (itemProducto) {
+            const id = parseInt(itemProducto.dataset.id);
+            const nombre = itemProducto.dataset.nombre;
+            const precio = parseFloat(itemProducto.dataset.precio);
+            const stock = parseInt(itemProducto.dataset.stock);
+            const codigo = itemProducto.dataset.codigo;
 
-                const productoYaSeleccionado = productosSeleccionadosParaVenta.find(p => p.id === id);
+            const productoYaSeleccionado = productosSeleccionadosParaVenta.find(p => p.id === id);
 
-                if (productoYaSeleccionado) {
-                    if (productoYaSeleccionado.cantidad < stock) {
-                        productoYaSeleccionado.cantidad++;
-                        renderTablaProductosSeleccionados();
-                    } else {
-                        alert(`No hay más stock disponible para ${nombre}. Stock máximo: ${stock}`);
-                    }
+            if (productoYaSeleccionado) {
+                if (productoYaSeleccionado.cantidad < stock) {
+                    productoYaSeleccionado.cantidad++;
+                    renderTablaProductosSeleccionados();
                 } else {
-                    if (stock > 0) {
-                        productosSeleccionadosParaVenta.push({ id, codigo, nombre, precio, cantidad: 1, stockMax: stock });
-                        renderTablaProductosSeleccionados();
-                    } else {
-                        alert(`El producto ${nombre} está agotado.`);
-                    }
+                    alert(`No hay más stock disponible para ${nombre}. Stock máximo: ${stock}`);
+                }
+            } else {
+                if (stock > 0) {
+                    productosSeleccionadosParaVenta.push({ id, codigo, nombre, precio, cantidad: 1, stockMax: stock });
+                    renderTablaProductosSeleccionados();
+                } else {
+                    alert(`El producto ${nombre} está agotado.`);
                 }
             }
-        });
-    }
+        }
+    });
+}
 
     // Renderizar tabla de productos seleccionados
     function renderTablaProductosSeleccionados() {
