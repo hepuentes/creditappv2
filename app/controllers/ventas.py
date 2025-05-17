@@ -1,10 +1,11 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response, current_app
 from flask_login import login_required, current_user
 from app import db
-from app.models import Venta, DetalleVenta, Producto, Cliente, Caja
+from app.models import Venta, DetalleVenta, Producto, Cliente, Caja, MovimientoCaja
 from app.forms import VentaForm
 from app.decorators import vendedor_required, admin_required, cobrador_required
 from app.pdf.venta import generar_pdf_venta
+from app.utils import registrar_movimiento_caja
 from datetime import datetime
 import traceback
 import json
@@ -54,7 +55,7 @@ def index():
     # Calcular totales para el resumen
     total_ventas_monto = sum(v.total for v in ventas)
     ventas_a_credito_count = sum(1 for v in ventas if v.tipo == 'credito')
-    saldo_pendiente_total = sum(v.saldo_pendiente for v in ventas if v.tipo == 'credito' and isinstance(v.saldo_pendiente, (int, float)))
+    saldo_pendiente_total = sum(v.saldo_pendiente for v in ventas if v.tipo == 'credito' and v.saldo_pendiente is not None)
 
     return render_template('ventas/index.html', 
                            ventas=ventas,
@@ -96,9 +97,9 @@ def crear():
                 saldo_pendiente=0  # Se calculará después
             )
             
-            # CORRECCIÓN: Establecer estado según tipo de venta
+            # Establecer estado según tipo de venta
             if tipo_venta == 'contado':
-                nueva_venta.estado = 'pagado'  # Ventas de contado son pagadas inmediatamente
+                nueva_venta.estado = 'pagado'
             else:
                 nueva_venta.estado = 'pendiente'
             
@@ -139,6 +140,7 @@ def crear():
                 )
                 db.session.add(detalle)
                 
+                # Actualizar stock del producto
                 producto_db.stock -= item['cantidad']
                 total_venta_calculado += detalle.subtotal
             
@@ -152,26 +154,28 @@ def crear():
             
             # Registrar movimiento de caja para venta de contado
             if tipo_venta == 'contado' and form.caja.data:
-                from app.utils import registrar_movimiento_caja
-                registrar_movimiento_caja(
-                    caja_id=form.caja.data,
-                    tipo='entrada',
-                    monto=total_venta_calculado,
-                    concepto=f"Venta de contado #{nueva_venta.id}",
-                    venta_id=nueva_venta.id
-                )
+                try:
+                    registrar_movimiento_caja(
+                        caja_id=form.caja.data,
+                        tipo='entrada',
+                        monto=total_venta_calculado,
+                        concepto=f"Venta de contado #{nueva_venta.id}",
+                        venta_id=nueva_venta.id
+                    )
+                except Exception as e:
+                    current_app.logger.error(f"Error al registrar movimiento de caja: {e}")
+                    # Continuar a pesar del error en el movimiento de caja
             
             db.session.commit()
             flash(f'Venta #{nueva_venta.id} creada exitosamente!', 'success')
             
-            # CORRECCIÓN: Redireccionar a la lista de ventas después de crear
+            # Redireccionar a la lista de ventas después de crear
             return redirect(url_for('ventas.index'))
             
         except Exception as e:
             db.session.rollback()
             flash(f'Error al crear la venta: {str(e)}', 'danger')
             current_app.logger.error(f"Error creando venta: {e}")
-            import traceback
             current_app.logger.error(traceback.format_exc())
     
     return render_template('ventas/crear.html', form=form, productos=productos_disponibles, titulo='Nueva Venta')
@@ -181,7 +185,6 @@ def crear():
 def detalle(id):
     venta = Venta.query.get_or_404(id)
     return render_template('ventas/detalle.html', venta=venta)
-
 
 @ventas_bp.route('/<int:id>/pdf')
 @login_required
@@ -203,11 +206,14 @@ def pdf(id):
 def eliminar(id):
     venta = Venta.query.get_or_404(id)
     try:
-        # Lógica para restaurar stock si es necesario
+        # Restaurar stock de productos
         for detalle in venta.detalles:
             producto = Producto.query.get(detalle.producto_id)
             if producto:
                 producto.stock += detalle.cantidad
+        
+        # Eliminar movimientos de caja asociados
+        MovimientoCaja.query.filter_by(venta_id=id).delete()
         
         # Eliminar detalles y luego la venta
         DetalleVenta.query.filter_by(venta_id=id).delete()
