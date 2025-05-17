@@ -198,3 +198,71 @@ except Exception as e:
         print(f"Error general al reparar relaciones: {e}")
     
     print("== PROCESO DE REPARACIÓN DE BASE DE DATOS COMPLETADO ==")
+
+# Corregir secuencias en todas las tablas
+print("==== REPARANDO SECUENCIAS DE IDs EN TODAS LAS TABLAS ====")
+try:
+    with db.engine.connect() as connection:
+        # Obtener lista de todas las tablas
+        result = connection.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'"))
+        tables = [row[0] for row in result]
+        
+        for table in tables:
+            # Verificar si la tabla tiene una columna id
+            try:
+                result = connection.execute(text(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}' AND column_name = 'id'"))
+                has_id = result.fetchone() is not None
+                
+                if has_id:
+                    # Obtener el valor máximo de id y actualizar la secuencia
+                    connection.execute(text(f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), COALESCE((SELECT MAX(id) FROM {table}), 0) + 1, false)"))
+                    print(f"  ✓ Secuencia reparada para tabla: {table}")
+            except Exception as e:
+                print(f"  ✗ Error al reparar secuencia para tabla {table}: {e}")
+                
+    print("Secuencias reparadas correctamente.")
+except Exception as e:
+    print(f"Error general al reparar secuencias: {e}")
+
+# Verificar y corregir la tabla movimiento_caja
+print("\n==== REPARANDO TABLA MOVIMIENTO_CAJA ====")
+try:
+    inspector = inspect(db.engine)
+    columns = inspector.get_columns('movimiento_caja')
+    column_names = [col['name'] for col in columns]
+    
+    missing_columns = []
+    if 'venta_id' not in column_names:
+        missing_columns.append("venta_id INTEGER")
+    if 'abono_id' not in column_names:
+        missing_columns.append("abono_id INTEGER")
+    if 'caja_destino_id' not in column_names:
+        missing_columns.append("caja_destino_id INTEGER")
+    
+    if missing_columns:
+        with db.engine.begin() as connection:
+            for column_def in missing_columns:
+                column_name = column_def.split()[0]
+                connection.execute(text(f"ALTER TABLE movimiento_caja ADD COLUMN {column_def}"))
+                print(f"  ✓ Columna {column_name} agregada a movimiento_caja")
+            
+            # Agregar foreign keys si no existen
+            if 'venta_id' in [col.split()[0] for col in missing_columns]:
+                connection.execute(text("ALTER TABLE movimiento_caja ADD CONSTRAINT fk_movimiento_caja_venta FOREIGN KEY (venta_id) REFERENCES ventas(id)"))
+                print("  ✓ Foreign key para venta_id agregada")
+            
+            if 'abono_id' in [col.split()[0] for col in missing_columns]:
+                connection.execute(text("ALTER TABLE movimiento_caja ADD CONSTRAINT fk_movimiento_caja_abono FOREIGN KEY (abono_id) REFERENCES abonos(id)"))
+                print("  ✓ Foreign key para abono_id agregada")
+            
+            if 'caja_destino_id' in [col.split()[0] for col in missing_columns]:
+                connection.execute(text("ALTER TABLE movimiento_caja ADD CONSTRAINT fk_movimiento_caja_destino FOREIGN KEY (caja_destino_id) REFERENCES cajas(id)"))
+                print("  ✓ Foreign key para caja_destino_id agregada")
+        
+        print("Tabla movimiento_caja reparada correctamente.")
+    else:
+        print("La tabla movimiento_caja ya tiene todas las columnas necesarias.")
+except Exception as e:
+    print(f"Error al reparar movimiento_caja: {e}")
+
+print("\n==== PROCESO DE REPARACIÓN COMPLETADO ====")
