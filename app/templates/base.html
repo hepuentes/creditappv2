@@ -22,9 +22,9 @@
         <nav id="sidebar" class="sidebar">
             <div class="sidebar-header d-flex justify-content-between align-items-center px-3 py-2">
                 <h3>CreditApp</h3>
-                <!-- Botón hamburguesa para móvil -->
-                <button type="button" id="sidebarCollapse" class="btn btn-primary">
-        <i class="fas fa-bars"></i>
+                <!-- Este botón solo estará visible en el sidebar, no duplicado en navbar -->
+                <button type="button" id="sidebarCollapse" class="btn btn-primary d-md-none">
+                    <i class="fas fa-bars"></i>
                 </button>
             </div>
             <ul class="list-unstyled components mb-0">
@@ -78,6 +78,7 @@
         <div id="content" class="flex-grow-1">
             <nav class="navbar navbar-expand-lg navbar-light bg-light">
                 <div class="container-fluid">
+                    <!-- Este botón solo estará visible en el content, no duplicado en sidebar -->
                     <button type="button" id="sidebarCollapse" class="btn btn-primary d-md-none">
                         <i class="fas fa-bars"></i>
                     </button>
