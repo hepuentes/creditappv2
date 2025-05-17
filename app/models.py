@@ -167,9 +167,16 @@ class MovimientoCaja(db.Model):
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
     descripcion = db.Column(db.String(200), nullable=True)
     
-    # relación 
+    # Añadir campo venta_id
+    venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=True)
+    venta = db.relationship('Venta', backref='movimientos_caja', foreign_keys=[venta_id])
+    
+    # relación con abono existente
     abono_id = db.Column(db.Integer, db.ForeignKey('abonos.id'), nullable=True)
-    abono = db.relationship('Abono', backref='movimiento', foreign_keys=[abono_id])
+    abono = db.relationship('Abono', backref='movimientos_caja', foreign_keys=[abono_id])
+    
+    caja_destino_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=True)
+    caja_destino = db.relationship('Caja', backref='transferencias_recibidas', foreign_keys=[caja_destino_id])
 
     def __repr__(self):
         return f"<MovimientoCaja #{self.id} Tipo:{self.tipo} Monto:{self.monto}>"
