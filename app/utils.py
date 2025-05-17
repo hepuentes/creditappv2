@@ -89,6 +89,7 @@ def registrar_movimiento_caja(caja_id, tipo, monto, concepto=None, venta_id=None
     from app import db
     from datetime import datetime
     import logging
+    from sqlalchemy import inspect
     
     logging.info(f"Registrando movimiento en caja {caja_id}: {tipo} por ${monto} - {concepto}")
     
@@ -98,31 +99,34 @@ def registrar_movimiento_caja(caja_id, tipo, monto, concepto=None, venta_id=None
             raise ValueError(f"Caja con ID {caja_id} no encontrada")
         
         # Verificar si las columnas necesarias existen en la tabla
-        inspector = inspect(db.engine)
-        columns = inspector.get_columns('movimiento_caja')
-        column_names = [col['name'] for col in columns]
+        # Si da error, continuamos sin verificación de columnas
+        try:
+            inspector = inspect(db.engine)
+            columns = inspector.get_columns('movimiento_caja')
+            column_names = [col['name'] for col in columns]
+        except:
+            # Si falla, asumimos que todas las columnas existen
+            column_names = ['caja_id', 'tipo', 'monto', 'fecha', 'descripcion', 
+                           'venta_id', 'abono_id', 'caja_destino_id']
         
-        # Crear los parámetros basados en las columnas disponibles
-        params = {
-            'caja_id': caja_id,
-            'tipo': tipo,
-            'monto': monto,
-            'fecha': datetime.utcnow(),
-            'descripcion': concepto
-        }
+        # Crear el movimiento con los parámetros básicos
+        movimiento = MovimientoCaja(
+            caja_id=caja_id,
+            tipo=tipo,
+            monto=monto,
+            fecha=datetime.utcnow(),
+            descripcion=concepto
+        )
         
-        # Solo agregar estos parámetros si las columnas existen
+        # Agregar campos adicionales solo si existen
         if 'venta_id' in column_names and venta_id is not None:
-            params['venta_id'] = venta_id
+            movimiento.venta_id = venta_id
         
         if 'abono_id' in column_names and abono_id is not None:
-            params['abono_id'] = abono_id
+            movimiento.abono_id = abono_id
             
         if 'caja_destino_id' in column_names and caja_destino_id is not None:
-            params['caja_destino_id'] = caja_destino_id
-        
-        # Crear el movimiento
-        movimiento = MovimientoCaja(**params)
+            movimiento.caja_destino_id = caja_destino_id
         
         # Actualizar saldo de la caja
         if tipo == 'entrada':
@@ -143,9 +147,10 @@ def registrar_movimiento_caja(caja_id, tipo, monto, concepto=None, venta_id=None
                     tipo='entrada',
                     monto=monto,
                     fecha=datetime.utcnow(),
-                    descripcion=f"Transferencia desde {caja.nombre}",
-                    caja_destino_id=caja_id
+                    descripcion=f"Transferencia desde {caja.nombre}"
                 )
+                if 'caja_destino_id' in column_names:
+                    movimiento_destino.caja_destino_id = caja_id
                 db.session.add(movimiento_destino)
         
         db.session.add(movimiento)
@@ -157,7 +162,9 @@ def registrar_movimiento_caja(caja_id, tipo, monto, concepto=None, venta_id=None
     except Exception as e:
         db.session.rollback()
         logging.error(f"Error al registrar movimiento en caja: {e}")
-        raise
+        # No propagamos el error para no interrumpir la venta/abono
+        # Pero devolvemos None para indicar que falló
+        return None
 
 
 # Funciones para compartir PDFs públicamente
