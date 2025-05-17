@@ -129,30 +129,29 @@ with app.app_context():
     except Exception as e:
         print(f"Error al reparar la tabla 'abonos': {e}")
 
-    # Verificar y corregir la tabla movimiento_caja
-    try:
-        print("Verificando tabla 'movimiento_caja'...")
-        if table_exists('movimiento_caja'):
-            columns = get_columns('movimiento_caja')
-            
-            with db.engine.begin() as connection:
-                # Verificar si falta la columna 'abono_id'
-                if 'abono_id' not in columns:
-                    print("La columna 'abono_id' no existe en la tabla 'movimiento_caja'. Agregando...")
-                    connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN abono_id INTEGER"))
-                    print("Columna 'abono_id' agregada.")
-        else:
-            print("La tabla 'movimiento_caja' no existe. Será creada al ejecutar db.create_all().")
-    except Exception as e:
-        print(f"Error al reparar la tabla 'movimiento_caja': {e}")
-    
-    # Asegurarse que todas las tablas estén creadas con el esquema correcto
-    try:
-        print("Aplicando esquema completo de la base de datos...")
-        db.create_all()
-        print("Esquema aplicado correctamente.")
-    except Exception as e:
-        print(f"Error al aplicar esquema: {e}")
+# Verificar y corregir la tabla movimiento_caja
+try:
+    print("Verificando tabla 'movimiento_caja'...")
+    if table_exists('movimiento_caja'):
+        columns = get_columns('movimiento_caja')
+        
+        with db.engine.begin() as connection:
+            # Verificar si falta la columna 'abono_id'
+            if 'abono_id' not in columns:
+                print("La columna 'abono_id' no existe en la tabla 'movimiento_caja'. Agregando...")
+                connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN abono_id INTEGER"))
+                print("Columna 'abono_id' agregada.")
+                
+            # Verificar si falta la columna 'venta_id'
+            if 'venta_id' not in columns:
+                print("La columna 'venta_id' no existe en la tabla 'movimiento_caja'. Agregando...")
+                connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN venta_id INTEGER"))
+                connection.execute(text("ALTER TABLE movimiento_caja ADD CONSTRAINT fk_movimiento_caja_venta_id FOREIGN KEY (venta_id) REFERENCES ventas(id)"))
+                print("Columna 'venta_id' agregada.")
+    else:
+        print("La tabla 'movimiento_caja' no existe. Será creada al ejecutar db.create_all().")
+except Exception as e:
+    print(f"Error al reparar la tabla 'movimiento_caja': {e}")
     
     # Mejorar el script para verificar y reparar relaciones
     try:
