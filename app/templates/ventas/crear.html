@@ -415,34 +415,36 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Validación del formulario al enviar
-    if (formularioVenta) {
-        formularioVenta.addEventListener('submit', function(e) {
-            // Verificar productos seleccionados
-            if (productosSeleccionadosParaVenta.length === 0) {
-                e.preventDefault();
-                alert('Debe seleccionar al menos un producto para crear la venta.');
-                return false;
-            }
-            
-            // Verificar cliente seleccionado
-            if (!clienteSelect.value) {
-                e.preventDefault();
-                alert('Debe seleccionar un cliente para crear la venta.');
-                return false;
-            }
-            
-            // Verificar que el JSON esté actualizado justo antes del submit
-            const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
-                id: p.id,
-                cantidad: p.cantidad,
-                precio_venta: p.precio
-            }));
-            inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
-            
-            console.log('Enviando formulario con productos:', inputJsonProductosOculto.value);
-            return true;
-        });
-    }
+if (formularioVenta) {
+    formularioVenta.addEventListener('submit', function(e) {
+        // Verificar productos seleccionados
+        if (productosSeleccionadosParaVenta.length === 0) {
+            e.preventDefault();
+            alert('Debe seleccionar al menos un producto para crear la venta.');
+            return false;
+        }
+        
+        // Verificar cliente seleccionado
+        const clienteSelect = document.querySelector('select[name="cliente"]');
+        if (!clienteSelect || !clienteSelect.value) {
+            e.preventDefault();
+            alert('Debe seleccionar un cliente para crear la venta.');
+            return false;
+        }
+        
+        // Verificar que el JSON esté actualizado justo antes del submit
+        const inputJsonProductosOculto = document.getElementById('productos_json');
+        const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
+            id: p.id,
+            cantidad: p.cantidad,
+            precio_venta: p.precio
+        }));
+        inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
+        
+        console.log('Enviando formulario con productos:', inputJsonProductosOculto.value);
+        return true;
+    });
+}
     
     // Llamada inicial si el tipo de venta es crédito al cargar
     if (selectTipoVenta && selectTipoVenta.value === 'credito') {
