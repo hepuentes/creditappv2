@@ -13,29 +13,50 @@ creditos_bp = Blueprint('creditos', __name__, url_prefix='/creditos')
 @login_required
 @cobrador_required
 def index():
-    creditos = Credito.query.order_by(Credito.fecha.desc()).all()
-    return render_template('creditos/index.html', creditos=creditos)
-
-@creditos_bp.route('/crear', methods=['GET','POST'])
-@login_required
-@cobrador_required
-def crear():
-    form = CreditoForm()
-    if form.validate_on_submit():
-        credito = Credito(
-            cliente_id=form.cliente.data,
-            monto=form.monto.data,
-            plazo=form.plazo.data,
-            tasa=form.tasa.data,
-            fecha=datetime.utcnow()
-        )
-        db.session.add(credito)
-        db.session.commit()
-
-        # Generar PDF de contrato de crédito
-        pdf_bytes = generar_pdf_credito(credito)
-        response = make_response(pdf_bytes)
-        response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'inline; filename=credito_{credito.id}.pdf'
-        return response
-    return render_template('creditos/crear.html', form=form)
+    # Obtener parámetros de filtrado
+    busqueda = request.args.get('busqueda', '')
+    desde_str = request.args.get('desde', '')
+    hasta_str = request.args.get('hasta', '')
+    
+    # Base query: ventas a crédito con saldo pendiente
+    query = Venta.query.filter(
+        Venta.tipo == 'credito',
+        Venta.saldo_pendiente > 0,
+        Venta.estado == 'pendiente'
+    )
+    
+    # Aplicar filtros
+    if busqueda:
+        query = query.join(Cliente).filter(Cliente.nombre.ilike(f'%{busqueda}%'))
+    
+    if desde_str:
+        try:
+            desde_dt = datetime.strptime(desde_str, '%Y-%m-%d')
+            query = query.filter(Venta.fecha >= desde_dt)
+        except ValueError:
+            flash('Formato de fecha "desde" incorrecto.', 'warning')
+    
+    if hasta_str:
+        try:
+            hasta_dt = datetime.strptime(hasta_str, '%Y-%m-%d')
+            hasta_dt = datetime.combine(hasta_dt, datetime.max.time())  # Fin del día
+            query = query.filter(Venta.fecha <= hasta_dt)
+        except ValueError:
+            flash('Formato de fecha "hasta" incorrecto.', 'warning')
+    
+    # Ordenar por fecha descendente
+    creditos = query.order_by(Venta.fecha.desc()).all()
+    
+    # Calcular totales
+    total_creditos = sum(c.total for c in creditos)
+    total_pendiente = sum(c.saldo_pendiente for c in creditos)
+    
+    return render_template(
+        'creditos/index.html',
+        creditos=creditos,
+        total_creditos=total_creditos,
+        total_pendiente=total_pendiente,
+        busqueda=busqueda,
+        desde=desde_str,
+        hasta=hasta_str
+    )
