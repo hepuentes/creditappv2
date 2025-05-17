@@ -85,65 +85,63 @@ def get_comisiones_periodo(usuario_id=None, fecha_inicio=None, fecha_fin=None):
 
 def registrar_movimiento_caja(caja_id, tipo, monto, concepto=None, venta_id=None, abono_id=None, caja_destino_id=None):
     """Registra un movimiento en caja y actualiza saldos"""
-    from app.models import Caja
+    from app.models import Caja, MovimientoCaja
+    from app import db
+    import logging
     
-    caja = Caja.query.get_or_404(caja_id)
+    logging.info(f"Registrando movimiento en caja {caja_id}: {tipo} por ${monto} - {concepto}")
     
-    # Crear el movimiento
-    movimiento = MovimientoCaja(
-        caja_id=caja_id,
-        tipo=tipo,
-        monto=monto,
-        concepto=concepto,
-        venta_id=venta_id,
-        abono_id=abono_id,
-        caja_destino_id=caja_destino_id
-    )
-    
-    # Actualizar saldo de la caja
-    if tipo == 'entrada':
-        caja.saldo_actual += monto
-    elif tipo == 'salida':
-        caja.saldo_actual -= monto
-    elif tipo == 'transferencia' and caja_destino_id:
-        caja.saldo_actual -= monto
-        caja_destino = Caja.query.get_or_404(caja_destino_id)
-        caja_destino.saldo_actual += monto
+    try:
+        caja = Caja.query.get(caja_id)
+        if not caja:
+            raise ValueError(f"Caja con ID {caja_id} no encontrada")
         
-        # Crear movimiento en la caja destino
-        movimiento_destino = MovimientoCaja(
-            caja_id=caja_destino_id,
-            tipo='entrada',
+        # Crear el movimiento
+        movimiento = MovimientoCaja(
+            caja_id=caja_id,
+            tipo=tipo,
             monto=monto,
-            concepto=f"Transferencia desde {caja.nombre}",
-            caja_destino_id=caja_id
+            fecha=datetime.utcnow(),
+            descripcion=concepto,
+            venta_id=venta_id,
+            abono_id=abono_id,
+            caja_destino_id=caja_destino_id
         )
-        db.session.add(movimiento_destino)
+        
+        # Actualizar saldo de la caja
+        if tipo == 'entrada':
+            caja.saldo_actual += monto
+        elif tipo == 'salida':
+            caja.saldo_actual -= monto
+        elif tipo == 'transferencia' and caja_destino_id:
+            caja.saldo_actual -= monto
+            caja_destino = Caja.query.get(caja_destino_id)
+            if not caja_destino:
+                raise ValueError(f"Caja destino con ID {caja_destino_id} no encontrada")
+            caja_destino.saldo_actual += monto
+            
+            # Crear movimiento en la caja destino
+            movimiento_destino = MovimientoCaja(
+                caja_id=caja_destino_id,
+                tipo='entrada',
+                monto=monto,
+                fecha=datetime.utcnow(),
+                descripcion=f"Transferencia desde {caja.nombre}",
+                caja_destino_id=caja_id
+            )
+            db.session.add(movimiento_destino)
+        
+        db.session.add(movimiento)
+        db.session.commit()
+        
+        logging.info(f"Movimiento registrado exitosamente: ID {movimiento.id}")
+        return movimiento
     
-    db.session.add(movimiento)
-    db.session.commit()
-    
-    return movimiento
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error al registrar movimiento en caja: {e}")
+        raise
 
-def generate_qr_for_whatsapp(url):
-    """Genera un código QR para compartir por WhatsApp"""
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data(url)
-    qr.make(fit=True)
-
-    img = qr.make_image(fill_color="black", back_color="white")
-    
-    # Guardamos la imagen en un buffer de memoria
-    buffered = BytesIO()
-    img.save(buffered, format="PNG")
-    img_str = buffered.getvalue()
-    
-    return img_str
 
 # Funciones para compartir PDFs públicamente
 def get_venta_pdf_public_url(venta_id):
