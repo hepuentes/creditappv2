@@ -28,7 +28,13 @@
                             <!-- Datos del cliente y venta -->
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Cliente *</label>
-                                {{ form.cliente(class="form-select") }}
+                                <div class="input-group">
+                                    {{ form.cliente(class="form-select") }}
+                                </div>
+                                <!-- Buscador de clientes -->
+                                <div class="mt-2">
+                                    <input type="text" class="form-control" id="buscar-cliente" placeholder="Buscar cliente por nombre o cédula...">
+                                </div>
                             </div>
                             
                             <div class="col-md-6 mb-3">
@@ -183,6 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const displayTotalVenta = document.getElementById('total-venta');
     const inputBuscarProductoDisponible = document.getElementById('buscar-producto-disponible');
     const formularioVenta = document.getElementById('ventaForm');
+    const inputBuscarCliente = document.getElementById('buscar-cliente');
     
     const selectTipoVenta = document.getElementById('tipo_venta');
     const divSeccionCredito = document.getElementById('seccion_credito');
@@ -193,6 +200,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Formateador de moneda
     const currencyFormatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    // Filtrar opciones del select de clientes al escribir en el buscador
+    if (inputBuscarCliente && clienteSelect) {
+        inputBuscarCliente.addEventListener('input', function() {
+            const busqueda = this.value.toLowerCase();
+            const opciones = clienteSelect.options;
+            
+            for (let i = 0; i < opciones.length; i++) {
+                const textoOpcion = opciones[i].text.toLowerCase();
+                const esVisible = textoOpcion.includes(busqueda);
+                opciones[i].style.display = esVisible ? '' : 'none';
+            }
+        });
+    }
 
     // Mostrar/ocultar sección de crédito
     if (selectTipoVenta) {
