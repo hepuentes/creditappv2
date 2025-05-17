@@ -1,4 +1,4 @@
-# auto_migrate.py
+# auto_migrate.py 
 import os
 import shutil
 from sqlalchemy import text, inspect
@@ -6,263 +6,155 @@ from app import create_app, db
 from app.models import (Usuario, Cliente, Venta, Credito, Abono, Caja, 
                         MovimientoCaja, CreditoVenta, DetalleVenta, 
                         Comision, Configuracion, Producto)
+import logging
+
+logging.basicConfig(level=logging.INFO, 
+                   format='%(asctime)s [AUTO-MIGRATE] %(levelname)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 app = create_app()
 
 with app.app_context():
-    print("== INICIANDO PROCESO DE REPARACIÓN DE BASE DE DATOS ==")
+    logger.info("=== INICIANDO PROCESO DE REPARACIÓN INTEGRAL DE LA BASE DE DATOS ===")
     
-    # Función para verificar si una tabla existe
-    def table_exists(table_name):
-        try:
-            inspector = inspect(db.engine)
-            return table_name in inspector.get_table_names()
-        except Exception as e:
-            print(f"Error al verificar tabla {table_name}: {e}")
-            return False
-    
-    # Función para obtener las columnas de una tabla
-    def get_columns(table_name):
-        try:
-            inspector = inspect(db.engine)
-            return [col['name'] for col in inspector.get_columns(table_name)]
-        except Exception as e:
-            print(f"Error al obtener columnas de {table_name}: {e}")
-            return []
-    
-    # Paso 1: Intentar cerrar cualquier transacción fallida
     try:
-        print("Intentando cerrar transacciones abiertas...")
+        # PASO 1: Reparar las secuencias de IDs en todas las tablas
+        logger.info("Reparando secuencias de autoincremento...")
+        
         with db.engine.connect() as connection:
-            connection.execute(text("ROLLBACK"))
-        print("Transacciones anteriores cerradas.")
-    except Exception as e:
-        print(f"Error al cerrar transacciones: {e}")
-    
-    # Paso 2: Verificar y corregir la tabla cajas
-    try:
-        print("Verificando tabla 'cajas'...")
-        if table_exists('cajas'):
-            columns = get_columns('cajas')
+            # Obtener todas las tablas de la base de datos
+            tablas = connection.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")).fetchall()
             
-            with db.engine.begin() as connection:
-                # Verificar si falta la columna 'tipo'
-                if 'tipo' not in columns:
-                    print("La columna 'tipo' no existe en la tabla 'cajas'. Agregando...")
-                    connection.execute(text("ALTER TABLE cajas ADD COLUMN tipo VARCHAR(50) DEFAULT 'efectivo' NOT NULL"))
-                    print("Columna 'tipo' agregada.")
-                
-                # Verificar si falta la columna 'saldo_actual'
-                if 'saldo_actual' not in columns:
-                    print("La columna 'saldo_actual' no existe en la tabla 'cajas'. Agregando...")
-                    connection.execute(text("ALTER TABLE cajas ADD COLUMN saldo_actual INTEGER DEFAULT 0 NOT NULL"))
-                    print("Columna 'saldo_actual' agregada.")
-                
-                # Verificar si falta la columna 'saldo_inicial'
-                if 'saldo_inicial' not in columns:
-                    print("La columna 'saldo_inicial' no existe en la tabla 'cajas'. Agregando...")
-                    connection.execute(text("ALTER TABLE cajas ADD COLUMN saldo_inicial INTEGER DEFAULT 0 NOT NULL"))
-                    print("Columna 'saldo_inicial' agregada.")
-                
-                # Verificar si falta la columna 'fecha_apertura'
-                if 'fecha_apertura' not in columns:
-                    print("La columna 'fecha_apertura' no existe en la tabla 'cajas'. Agregando...")
-                    connection.execute(text("ALTER TABLE cajas ADD COLUMN fecha_apertura TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL"))
-                    print("Columna 'fecha_apertura' agregada.")
-        else:
-            print("La tabla 'cajas' no existe. Será creada al ejecutar db.create_all().")
-    except Exception as e:
-        print(f"Error al reparar la tabla 'cajas': {e}")
-    
-    # Verificar y corregir la tabla ventas
-    try:
-        print("Verificando tabla 'ventas'...")
-        if table_exists('ventas'):
-            columns = get_columns('ventas')
-            
-            with db.engine.begin() as connection:
-                # Verificar si falta la columna 'vendedor_id'
-                if 'vendedor_id' not in columns:
-                    print("La columna 'vendedor_id' no existe en la tabla 'ventas'. Agregando...")
-                    connection.execute(text("ALTER TABLE ventas ADD COLUMN vendedor_id INTEGER"))
-                    connection.execute(text("ALTER TABLE ventas ADD CONSTRAINT fk_ventas_vendedor_id FOREIGN KEY (vendedor_id) REFERENCES usuarios(id)"))
-                    print("Columna 'vendedor_id' agregada.")
-                
-                # Verificar si falta la columna 'estado'
-                if 'estado' not in columns:
-                    print("La columna 'estado' no existe en la tabla 'ventas'. Agregando...")
-                    connection.execute(text("ALTER TABLE ventas ADD COLUMN estado VARCHAR(20) DEFAULT 'pendiente' NOT NULL"))
-                    
-                    # Actualizar ventas de contado a 'pagado'
-                    connection.execute(text("UPDATE ventas SET estado = 'pagado' WHERE tipo = 'contado'"))
-                    
-                    # Actualizar ventas a crédito con saldo_pendiente = 0 a 'pagado'
-                    connection.execute(text("UPDATE ventas SET estado = 'pagado' WHERE tipo = 'credito' AND (saldo_pendiente IS NULL OR saldo_pendiente = 0 OR saldo_pendiente <= 0)"))
-                    
-                    print("Columna 'estado' agregada y valores iniciales establecidos.")
-        else:
-            print("La tabla 'ventas' no existe. Será creada al ejecutar db.create_all().")
-    except Exception as e:
-        print(f"Error al reparar la tabla 'ventas': {e}")
-    
-    # Verificar y corregir la tabla abonos
-    try:
-        print("Verificando tabla 'abonos'...")
-        if table_exists('abonos'):
-            columns = get_columns('abonos')
-            
-            with db.engine.begin() as connection:
-                # Verificar si falta la columna 'venta_id'
-                if 'venta_id' not in columns:
-                    print("La columna 'venta_id' no existe en la tabla 'abonos'. Agregando...")
-                    connection.execute(text("ALTER TABLE abonos ADD COLUMN venta_id INTEGER"))
-                    connection.execute(text("ALTER TABLE abonos ADD CONSTRAINT fk_abonos_venta_id FOREIGN KEY (venta_id) REFERENCES ventas(id)"))
-                    print("Columna 'venta_id' agregada.")
-                
-                # Verificar si falta la columna 'notas'
-                if 'notas' not in columns:
-                    print("La columna 'notas' no existe en la tabla 'abonos'. Agregando...")
-                    connection.execute(text("ALTER TABLE abonos ADD COLUMN notas TEXT"))
-                    print("Columna 'notas' agregada.")
-        else:
-            print("La tabla 'abonos' no existe. Será creada al ejecutar db.create_all().")
-    except Exception as e:
-        print(f"Error al reparar la tabla 'abonos': {e}")
-
-# Verificar y corregir la tabla movimiento_caja
-try:
-    print("Verificando tabla 'movimiento_caja'...")
-    if table_exists('movimiento_caja'):
-        columns = get_columns('movimiento_caja')
-        
-        with db.engine.begin() as connection:
-            # Verificar si falta la columna 'abono_id'
-            if 'abono_id' not in columns:
-                print("La columna 'abono_id' no existe en la tabla 'movimiento_caja'. Agregando...")
-                connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN abono_id INTEGER"))
-                print("Columna 'abono_id' agregada.")
-                
-            # Verificar si falta la columna 'venta_id'
-            if 'venta_id' not in columns:
-                print("La columna 'venta_id' no existe en la tabla 'movimiento_caja'. Agregando...")
-                connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN venta_id INTEGER"))
-                connection.execute(text("ALTER TABLE movimiento_caja ADD CONSTRAINT fk_movimiento_caja_venta_id FOREIGN KEY (venta_id) REFERENCES ventas(id)"))
-                print("Columna 'venta_id' agregada.")
-    else:
-        print("La tabla 'movimiento_caja' no existe. Será creada al ejecutar db.create_all().")
-except Exception as e:
-    print(f"Error al reparar la tabla 'movimiento_caja': {e}")
-    
-    # Mejorar el script para verificar y reparar relaciones
-    try:
-        # Verificar y reparar relaciones en la base de datos
-        print("Verificando y reparando relaciones en la base de datos...")
-        
-        # Verificar restricciones y claves foráneas
-        for model_class in [Usuario, Cliente, Venta, Credito, Abono, Caja, MovimientoCaja, CreditoVenta, DetalleVenta, Comision, Configuracion, Producto]:
-            try:
-                table_name = model_class.__tablename__
-                print(f"  Verificando tabla {table_name}...")
-                
-                # Actualizar secuencias si es necesario
+            for tabla_info in tablas:
+                tabla = tabla_info[0]
                 try:
-                    with db.engine.connect() as connection:
-                        connection.execute(text(f"SELECT setval(pg_get_serial_sequence('{table_name}', 'id'), COALESCE((SELECT MAX(id) FROM {table_name}), 1), false)"))
-                    print(f"  Secuencia para {table_name} actualizada.")
-                except Exception as seq_error:
-                    print(f"  Nota: No se pudo actualizar la secuencia para {table_name}: {seq_error}")
-                
-                print(f"  Tabla {table_name} verificada.")
-            except Exception as e:
-                print(f"  Error al verificar/reparar tabla {table_name}: {e}")
+                    # Verificar si la tabla tiene columna ID
+                    result = connection.execute(text(
+                        f"SELECT column_name FROM information_schema.columns WHERE table_name = '{tabla}' AND column_name = 'id'"
+                    )).fetchone()
+                    
+                    if result:
+                        # Obtener el valor máximo de ID
+                        max_id = connection.execute(text(f"SELECT MAX(id) FROM {tabla}")).scalar() or 0
+                        
+                        # Resetear la secuencia al valor máximo + 1
+                        connection.execute(text(
+                            f"SELECT setval(pg_get_serial_sequence('{tabla}', 'id'), {max_id + 1}, false)"
+                        ))
+                        logger.info(f"  ✓ Secuencia reparada para tabla: {tabla} (próximo ID: {max_id + 1})")
+                except Exception as e:
+                    logger.error(f"  ✗ Error al reparar secuencia para tabla {tabla}: {e}")
         
-        # Verificar relaciones específicas entre tablas
-        try:
-            print("Verificando relaciones entre tablas...")
+        # PASO 2: Verificar y reparar la estructura de las tablas
+        logger.info("\nVerificando estructura de tablas críticas...")
+        
+        # Tabla movimiento_caja
+        logger.info("Verificando tabla 'movimiento_caja'...")
+        inspector = inspect(db.engine)
+        
+        if 'movimiento_caja' in inspector.get_table_names():
+            columnas = [c['name'] for c in inspector.get_columns('movimiento_caja')]
+            
             with db.engine.begin() as connection:
-                # Asegurar que las ventas tengan clientes válidos
-                connection.execute(text("UPDATE ventas SET cliente_id = NULL WHERE cliente_id NOT IN (SELECT id FROM clientes)"))
+                # Verificar columna venta_id
+                if 'venta_id' not in columnas:
+                    logger.info("  ✓ Agregando columna 'venta_id' a movimiento_caja...")
+                    connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN venta_id INTEGER"))
+                    # Intentar agregar foreign key si es posible
+                    try:
+                        connection.execute(text(
+                            "ALTER TABLE movimiento_caja ADD CONSTRAINT fk_movimiento_venta " +
+                            "FOREIGN KEY (venta_id) REFERENCES ventas(id)"
+                        ))
+                        logger.info("  ✓ Foreign key para venta_id agregada")
+                    except Exception as e:
+                        logger.warning(f"    No se pudo agregar foreign key para venta_id: {e}")
                 
-                # Asegurar que los abonos tengan créditos válidos
-                connection.execute(text("UPDATE abonos SET credito_id = NULL WHERE credito_id NOT IN (SELECT id FROM creditos) AND credito_id IS NOT NULL"))
-                connection.execute(text("UPDATE abonos SET credito_venta_id = NULL WHERE credito_venta_id NOT IN (SELECT id FROM creditos_venta) AND credito_venta_id IS NOT NULL"))
+                # Verificar columna abono_id
+                if 'abono_id' not in columnas:
+                    logger.info("  ✓ Agregando columna 'abono_id' a movimiento_caja...")
+                    connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN abono_id INTEGER"))
+                    # Intentar agregar foreign key si es posible
+                    try:
+                        connection.execute(text(
+                            "ALTER TABLE movimiento_caja ADD CONSTRAINT fk_movimiento_abono " +
+                            "FOREIGN KEY (abono_id) REFERENCES abonos(id)"
+                        ))
+                        logger.info("  ✓ Foreign key para abono_id agregada")
+                    except Exception as e:
+                        logger.warning(f"    No se pudo agregar foreign key para abono_id: {e}")
                 
-                # Asegurar que los movimientos de caja tengan cajas válidas
-                connection.execute(text("DELETE FROM movimiento_caja WHERE caja_id NOT IN (SELECT id FROM cajas)"))
-            print("Relaciones entre tablas verificadas y reparadas.")
+                # Verificar columna caja_destino_id
+                if 'caja_destino_id' not in columnas:
+                    logger.info("  ✓ Agregando columna 'caja_destino_id' a movimiento_caja...")
+                    connection.execute(text("ALTER TABLE movimiento_caja ADD COLUMN caja_destino_id INTEGER"))
+                    # Intentar agregar foreign key si es posible
+                    try:
+                        connection.execute(text(
+                            "ALTER TABLE movimiento_caja ADD CONSTRAINT fk_movimiento_caja_destino " +
+                            "FOREIGN KEY (caja_destino_id) REFERENCES cajas(id)"
+                        ))
+                        logger.info("  ✓ Foreign key para caja_destino_id agregada")
+                    except Exception as e:
+                        logger.warning(f"    No se pudo agregar foreign key para caja_destino_id: {e}")
+        else:
+            logger.warning("La tabla 'movimiento_caja' no existe. Se creará durante db.create_all()")
+        
+        # PASO 3: Crear tablas faltantes o reparar inconsistencias
+        logger.info("\nCreando tablas faltantes y verificando relaciones...")
+        db.create_all()
+        
+        # PASO 4: Corregir datos incongruentes
+        logger.info("\nVerificando y corrigiendo datos incongruentes...")
+        
+        # Corregir ventas a crédito con saldo_pendiente=0 que deberían estar pagadas
+        try:
+            with db.engine.begin() as connection:
+                connection.execute(text(
+                    "UPDATE ventas SET estado = 'pagado' " +
+                    "WHERE tipo = 'credito' AND (saldo_pendiente IS NULL OR saldo_pendiente <= 0)"
+                ))
+                logger.info("  ✓ Ventas a crédito con saldo 0 marcadas como pagadas")
+                
+                # Asegurar que todas las ventas tienen estado
+                connection.execute(text(
+                    "UPDATE ventas SET estado = 'pendiente' WHERE estado IS NULL AND tipo = 'credito'"
+                ))
+                connection.execute(text(
+                    "UPDATE ventas SET estado = 'pagado' WHERE estado IS NULL AND tipo = 'contado'"
+                ))
+                logger.info("  ✓ Ventas sin estado actualizado correctamente")
         except Exception as e:
-            print(f"Error al verificar relaciones entre tablas: {e}")
+            logger.error(f"  ✗ Error al corregir datos incongruentes: {e}")
         
-        print("Verificación y reparación de relaciones completadas.")
+        # PASO 5: Validar integridad referencial
+        logger.info("\nValidando integridad referencial...")
+        
+        try:
+            # Verificar que los clientes existen
+            ventas_sin_cliente = db.session.query(Venta).filter(
+                ~Venta.cliente_id.in_(db.session.query(Cliente.id))
+            ).all()
+            
+            if ventas_sin_cliente:
+                logger.warning(f"  ! Se encontraron {len(ventas_sin_cliente)} ventas con clientes inexistentes")
+                # No eliminamos automáticamente para evitar pérdida de datos
+            
+            # Verificar que los vendedores existen
+            ventas_sin_vendedor = db.session.query(Venta).filter(
+                ~Venta.vendedor_id.in_(db.session.query(Usuario.id))
+            ).all()
+            
+            if ventas_sin_vendedor:
+                logger.warning(f"  ! Se encontraron {len(ventas_sin_vendedor)} ventas con vendedores inexistentes")
+                # No eliminamos automáticamente para evitar pérdida de datos
+            
+        except Exception as e:
+            logger.error(f"  ✗ Error al validar integridad referencial: {e}")
+        
+        logger.info("=== PROCESO DE REPARACIÓN DE BASE DE DATOS COMPLETADO ===")
+        
     except Exception as e:
-        print(f"Error general al reparar relaciones: {e}")
-    
-    print("== PROCESO DE REPARACIÓN DE BASE DE DATOS COMPLETADO ==")
-
-# Corregir secuencias en todas las tablas
-print("==== REPARANDO SECUENCIAS DE IDs EN TODAS LAS TABLAS ====")
-try:
-    with db.engine.connect() as connection:
-        # Obtener lista de todas las tablas
-        result = connection.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'"))
-        tables = [row[0] for row in result]
-        
-        for table in tables:
-            # Verificar si la tabla tiene una columna id
-            try:
-                result = connection.execute(text(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}' AND column_name = 'id'"))
-                has_id = result.fetchone() is not None
-                
-                if has_id:
-                    # Obtener el valor máximo de id y actualizar la secuencia
-                    connection.execute(text(f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), COALESCE((SELECT MAX(id) FROM {table}), 0) + 1, false)"))
-                    print(f"  ✓ Secuencia reparada para tabla: {table}")
-            except Exception as e:
-                print(f"  ✗ Error al reparar secuencia para tabla {table}: {e}")
-                
-    print("Secuencias reparadas correctamente.")
-except Exception as e:
-    print(f"Error general al reparar secuencias: {e}")
-
-# Verificar y corregir la tabla movimiento_caja
-print("\n==== REPARANDO TABLA MOVIMIENTO_CAJA ====")
-try:
-    inspector = inspect(db.engine)
-    columns = inspector.get_columns('movimiento_caja')
-    column_names = [col['name'] for col in columns]
-    
-    missing_columns = []
-    if 'venta_id' not in column_names:
-        missing_columns.append("venta_id INTEGER")
-    if 'abono_id' not in column_names:
-        missing_columns.append("abono_id INTEGER")
-    if 'caja_destino_id' not in column_names:
-        missing_columns.append("caja_destino_id INTEGER")
-    
-    if missing_columns:
-        with db.engine.begin() as connection:
-            for column_def in missing_columns:
-                column_name = column_def.split()[0]
-                connection.execute(text(f"ALTER TABLE movimiento_caja ADD COLUMN {column_def}"))
-                print(f"  ✓ Columna {column_name} agregada a movimiento_caja")
-            
-            # Agregar foreign keys si no existen
-            if 'venta_id' in [col.split()[0] for col in missing_columns]:
-                connection.execute(text("ALTER TABLE movimiento_caja ADD CONSTRAINT fk_movimiento_caja_venta FOREIGN KEY (venta_id) REFERENCES ventas(id)"))
-                print("  ✓ Foreign key para venta_id agregada")
-            
-            if 'abono_id' in [col.split()[0] for col in missing_columns]:
-                connection.execute(text("ALTER TABLE movimiento_caja ADD CONSTRAINT fk_movimiento_caja_abono FOREIGN KEY (abono_id) REFERENCES abonos(id)"))
-                print("  ✓ Foreign key para abono_id agregada")
-            
-            if 'caja_destino_id' in [col.split()[0] for col in missing_columns]:
-                connection.execute(text("ALTER TABLE movimiento_caja ADD CONSTRAINT fk_movimiento_caja_destino FOREIGN KEY (caja_destino_id) REFERENCES cajas(id)"))
-                print("  ✓ Foreign key para caja_destino_id agregada")
-        
-        print("Tabla movimiento_caja reparada correctamente.")
-    else:
-        print("La tabla movimiento_caja ya tiene todas las columnas necesarias.")
-except Exception as e:
-    print(f"Error al reparar movimiento_caja: {e}")
-
-print("\n==== PROCESO DE REPARACIÓN COMPLETADO ====")
+        logger.error(f"ERROR GENERAL EN AUTO-MIGRATE: {e}")
+        # No hacemos raise para evitar que falle el arranque de la aplicación
+        logger.error("A pesar del error, se intentará iniciar la aplicación.")
