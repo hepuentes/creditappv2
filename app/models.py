@@ -74,18 +74,18 @@ class Venta(db.Model):
     __tablename__ = 'ventas'
 
     id = db.Column(db.Integer, primary_key=True)
-    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
-    vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
+    vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     total = db.Column(db.Integer, nullable=False)
     tipo = db.Column(db.String(20), nullable=False)  # 'contado' o 'credito'
     saldo_pendiente = db.Column(db.Integer, nullable=True)  # sólo para crédito
+    estado = db.Column(db.String(20), nullable=False, default='pendiente')  # 'pendiente' o 'pagado'
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relaciones
     cliente = db.relationship('Cliente', back_populates='ventas')
-    vendedor = db.relationship('Usuario', foreign_keys=[vendedor_id], backref='ventas_realizadas')
+    vendedor = db.relationship('Usuario', foreign_keys=[vendedor_id], backref='ventas')
     detalles = db.relationship('DetalleVenta', backref='venta', lazy=True, cascade='all, delete-orphan')
-    # Usar back_populates en lugar de una relación unidireccional
     abonos = db.relationship('Abono', back_populates='venta', foreign_keys='Abono.venta_id', lazy=True)
 
 
