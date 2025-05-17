@@ -215,22 +215,31 @@ def crear():
 @login_required
 @cobrador_required
 def cargar_ventas(cliente_id):
-    # Cargar ventas a crédito con saldo pendiente
-    ventas = Venta.query.filter(
-        Venta.cliente_id == cliente_id,
-        Venta.tipo == 'credito',
-        Venta.saldo_pendiente > 0
-    ).all()
-    
-    # Preparar datos para la respuesta JSON
-    ventas_json = []
-    for v in ventas:
-        ventas_json.append({
-            'id': v.id,
-            'texto': f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.2f}"
-        })
-    
-    return jsonify(ventas_json)
+    try:
+        # Cargar ventas a crédito con saldo pendiente
+        ventas = Venta.query.filter(
+            Venta.cliente_id == cliente_id,
+            Venta.tipo == 'credito',
+            Venta.saldo_pendiente > 0
+        ).all()
+        
+        # Si no hay ventas, devolvemos lista vacía en lugar de error
+        if not ventas:
+            return jsonify([])
+        
+        # Preparar datos para la respuesta JSON
+        ventas_json = []
+        for v in ventas:
+            ventas_json.append({
+                'id': v.id,
+                'texto': f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.2f}"
+            })
+        
+        return jsonify(ventas_json)
+    except Exception as e:
+        # En caso de error, logueamos pero devolvemos lista vacía
+        current_app.logger.error(f"Error cargando ventas: {e}")
+        return jsonify([])
 
 @abonos_bp.route('/<int:id>')
 @login_required
