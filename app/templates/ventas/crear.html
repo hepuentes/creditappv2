@@ -360,8 +360,7 @@ function renderTablaProductosSeleccionados() {
         precio_venta: p.precio
     }));
     document.getElementById('productos_json').value = JSON.stringify(productosParaEnviar);
-    inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
-    
+        
     actualizarResumenVentaCredito(); // Actualizar resumen si es crédito
     bindEventosItemsTabla();
 }
