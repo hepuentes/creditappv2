@@ -97,17 +97,32 @@ def registrar_movimiento_caja(caja_id, tipo, monto, concepto=None, venta_id=None
         if not caja:
             raise ValueError(f"Caja con ID {caja_id} no encontrada")
         
+        # Verificar si las columnas necesarias existen en la tabla
+        inspector = inspect(db.engine)
+        columns = inspector.get_columns('movimiento_caja')
+        column_names = [col['name'] for col in columns]
+        
+        # Crear los parámetros basados en las columnas disponibles
+        params = {
+            'caja_id': caja_id,
+            'tipo': tipo,
+            'monto': monto,
+            'fecha': datetime.utcnow(),
+            'descripcion': concepto
+        }
+        
+        # Solo agregar estos parámetros si las columnas existen
+        if 'venta_id' in column_names and venta_id is not None:
+            params['venta_id'] = venta_id
+        
+        if 'abono_id' in column_names and abono_id is not None:
+            params['abono_id'] = abono_id
+            
+        if 'caja_destino_id' in column_names and caja_destino_id is not None:
+            params['caja_destino_id'] = caja_destino_id
+        
         # Crear el movimiento
-        movimiento = MovimientoCaja(
-            caja_id=caja_id,
-            tipo=tipo,
-            monto=monto,
-            fecha=datetime.utcnow(),
-            descripcion=concepto,
-            venta_id=venta_id,
-            abono_id=abono_id,
-            caja_destino_id=caja_destino_id
-        )
+        movimiento = MovimientoCaja(**params)
         
         # Actualizar saldo de la caja
         if tipo == 'entrada':
@@ -121,16 +136,17 @@ def registrar_movimiento_caja(caja_id, tipo, monto, concepto=None, venta_id=None
                 raise ValueError(f"Caja destino con ID {caja_destino_id} no encontrada")
             caja_destino.saldo_actual += monto
             
-            # Crear movimiento en la caja destino
-            movimiento_destino = MovimientoCaja(
-                caja_id=caja_destino_id,
-                tipo='entrada',
-                monto=monto,
-                fecha=datetime.utcnow(),
-                descripcion=f"Transferencia desde {caja.nombre}",
-                caja_destino_id=caja_id
-            )
-            db.session.add(movimiento_destino)
+            # Crear movimiento en la caja destino si la columna existe
+            if 'caja_destino_id' in column_names:
+                movimiento_destino = MovimientoCaja(
+                    caja_id=caja_destino_id,
+                    tipo='entrada',
+                    monto=monto,
+                    fecha=datetime.utcnow(),
+                    descripcion=f"Transferencia desde {caja.nombre}",
+                    caja_destino_id=caja_id
+                )
+                db.session.add(movimiento_destino)
         
         db.session.add(movimiento)
         db.session.commit()
