@@ -92,7 +92,7 @@
                             <p>Ventas Realizadas</p>
                         </div>
                         <div class="col-md-6 text-center mb-3">
-                            <h3>{{ "${:,.2f}".format(usuario.ventas|sum(attribute='total')|float) }}</h3>
+                            <h3>{{ "${:,}".format(usuario.ventas|sum(attribute='total')|default(0)|float) }}</h3>
                             <p>Total Vendido</p>
                         </div>
                         {% endif %}
@@ -103,14 +103,14 @@
                             <p>Abonos Recibidos</p>
                         </div>
                         <div class="col-md-6 text-center mb-3">
-                            <h3>{{ "${:,.2f}".format(usuario.abonos|sum(attribute='monto')|float) }}</h3>
+                            <h3>{{ "${:,}".format(usuario.abonos|sum(attribute='monto')|default(0)|float) }}</h3>
                             <p>Total Cobrado</p>
                         </div>
                         {% endif %}
 
                         {% if usuario.comisiones %}
                         <div class="col-md-12 text-center">
-                            <h3>{{ "${:,.2f}".format(usuario.comisiones|sum(attribute='monto_comision')|float) }}</h3>
+                            <h3>{{ "${:,}".format(usuario.comisiones|sum(attribute='monto_comision')|default(0)|float) }}</h3>
                             <p>Total Comisiones</p>
                         </div>
                         {% endif %}
