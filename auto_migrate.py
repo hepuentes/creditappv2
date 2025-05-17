@@ -132,8 +132,32 @@ with app.app_context():
             print("La tabla 'movimiento_caja' no existe. Será creada al ejecutar db.create_all().")
     except Exception as e:
         print(f"Error al reparar la tabla 'movimiento_caja': {e}")
-    
-    # Asegurarse que todas las tablas estén creadas con el esquema correcto
+      
+    # Verificar y corregir la tabla ventas
+    try:
+        print("Verificando tabla 'ventas'...")
+        if table_exists('ventas'):
+            columns = get_columns('ventas')
+            
+            with db.engine.begin() as connection:
+                # Verificar si falta la columna 'estado'
+                if 'estado' not in columns:
+                    print("La columna 'estado' no existe en la tabla 'ventas'. Agregando...")
+                    connection.execute(text("ALTER TABLE ventas ADD COLUMN estado VARCHAR(20) DEFAULT 'pendiente' NOT NULL"))
+                    
+                    # Actualizar ventas de contado a 'pagado'
+                    connection.execute(text("UPDATE ventas SET estado = 'pagado' WHERE tipo = 'contado'"))
+                    
+                    # Actualizar ventas a crédito con saldo_pendiente = 0 a 'pagado'
+                    connection.execute(text("UPDATE ventas SET estado = 'pagado' WHERE tipo = 'credito' AND (saldo_pendiente IS NULL OR saldo_pendiente = 0 OR saldo_pendiente <= 0)"))
+                    
+                    print("Columna 'estado' agregada y valores iniciales establecidos.")
+        else:
+            print("La tabla 'ventas' no existe. Será creada al ejecutar db.create_all().")
+    except Exception as e:
+        print(f"Error al reparar la tabla 'ventas': {e}")  
+
+      # Asegurarse que todas las tablas estén creadas con el esquema correcto
     try:
         print("Aplicando esquema completo de la base de datos...")
         db.create_all()
