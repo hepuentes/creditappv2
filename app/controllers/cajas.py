@@ -101,45 +101,55 @@ def nuevo_movimiento(id):
     form.caja_destino_id.choices = [('', 'Ninguna')] + [(c.id, c.nombre) for c in CajaModel.query.filter(CajaModel.id != id).all()]
     
     if form.validate_on_submit():
-        # Validar montos
-        monto = form.monto.data
-        if (form.tipo.data == 'salida' or form.tipo.data == 'transferencia') and monto > caja.saldo_actual:
-            flash(f"El monto no puede ser mayor al saldo actual (${caja.saldo_actual:,.2f})", 'danger')
-            return render_template('cajas/nuevo_movimiento.html', form=form, caja=caja)
-        
-        # Crear el movimiento
-        mov = MovimientoCaja(
-            tipo=form.tipo.data,
-            monto=monto,
-            concepto=form.concepto.data,
-            caja_id=caja.id,
-            caja_destino_id=form.caja_destino_id.data if form.tipo.data == 'transferencia' else None
-        )
-        
-        # Actualizar saldos
-        if form.tipo.data == 'entrada':
-            caja.saldo_actual += monto
-        elif form.tipo.data == 'salida':
-            caja.saldo_actual -= monto
-        elif form.tipo.data == 'transferencia' and form.caja_destino_id.data:
-            caja.saldo_actual -= monto
-            caja_destino = CajaModel.query.get(form.caja_destino_id.data)
-            caja_destino.saldo_actual += monto
+        try:
+            # Validar montos
+            monto = form.monto.data
+            if (form.tipo.data == 'salida' or form.tipo.data == 'transferencia') and monto > caja.saldo_actual:
+                flash(f"El monto no puede ser mayor al saldo actual (${caja.saldo_actual:,.2f})", 'danger')
+                return render_template('cajas/nuevo_movimiento.html', form=form, caja=caja)
             
-            # Crear movimiento en la caja destino
-            mov_destino = MovimientoCaja(
-                tipo='entrada',
+            # Crear el movimiento
+            mov = MovimientoCaja(
+                tipo=form.tipo.data,
                 monto=monto,
-                concepto=f"Transferencia desde {caja.nombre}",
-                caja_id=caja_destino.id,
-                caja_destino_id=caja.id
+                descripcion=form.concepto.data,  # ¡IMPORTANTE! Usar descripcion en lugar de concepto
+                caja_id=caja.id,
+                caja_destino_id=form.caja_destino_id.data if form.tipo.data == 'transferencia' else None
             )
-            db.session.add(mov_destino)
-        
-        db.session.add(mov)
-        db.session.commit()
-        flash('Movimiento registrado exitosamente', 'success')
-        return redirect(url_for('cajas.movimientos', id=id))
+            
+            db.session.add(mov)
+            
+            # Actualizar saldos
+            if form.tipo.data == 'entrada':
+                caja.saldo_actual += monto
+            elif form.tipo.data == 'salida':
+                caja.saldo_actual -= monto
+            elif form.tipo.data == 'transferencia' and form.caja_destino_id.data:
+                caja.saldo_actual -= monto
+                caja_destino = CajaModel.query.get(form.caja_destino_id.data)
+                if not caja_destino:
+                    flash(f"Caja destino no encontrada", 'danger')
+                    return render_template('cajas/nuevo_movimiento.html', form=form, caja=caja)
+                
+                caja_destino.saldo_actual += monto
+                
+                # Crear movimiento en la caja destino
+                mov_destino = MovimientoCaja(
+                    tipo='entrada',
+                    monto=monto,
+                    descripcion=f"Transferencia desde {caja.nombre}",
+                    caja_id=caja_destino.id,
+                    caja_destino_id=caja.id
+                )
+                db.session.add(mov_destino)
+            
+            db.session.commit()
+            flash('Movimiento registrado exitosamente', 'success')
+            return redirect(url_for('cajas.movimientos', id=id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error al registrar movimiento: {str(e)}", 'danger')
     
     return render_template('cajas/nuevo_movimiento.html', form=form, caja=caja)
 
