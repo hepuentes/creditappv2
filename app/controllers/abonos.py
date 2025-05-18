@@ -59,7 +59,6 @@ def index():
 @login_required
 @cobrador_required
 def crear():
-    # El resto del código permanece igual...
     form = AbonoForm()
     
     # Cargar cajas disponibles
