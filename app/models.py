@@ -118,20 +118,15 @@ class Abono(db.Model):
     venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=True)
     credito_id = db.Column(db.Integer, db.ForeignKey('creditos.id'), nullable=True)
     credito_venta_id = db.Column(db.Integer, db.ForeignKey('creditos_venta.id'), nullable=True)
-    monto = db.Column(db.Numeric(precision=15, scale=2), nullable=False)  # Cambiado de Integer a Numeric
+    monto = db.Column(db.Numeric(precision=15, scale=2), nullable=False)
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Otros campos
-    cobrador_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    caja_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=True)
+    cobrador_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)  # Cambiado a no nulo
+    caja_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=False)  # Cambiado a no nulo
     notas = db.Column(db.Text, nullable=True)
     
-    # Restricción - al menos uno de los tres campos debe ser no nulo
-    __table_args__ = (
-        db.CheckConstraint('credito_id IS NOT NULL OR credito_venta_id IS NOT NULL OR venta_id IS NOT NULL', 
-                           name='check_credito_reference'),
-    )
-    
+       
     # Relación bidireccional con back_populates
     venta = db.relationship('Venta', back_populates='abonos', foreign_keys=[venta_id])
     cobrador = db.relationship('Usuario', foreign_keys=[cobrador_id], backref='abonos')
