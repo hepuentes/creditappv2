@@ -118,7 +118,7 @@ class Abono(db.Model):
     venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=True)
     credito_id = db.Column(db.Integer, db.ForeignKey('creditos.id'), nullable=True)
     credito_venta_id = db.Column(db.Integer, db.ForeignKey('creditos_venta.id'), nullable=True)
-    monto = db.Column(db.Integer, nullable=False)
+    monto = db.Column(db.Numeric(precision=15, scale=2), nullable=False)  # Cambiado de Integer a Numeric
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Otros campos
