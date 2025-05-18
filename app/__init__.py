@@ -42,6 +42,14 @@ def create_app():
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Inicie sesión para acceder a esta página'
     login_manager.login_message_category = 'warning'
+
+    # Ruta para servir el favicon.ico desde la carpeta static
+    @app.route('/favicon.ico')
+    def favicon():
+        return send_from_directory(
+            os.path.join(app.root_path, 'static'),
+            'favicon.ico',
+            mimetype='image/vnd.microsoft.icon')
     
     # Importar y registrar los blueprints
     from app.controllers.auth import auth_bp
