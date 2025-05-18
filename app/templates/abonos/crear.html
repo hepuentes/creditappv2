@@ -41,6 +41,9 @@
                             </div>
                         </div>
 
+                        <!-- Campo oculto para tipo_credito -->
+                        <input type="hidden" name="tipo_credito" value="venta" id="tipo_credito">
+
                         <!-- Venta a abonar -->
                         <div class="mb-3">
                             <label class="form-label">Venta/Crédito *</label>
@@ -114,11 +117,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Actualizar max del monto
                 montoInput.setAttribute('max', saldoPendiente);
-                
-                // Si el monto es mayor al saldo, ajustarlo
-                if (montoInput.value && parseFloat(montoInput.value) > saldoPendiente) {
-                    montoInput.value = saldoPendiente;
-                }
             } else {
                 saldoInfo.textContent = '';
             }
@@ -212,6 +210,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (saldoMatch && saldoMatch[1]) {
                 const saldoPendiente = parseFloat(saldoMatch[1].replace(/,/g, ''));
                 
+                // Solo limitamos si el monto es mayor al saldo
                 if (monto > saldoPendiente) {
                     this.value = saldoPendiente;
                     alert(`El monto no puede ser mayor al saldo pendiente ($${saldoPendiente.toLocaleString('es')})`);
