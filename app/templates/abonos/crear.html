@@ -60,7 +60,6 @@
                                 <label class="form-label">Monto *</label>
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
-                                    <!-- Cambiado a type="text" para permitir valores más grandes -->
                                     <input
                                         type="text"
                                         class="form-control"
@@ -68,12 +67,36 @@
                                         name="monto"
                                         required
                                         value="{{ form.monto.data or '' }}"
-                                        placeholder="Ingrese el monto (ej: 116000)"
+                                        placeholder="Ingrese el monto (ej: 50000)"
                                     >
                                 </div>
                                 <small class="form-text text-muted">
                                     Ingrese el monto sin puntos ni comas para valores grandes.
                                 </small>
+                            </div>
+
+                            <!-- Caja -->
+                            <div class="mb-3">
+                                <label class="form-label">Caja *</label>
+                                <select class="form-select" id="caja_id" name="caja_id" required>
+                                    {% for id, nombre in form.caja_id.choices %}
+                                        <option value="{{ id }}" {% if form.caja_id.data == id %}selected{% endif %}>{{ nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Notas -->
+                            <div class="mb-3">
+                                <label class="form-label">Notas (opcional)</label>
+                                <textarea class="form-control" id="notas" name="notas" rows="3">{{ form.notas.data or '' }}</textarea>
+                            </div>
+
+                            <!-- Botón de envío -->
+                            <div class="d-flex justify-content-end mt-4">
+                                <a href="{{ url_for('abonos.index') }}" class="btn btn-secondary me-2">Cancelar</a>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-save"></i> Registrar Abono
+                                </button>
                             </div>
 
                             <!-- JavaScript mejorado para procesar el monto -->
@@ -162,22 +185,29 @@
                                         ventaSelect.addEventListener('change', actualizarSaldoInfo);
                                     }
 
+                                    // Mejorado: Permitir valores grandes sin puntos ni comas
                                     if (montoInput) {
                                         montoInput.addEventListener('input', function() {
-                                            this.value = this.value.replace(/[^\d.,]/g, '');
+                                            // Solo permitir dígitos
+                                            this.value = this.value.replace(/[^\d]/g, '');
+                                            
+                                            // Validar contra saldo pendiente
                                             if (!saldoInfo.textContent) return;
                                             const match = saldoInfo.textContent.match(/\$([\d,\.]+)/);
                                             if (match && match[1]) {
-                                                const saldo = parseFloat(match[1].replace(/,/g, ''));
-                                                const monto = parseFloat(this.value.replace(/,/g, '.'));
+                                                const saldoStr = match[1].replace(/,/g, '');
+                                                const saldo = parseFloat(saldoStr);
+                                                const monto = parseFloat(this.value);
+                                                
                                                 if (!isNaN(monto) && monto > saldo) {
-                                                    this.value = saldo.toString();
+                                                    this.value = Math.floor(saldo);
                                                     alert(`El monto no puede ser mayor al saldo pendiente ($${saldo.toLocaleString('es')})`);
                                                 }
                                             }
                                         });
                                     }
 
+                                    // Inicializar datos al cargar
                                     actualizarSaldoInfo();
                                     if (clienteSelect && clienteSelect.value > 0) {
                                         clienteSelect.dispatchEvent(new Event('change'));
