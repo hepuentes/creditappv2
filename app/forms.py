@@ -97,8 +97,8 @@ class AbonoForm(FlaskForm):
     venta_id = SelectField('Venta/Crédito', coerce=int, validators=[DataRequired()])
     credito_id = HiddenField('ID Crédito')
     credito_venta_id = HiddenField('ID Crédito Venta')
-    # Cambiado min y max_range para permitir valores más grandes
-    monto = FloatField('Monto', validators=[DataRequired(), NumberRange(min=0.01, max=999999999.99)])
+    # Cambiado para permitir valores muy grandes
+    monto = StringField('Monto', validators=[DataRequired()])
     caja_id = SelectField('Caja', coerce=int, validators=[DataRequired()])
     notas = TextAreaField('Notas', validators=[Optional(), Length(max=500)])
     submit = SubmitField('Registrar Abono')
