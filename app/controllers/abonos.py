@@ -111,7 +111,7 @@ def crear():
                 
                 if ventas_pendientes:
                     form.venta_id.choices = [
-                        (v.id, f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.2f}")
+                        (v.id, f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.0f}")
                         for v in ventas_pendientes
                     ]
                 else:
@@ -143,7 +143,7 @@ def crear():
                 
                 if ventas_pendientes:
                     form.venta_id.choices = [
-                        (v.id, f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.2f}")
+                        (v.id, f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.0f}")
                         for v in ventas_pendientes
                     ]
             
@@ -156,6 +156,29 @@ def crear():
             else:
                 flash(f"No se encontró la venta #{venta_id}", "warning")
     
+    # Si es una petición POST, validar y procesar el formulario
+    if request.method == 'POST':
+        # Asegurarnos de que el formulario tenga las opciones de venta_id correctas
+        # Este paso es crítico porque sin él, la validación del formulario fallará
+        try:
+            selected_cliente_id = request.form.get('cliente_id', type=int)
+            if selected_cliente_id:
+                ventas_pendientes = Venta.query.filter(
+                    Venta.cliente_id == selected_cliente_id,
+                    Venta.tipo == 'credito', 
+                    Venta.saldo_pendiente > 0
+                ).all()
+                
+                if ventas_pendientes:
+                    # Actualizar las opciones del formulario con los datos actuales
+                    form.venta_id.choices = [
+                        (v.id, f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.0f}")
+                        for v in ventas_pendientes
+                    ]
+        except Exception as e:
+            current_app.logger.error(f"Error al cargar ventas para validación: {e}")
+    
+    # Validar el formulario
     if form.validate_on_submit():
         try:
             # Verificar si el formulario tiene todos los datos necesarios
@@ -194,7 +217,7 @@ def crear():
                 # Si el monto es mayor al saldo, ajustarlo
                 if monto > venta.saldo_pendiente:
                     monto = Decimal(str(venta.saldo_pendiente))
-                    flash(f'El monto ha sido ajustado al saldo pendiente: ${venta.saldo_pendiente:,.2f}', 'warning')
+                    flash(f'El monto ha sido ajustado al saldo pendiente: ${venta.saldo_pendiente:,.0f}', 'warning')
             except Exception as e:
                 flash(f'Error al procesar el monto: {str(e)}', 'danger')
                 return render_template('abonos/crear.html', form=form, clientes=clientes)
@@ -303,7 +326,8 @@ def cargar_ventas(cliente_id):
         for v in ventas:
             ventas_json.append({
                 'id': v.id,
-                'texto': f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.2f}"
+                # Formatear sin decimales para mantener consistencia
+                'texto': f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.0f}"
             })
         
         return jsonify(ventas_json)
