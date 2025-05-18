@@ -8,7 +8,7 @@ from app.utils import registrar_movimiento_caja, calcular_comision
 from app.pdf.abono import generar_pdf_abono
 from datetime import datetime
 import logging
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 abonos_bp = Blueprint('abonos', __name__, url_prefix='/abonos')
 
@@ -202,27 +202,50 @@ def crear():
                 flash('Esta venta ya está pagada completamente', 'success')
                 return render_template('abonos/crear.html', form=form, clientes=clientes)
             
-            # Validar y procesar el monto del abono
+            # Procesar y validar el monto del abono
             try:
-                # Limpiar el formato y convertir a decimal para manejar valores grandes
-                # Acepta entradas como "50000" o "50,000" o "50.000"
-                monto_str = str(form.monto.data).replace(',', '').replace('.', '')
-                monto = Decimal(monto_str)
+                # Obtener valor del formulario como string
+                monto_str = str(form.monto.data).strip()
                 
-                # Verificar que el monto sea positivo
+                # Verificar si está vacío
+                if not monto_str:
+                    flash('Por favor ingrese un monto válido', 'danger')
+                    return render_template('abonos/crear.html', form=form, clientes=clientes)
+                
+                # Limpiar formato para manejar diferentes tipos de entrada
+                # Primero reemplazar comas por puntos si hay ambiguedad
+                monto_str = monto_str.replace(',', '.')
+                
+                # Luego asegurar un formato válido para Decimal
+                try:
+                    monto = Decimal(monto_str)
+                except InvalidOperation:
+                    # Si falla, intentar un enfoque diferente para valores grandes
+                    # Posiblemente el usuario ingresó un número como "5.000.000"
+                    # Eliminar todos los puntos y convertir
+                    monto_str_limpio = monto_str.replace('.', '')
+                    try:
+                        monto = Decimal(monto_str_limpio)
+                    except InvalidOperation:
+                        flash('El formato del monto no es válido. Ingrese solo números, opcionalmente con punto decimal', 'danger')
+                        return render_template('abonos/crear.html', form=form, clientes=clientes)
+                
+                # Validar valor positivo
                 if monto <= 0:
                     flash('El monto del abono debe ser mayor a cero', 'danger')
                     return render_template('abonos/crear.html', form=form, clientes=clientes)
                 
-                # Si el monto es mayor al saldo, ajustarlo
+                # Validar contra saldo pendiente con mensaje claro
                 if monto > venta.saldo_pendiente:
-                    monto = Decimal(str(venta.saldo_pendiente))
                     flash(f'El monto ha sido ajustado al saldo pendiente: ${venta.saldo_pendiente:,.0f}', 'warning')
+                    monto = Decimal(str(venta.saldo_pendiente))
+                
             except Exception as e:
+                current_app.logger.error(f"Error al procesar monto: {str(e)}")
                 flash(f'Error al procesar el monto: {str(e)}', 'danger')
                 return render_template('abonos/crear.html', form=form, clientes=clientes)
             
-            # Crear el abono con los campos obligatorios
+            # Crear el abono con los campos obligatorios (usar monto ya validado)
             abono = Abono(
                 venta_id=venta.id,
                 monto=monto,
@@ -250,7 +273,7 @@ def crear():
             # Actualizar el saldo pendiente de la venta
             venta.saldo_pendiente -= monto
             
-            # Si el saldo es cero, marcar la venta como pagada
+            # Si el saldo es cero o negativo, marcar la venta como pagada y ajustar saldo a cero
             if venta.saldo_pendiente <= 0:
                 venta.estado = 'pagado'
                 venta.saldo_pendiente = 0  # Evitar saldos negativos
@@ -286,8 +309,9 @@ def crear():
             # Commit de todos los cambios
             db.session.commit()
             
-            # Mensaje de éxito
-            flash(f'Abono de ${float(monto):,.2f} registrado exitosamente', 'success')
+            # Mensaje de éxito con formato apropiado
+            monto_formateado = f"${float(monto):,.2f}"
+            flash(f'Abono de {monto_formateado} registrado exitosamente', 'success')
             
             # Redireccionar a la lista de abonos
             return redirect(url_for('abonos.index'))
