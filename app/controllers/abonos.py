@@ -62,48 +62,35 @@ def crear():
     cajas = Caja.query.all()
     form.caja_id.choices = [(c.id, f"{c.nombre} ({c.tipo})") for c in cajas]
     
+    # Obtener parámetros de la URL
+    cliente_id = request.args.get('cliente_id', type=int)
+    venta_id = request.args.get('venta_id', type=int)
+    
     # Obtener clientes con ventas a crédito pendientes
     clientes = db.session.query(Cliente).join(Venta).filter(
         Venta.tipo == 'credito',
         Venta.saldo_pendiente > 0
     ).distinct().order_by(Cliente.nombre).all()
     
-    # Asegurar que el campo cliente_id tiene opciones válidas
+    # Configurar opciones para el select de clientes
     if clientes:
         form.cliente_id.choices = [(c.id, f"{c.nombre} - {c.cedula}") for c in clientes]
     else:
         form.cliente_id.choices = [(-1, "No hay clientes con créditos pendientes")]
     
-    # Inicializar opciones para venta_id
+    # Inicialmente, sin ventas para seleccionar
     form.venta_id.choices = [(-1, "Seleccione un cliente primero")]
     
-    # Si se recibe un cliente_id o venta_id como parámetro, pre-seleccionarlo
-    cliente_id = request.args.get('cliente_id', type=int)
-    venta_id = request.args.get('venta_id', type=int)
-    
+    # Preparar selección de cliente y venta basado en los parámetros URL
     if cliente_id:
+        # Seleccionar este cliente
         form.cliente_id.data = cliente_id
-        # Cargar ventas pendientes para este cliente
-        ventas_pendientes = Venta.query.filter_by(
-            cliente_id=cliente_id, 
-            tipo='credito'
-        ).filter(Venta.saldo_pendiente > 0).all()
+        cliente = Cliente.query.get(cliente_id)
         
-        if ventas_pendientes:
-            form.venta_id.choices = [
-                (v.id, f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.2f}")
-                for v in ventas_pendientes
-            ]
-    
-    if venta_id:
-        form.venta_id.data = venta_id
-        # Obtener la venta para cargar el cliente también
-        venta = Venta.query.get(venta_id)
-        if venta:
-            form.cliente_id.data = venta.cliente_id
-            # Recargar las ventas de este cliente
+        if cliente:
+            # Cargar las ventas a crédito pendientes de este cliente
             ventas_pendientes = Venta.query.filter_by(
-                cliente_id=venta.cliente_id, 
+                cliente_id=cliente_id,
                 tipo='credito'
             ).filter(Venta.saldo_pendiente > 0).all()
             
@@ -112,6 +99,28 @@ def crear():
                     (v.id, f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.2f}")
                     for v in ventas_pendientes
                 ]
+    
+    if venta_id:
+        # Si se especificó una venta, preseleccionarla
+        venta = Venta.query.get(venta_id)
+        if venta:
+            form.venta_id.data = venta_id
+            
+            # Asegurarse de tener el cliente seleccionado
+            if not cliente_id:
+                form.cliente_id.data = venta.cliente_id
+                
+                # Cargar las ventas de este cliente para el dropdown
+                ventas_pendientes = Venta.query.filter_by(
+                    cliente_id=venta.cliente_id,
+                    tipo='credito'
+                ).filter(Venta.saldo_pendiente > 0).all()
+                
+                if ventas_pendientes:
+                    form.venta_id.choices = [
+                        (v.id, f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.2f}")
+                        for v in ventas_pendientes
+                    ]
     
     if form.validate_on_submit():
         try:
@@ -132,7 +141,7 @@ def crear():
             # Validar que el monto del abono no exceda el saldo pendiente
             if form.monto.data > venta.saldo_pendiente:
                 form.monto.data = venta.saldo_pendiente
-                flash(f'El monto ha sido ajustado al saldo pendiente: ${venta.saldo_pendiente}', 'warning')
+                flash(f'El monto ha sido ajustado al saldo pendiente: ${venta.saldo_pendiente:,.2f}', 'warning')
             
             # Crear un abono
             abono = Abono(
@@ -157,57 +166,35 @@ def crear():
             
             # Registrar movimiento en la caja
             try:
-                registrar_movimiento_caja(
+                movimiento = MovimientoCaja(
                     caja_id=form.caja_id.data,
                     tipo='entrada',
                     monto=form.monto.data,
-                    concepto=f'Abono a venta #{venta.id}',
+                    descripcion=f'Abono a venta #{venta.id}',
                     abono_id=abono.id
                 )
+                db.session.add(movimiento)
+                
+                # Actualizar saldo de la caja
+                caja = Caja.query.get(form.caja_id.data)
+                if caja:
+                    caja.saldo_actual += form.monto.data
             except Exception as e:
                 db.session.rollback()
                 flash(f'Error al registrar movimiento de caja: {str(e)}', 'danger')
                 return render_template('abonos/crear.html', form=form, clientes=clientes)
             
-            # Calcular comisión si aplica
-            try:
-                calcular_comision(abono.monto, current_user.id)
-            except Exception as e:
-                # No interrumpir por error en comisión, pero registrarlo
-                print(f"Error al calcular comisión: {e}")
-            
             db.session.commit()
             
             flash(f'Abono de ${form.monto.data:,.2f} registrado exitosamente.', 'success')
             
-            # Generar PDF
-            try:
-                pdf_bytes = generar_pdf_abono(abono)
-                response = make_response(pdf_bytes)
-                response.headers['Content-Type'] = 'application/pdf'
-                response.headers['Content-Disposition'] = f'inline; filename=abono_{abono.id}.pdf'
-                return response
-            except Exception as e:
-                flash(f'Abono registrado pero hubo un error al generar el PDF: {str(e)}', 'warning')
-                return redirect(url_for('abonos.detalle', id=abono.id))
+            # Redireccionar a la lista de abonos en lugar de generar PDF
+            return redirect(url_for('abonos.index'))
             
         except Exception as e:
             db.session.rollback()
             flash(f'Error al registrar el abono: {str(e)}', 'danger')
             return render_template('abonos/crear.html', form=form, clientes=clientes)
-
-    return render_template('abonos/crear.html', form=form, clientes=clientes)
-
-    # Pre-seleccionar cliente o venta si vienen como parámetros
-    if cliente_id:
-        form.cliente_id.data = cliente_id
-    
-    if venta_id:
-        form.venta_id.data = venta_id
-        # Cargar la venta para mostrar información
-        venta = Venta.query.get(venta_id)
-        if venta:
-            form.cliente_id.data = venta.cliente_id
 
     return render_template('abonos/crear.html', form=form, clientes=clientes)
 
