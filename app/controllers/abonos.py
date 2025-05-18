@@ -182,7 +182,7 @@ def crear():
             try:
                 # Limpiar el formato y convertir a decimal para manejar valores grandes
                 from decimal import Decimal
-                monto_str = str(form.monto.data).replace(',', '.')
+                monto_str = str(form.monto.data).replace(',', '').replace('.', '')
                 monto = Decimal(monto_str)
                 
                 # Verificar que el monto sea positivo
