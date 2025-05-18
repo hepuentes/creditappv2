@@ -104,12 +104,25 @@ def detalle(id):
 @clientes_bp.route('/<int:id>/historial/pdf')
 @login_required
 def historial_pdf(id):
-    cliente = Cliente.query.get_or_404(id)
-    ventas = cliente.ventas
-    creditos = cliente.creditos
-    abonos = cliente.abonos
-    pdf_bytes = generar_pdf_historial(cliente, ventas, creditos, abonos)
-    response = make_response(pdf_bytes)
-    response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'inline; filename=historial_cliente_{cliente.id}.pdf'
-    return response
+    try:
+        cliente = Cliente.query.get_or_404(id)
+        ventas = Venta.query.filter_by(cliente_id=id).all()
+        
+        # Obtenemos abonos directamente desde las ventas
+        abonos = []
+        for venta in ventas:
+            if hasattr(venta, 'abonos') and venta.abonos:
+                abonos.extend(venta.abonos)
+        
+        # Pueden existir créditos directos, pero no es necesario para este PDF
+        creditos = []
+        
+        pdf_bytes = generar_pdf_historial(cliente, ventas, creditos, abonos)
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'inline; filename=historial_cliente_{cliente.id}.pdf'
+        return response
+    except Exception as e:
+        current_app.logger.error(f"Error generando historial PDF: {e}")
+        flash(f"Error al generar el historial PDF: {str(e)}", "danger")
+        return redirect(url_for('clientes.detalle', id=id))
