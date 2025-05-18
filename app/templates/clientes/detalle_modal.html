@@ -21,21 +21,21 @@
     </div>
     
     <div class="action-buttons">
-        <a href="{{ url_for('ventas.crear', cliente_id=cliente.id) }}" class="btn btn-primary">
-            <i class="fas fa-cart-plus"></i> Nueva venta
-        </a>
-        {% if cliente.saldo_pendiente() > 0 %}
-        <a href="{{ url_for('abonos.crear', cliente_id=cliente.id) }}" class="btn btn-success">
-            <i class="fas fa-money-bill-wave"></i> Registrar abono
-        </a>
-        {% endif %}
-        <a href="{{ url_for('clientes.detalle', id=cliente.id) }}" class="btn btn-info">
-            <i class="fas fa-eye"></i> Ver historial
-        </a>
-        <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn btn-warning">
-            <i class="fas fa-edit"></i> Editar
-        </a>
-    </div>
+    <a href="{{ url_for('ventas.crear', cliente_id=cliente.id) }}" class="btn btn-primary">
+        <i class="fas fa-cart-plus"></i> Nueva venta
+    </a>
+    {% if cliente.saldo_pendiente() > 0 %}
+    <a href="{{ url_for('abonos.crear', cliente_id=cliente.id) }}" class="btn btn-success">
+        <i class="fas fa-money-bill-wave"></i> Registrar abono
+    </a>
+    {% endif %}
+    <a href="{{ url_for('clientes.detalle', id=cliente.id) }}" class="btn btn-info">
+        <i class="fas fa-eye"></i> Ver historial
+    </a>
+    <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn btn-warning">
+        <i class="fas fa-edit"></i> Editar
+    </a>
+</div>
 </div>
 
 <style>
