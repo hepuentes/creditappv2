@@ -15,13 +15,51 @@ abonos_bp = Blueprint('abonos', __name__, url_prefix='/abonos')
 @login_required
 @cobrador_required
 def index():
-    # El código existente se mantiene igual...
-    # ...
+    # Obtener parámetros de filtro
+    busqueda = request.args.get('busqueda', '')
+    desde_str = request.args.get('desde', '')
+    hasta_str = request.args.get('hasta', '')
+    
+    # Consulta base
+    query = Abono.query
+    
+    if busqueda:
+        # Buscar por nombre de cliente asociado a la venta del abono
+        query = query.join(Abono.venta).join(Venta.cliente).filter(Cliente.nombre.ilike(f"%{busqueda}%"))
+    
+    if desde_str:
+        try:
+            desde_dt = datetime.strptime(desde_str, '%Y-%m-%d')
+            query = query.filter(Abono.fecha >= desde_dt)
+        except ValueError:
+            flash('Fecha "desde" inválida.', 'warning')
+    
+    if hasta_str:
+        try:
+            hasta_dt = datetime.strptime(hasta_str, '%Y-%m-%d')
+            hasta_dt_fin_dia = datetime.combine(hasta_dt, datetime.max.time())
+            query = query.filter(Abono.fecha <= hasta_dt_fin_dia)
+        except ValueError:
+            flash('Fecha "hasta" inválida.', 'warning')
+
+    # Ordenar por fecha descendente
+    abonos = query.order_by(Abono.fecha.desc()).all()
+    
+    # Calcular total de abonos
+    total_abonos = sum(a.monto for a in abonos) if abonos else 0
+    
+    return render_template('abonos/index.html', 
+                          abonos=abonos, 
+                          total_abonos=total_abonos,
+                          busqueda=busqueda,
+                          desde=desde_str,
+                          hasta=hasta_str)
 
 @abonos_bp.route('/crear', methods=['GET', 'POST'])
 @login_required
 @cobrador_required
 def crear():
+    # El resto del código permanece igual...
     form = AbonoForm()
     
     # Cargar cajas disponibles
