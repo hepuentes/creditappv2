@@ -198,6 +198,160 @@
 
 {% block extra_js %}
 <script>
+@ventas_bp.route('/crear', methods=['GET', 'POST'])
+@login_required
+@vendedor_required
+def crear():
+    # Inicializar el formulario
+    form = VentaForm()
+    
+    # Obtener cliente_id de la URL si existe
+    cliente_id_param = request.args.get('cliente_id', type=int)
+    
+    # Cargar opciones para los selectores
+    clientes = Cliente.query.order_by(Cliente.nombre).all()
+    form.cliente.choices = [(c.id, f"{c.nombre} - {c.cedula}") for c in clientes]
+    
+    # Si hay un cliente_id en la URL, preseleccionarlo
+    if cliente_id_param and request.method == 'GET':
+        cliente = Cliente.query.get(cliente_id_param)
+        if cliente:
+            form.cliente.data = cliente.id
+    
+    # Cargar opciones para los selectores de caja
+    cajas = Caja.query.all()
+    form.caja.choices = [(c.id, c.nombre) for c in cajas]
+    
+    # Obtener productos disponibles para la vista
+    productos_disponibles = Producto.query.filter(Producto.stock > 0).order_by(Producto.nombre).all()
+    
+    # Log para depuración
+    if request.method == 'POST':
+        current_app.logger.info(f"Datos del formulario recibidos: {request.form}")
+        
+    # Procesar el formulario cuando se envía
+    if form.validate_on_submit():
+        current_app.logger.info("Formulario validado correctamente")
+        
+        # Obtener productos del campo JSON
+        productos_json = request.form.get('productos_json', '[]')
+        current_app.logger.info(f"Productos JSON: {productos_json}")
+        
+        try:
+            # Decodificar JSON de productos
+            productos_seleccionados = json.loads(productos_json)
+            
+            # Verificar si hay productos seleccionados
+            if not productos_seleccionados:
+                flash('No se seleccionaron productos para la venta.', 'danger')
+                return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
+            
+            current_app.logger.info(f"Productos decodificados: {productos_seleccionados}")
+            
+            # Crear nueva venta
+            nueva_venta = Venta(
+                cliente_id=form.cliente.data,
+                vendedor_id=current_user.id,
+                tipo=form.tipo.data,
+                fecha=datetime.utcnow(),
+                total=0,  # Se calculará después
+                saldo_pendiente=0  # Se calculará después
+            )
+            
+            # Establecer estado según tipo de venta
+            if form.tipo.data == 'contado':
+                nueva_venta.estado = 'pagado'
+            else:
+                nueva_venta.estado = 'pendiente'
+            
+            db.session.add(nueva_venta)
+            db.session.flush()  # Para obtener el ID antes del commit
+            
+            # Procesar los productos seleccionados
+            total_venta_calculado = 0
+            
+            for item in productos_seleccionados:
+                producto_id = int(item.get('id', 0))
+                cantidad = int(item.get('cantidad', 0))
+                precio_venta = float(item.get('precio_venta', 0))
+                
+                # Verificar stock disponible
+                producto_db = Producto.query.get(producto_id)
+                if not producto_db:
+                    flash(f"Producto no encontrado.", 'danger')
+                    db.session.rollback()
+                    return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
+                
+                if producto_db.stock < cantidad:
+                    flash(f"Stock insuficiente para {producto_db.nombre}. Disponible: {producto_db.stock}", 'danger')
+                    db.session.rollback()
+                    return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
+                
+                # Crear detalle de venta
+                subtotal = cantidad * precio_venta
+                detalle = DetalleVenta(
+                    venta_id=nueva_venta.id,
+                    producto_id=producto_id,
+                    cantidad=cantidad,
+                    precio_unitario=precio_venta,
+                    subtotal=subtotal
+                )
+                db.session.add(detalle)
+                
+                # Actualizar stock
+                producto_db.stock -= cantidad
+                
+                # Sumar al total
+                total_venta_calculado += subtotal
+            
+            # Actualizar total y saldo pendiente
+            nueva_venta.total = total_venta_calculado
+            
+            if form.tipo.data == 'credito':
+                nueva_venta.saldo_pendiente = total_venta_calculado
+            else:  # contado
+                nueva_venta.saldo_pendiente = 0
+                
+                # Registrar movimiento en caja para ventas de contado
+                try:
+                    registrar_movimiento_caja(
+                        caja_id=form.caja.data,
+                        tipo='entrada',
+                        monto=total_venta_calculado,
+                        concepto=f"Venta de contado #{nueva_venta.id}",
+                        venta_id=nueva_venta.id
+                    )
+                except Exception as e:
+                    current_app.logger.error(f"Error al registrar movimiento de caja: {e}")
+                    # Continuar a pesar del error en la caja
+            
+            # Confirmar cambios
+            db.session.commit()
+            flash(f'Venta #{nueva_venta.id} creada exitosamente!', 'success')
+            
+            # Redireccionar a la lista de ventas
+            return redirect(url_for('ventas.index'))
+            
+        except json.JSONDecodeError as e:
+            current_app.logger.error(f"Error al decodificar JSON: {e}")
+            flash('Error en el formato de productos seleccionados.', 'danger')
+            return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error al crear venta: {e}")
+            current_app.logger.error(traceback.format_exc())
+            flash(f'Error al crear la venta: {str(e)}', 'danger')
+    elif request.method == 'POST':
+        # Si el formulario no se validó, mostrar errores
+        current_app.logger.warning(f"Errores de validación: {form.errors}")
+        flash('Por favor corrija los errores en el formulario.', 'warning')
+    
+    return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
+3. Actualización dinámica del stock en la interfaz de ventas
+Archivo modificado: app/templates/ventas/crear.html
+Vamos a modificar la parte del JavaScript que maneja la selección de productos:
+javascript// Reemplaza la sección de JavaScript en ventas/crear.html con este código
+
 document.addEventListener('DOMContentLoaded', function() {
     // Variables y elementos del DOM
     let productosSeleccionadosParaVenta = [];
@@ -217,6 +371,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectFrecuenciaPago = document.getElementById('frecuencia_pago');
     const inputNumeroCuotas = document.getElementById('numero_cuotas');
     const clienteSelect = document.querySelector('select[name="cliente"]');
+
+    // Objeto para almacenar el stock disponible actualizado
+    const stockActualizado = {};
 
     // Formateador de moneda
     const currencyFormatter = new Intl.NumberFormat('es-CO', { 
@@ -291,108 +448,185 @@ document.addEventListener('DOMContentLoaded', function() {
     if (inputNumeroCuotas) inputNumeroCuotas.addEventListener('input', actualizarResumenVentaCredito);
     if (clienteSelect) clienteSelect.addEventListener('change', actualizarResumenVentaCredito);
 
-    // Manejar clic en productos disponibles para agregarlos
-if (productosDisponiblesContainer) {
-    productosDisponiblesContainer.addEventListener('click', function(e) {
-        const itemProducto = e.target.closest('.producto-item-disponible');
-        if (itemProducto) {
-            const id = parseInt(itemProducto.dataset.id);
-            const nombre = itemProducto.dataset.nombre;
-            const precio = parseFloat(itemProducto.dataset.precio);
-            const stock = parseInt(itemProducto.dataset.stock);
-            const codigo = itemProducto.dataset.codigo;
-
-            const productoYaSeleccionado = productosSeleccionadosParaVenta.find(p => p.id === id);
-
-            if (productoYaSeleccionado) {
-                if (productoYaSeleccionado.cantidad < stock) {
-                    productoYaSeleccionado.cantidad++;
-                    renderTablaProductosSeleccionados();
-                } else {
-                    alert(`No hay más stock disponible para ${nombre}. Stock máximo: ${stock}`);
-                }
-            } else {
-                if (stock > 0) {
-                    productosSeleccionadosParaVenta.push({ id, codigo, nombre, precio, cantidad: 1, stockMax: stock });
-                    renderTablaProductosSeleccionados();
-                } else {
-                    alert(`El producto ${nombre} está agotado.`);
+    // Función para actualizar visualmente el stock disponible
+    function actualizarVisualizacionStock() {
+        if (!productosDisponiblesContainer) return;
+        
+        const items = productosDisponiblesContainer.querySelectorAll('.producto-item-disponible');
+        items.forEach(item => {
+            const id = parseInt(item.dataset.id);
+            
+            // Si el producto está en el carrito, actualizar visualización de stock
+            if (id in stockActualizado) {
+                const stockOriginal = parseInt(item.dataset.stock);
+                const stockRestante = stockActualizado[id];
+                
+                // Actualizar el texto del stock
+                const stockText = item.querySelector('small.text-muted');
+                if (stockText) {
+                    stockText.textContent = `Stock: ${stockRestante}`;
+                    
+                    // Cambiar color si el stock está bajo o agotado
+                    if (stockRestante <= 0) {
+                        item.classList.add('bg-danger', 'text-white');
+                        item.style.opacity = '0.5';
+                        item.style.cursor = 'not-allowed';
+                    } else if (stockRestante <= 5) {
+                        item.classList.add('bg-warning');
+                        item.classList.remove('bg-danger', 'text-white');
+                        item.style.opacity = '1';
+                        item.style.cursor = 'pointer';
+                    } else {
+                        item.classList.remove('bg-warning', 'bg-danger', 'text-white');
+                        item.style.opacity = '1';
+                        item.style.cursor = 'pointer';
+                    }
                 }
             }
-        }
-    });
-}
+        });
+    }
 
-// Renderizar tabla de productos seleccionados
-function renderTablaProductosSeleccionados() {
-    tablaProductosVentaBody.innerHTML = '';
-    let granTotal = 0;
-
-    productosSeleccionadosParaVenta.forEach((producto, index) => {
-        const subtotal = producto.precio * producto.cantidad;
-        granTotal += subtotal;
-
-        const fila = tablaProductosVentaBody.insertRow();
-        fila.innerHTML = `
-            <td>${producto.codigo}</td>
-            <td>${producto.nombre}</td>
-            <td>
-                <input type="number" class="form-control form-control-sm cantidad-item-venta" 
-                       value="${producto.cantidad}" min="1" max="${producto.stockMax}" 
-                       data-index="${index}">
-            </td>
-            <td class="text-end">${currencyFormatter.format(producto.precio)}</td>
-            <td class="text-end subtotal">${currencyFormatter.format(subtotal)}</td>
-            <td>
-                <button type="button" class="btn btn-sm btn-danger eliminar-item-venta" data-index="${index}">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-    });
-
-    displayTotalVenta.textContent = currencyFormatter.format(granTotal);
-    
-    // Prepara el JSON para el backend
-    const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
-        id: p.id,
-        cantidad: p.cantidad,
-        precio_venta: p.precio
-    }));
-    document.getElementById('productos_json').value = JSON.stringify(productosParaEnviar);
+    // Manejar clic en productos disponibles para agregarlos
+    if (productosDisponiblesContainer) {
+        // Inicializar el stock actual
+        const items = productosDisponiblesContainer.querySelectorAll('.producto-item-disponible');
+        items.forEach(item => {
+            const id = parseInt(item.dataset.id);
+            stockActualizado[id] = parseInt(item.dataset.stock);
+        });
         
-    actualizarResumenVentaCredito(); // Actualizar resumen si es crédito
-    bindEventosItemsTabla();
-}
+        productosDisponiblesContainer.addEventListener('click', function(e) {
+            const itemProducto = e.target.closest('.producto-item-disponible');
+            if (itemProducto) {
+                const id = parseInt(itemProducto.dataset.id);
+                const nombre = itemProducto.dataset.nombre;
+                const precio = parseFloat(itemProducto.dataset.precio);
+                const stockOriginal = parseInt(itemProducto.dataset.stock);
+                const codigo = itemProducto.dataset.codigo;
+                
+                // Usar el stock actualizado si existe, sino el original
+                const stockActual = stockActualizado[id] !== undefined ? stockActualizado[id] : stockOriginal;
+
+                const productoYaSeleccionado = productosSeleccionadosParaVenta.find(p => p.id === id);
+
+                if (productoYaSeleccionado) {
+                    if (stockActual > 0) {
+                        productoYaSeleccionado.cantidad++;
+                        // Actualizar el stock restante
+                        stockActualizado[id] = stockActual - 1;
+                        renderTablaProductosSeleccionados();
+                        actualizarVisualizacionStock();
+                    } else {
+                        alert(`No hay más stock disponible para ${nombre}. Stock máximo: 0`);
+                    }
+                } else {
+                    if (stockActual > 0) {
+                        productosSeleccionadosParaVenta.push({ id, codigo, nombre, precio, cantidad: 1, stockMax: stockActual });
+                        // Actualizar el stock restante
+                        stockActualizado[id] = stockActual - 1;
+                        renderTablaProductosSeleccionados();
+                        actualizarVisualizacionStock();
+                    } else {
+                        alert(`El producto ${nombre} está agotado.`);
+                    }
+                }
+            }
+        });
+    }
+
+    // Renderizar tabla de productos seleccionados
+    function renderTablaProductosSeleccionados() {
+        tablaProductosVentaBody.innerHTML = '';
+        let granTotal = 0;
+
+        productosSeleccionadosParaVenta.forEach((producto, index) => {
+            const subtotal = producto.precio * producto.cantidad;
+            granTotal += subtotal;
+
+            const fila = tablaProductosVentaBody.insertRow();
+            fila.innerHTML = `
+                <td>${producto.codigo}</td>
+                <td>${producto.nombre}</td>
+                <td>
+                    <input type="number" class="form-control form-control-sm cantidad-item-venta" 
+                           value="${producto.cantidad}" min="1" max="${producto.stockMax}" 
+                           data-index="${index}" data-id="${producto.id}">
+                </td>
+                <td class="text-end">${currencyFormatter.format(producto.precio)}</td>
+                <td class="text-end subtotal">${currencyFormatter.format(subtotal)}</td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-danger eliminar-item-venta" data-index="${index}" data-id="${producto.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+        });
+
+        displayTotalVenta.textContent = currencyFormatter.format(granTotal);
+        
+        // Prepara el JSON para el backend
+        const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
+            id: p.id,
+            cantidad: p.cantidad,
+            precio_venta: p.precio
+        }));
+        document.getElementById('productos_json').value = JSON.stringify(productosParaEnviar);
+            
+        actualizarResumenVentaCredito(); // Actualizar resumen si es crédito
+        bindEventosItemsTabla();
+    }
 
     // Agregar eventos a los elementos de la tabla de productos seleccionados
     function bindEventosItemsTabla() {
         document.querySelectorAll('.cantidad-item-venta').forEach(input => {
             input.addEventListener('change', function() {
                 const index = parseInt(this.dataset.index);
+                const productoId = parseInt(this.dataset.id);
                 let nuevaCantidad = parseInt(this.value);
                 const producto = productosSeleccionadosParaVenta[index];
-
+                const stockOriginal = parseInt(document.querySelector(`.producto-item-disponible[data-id="${productoId}"]`).dataset.stock);
+                
                 if (isNaN(nuevaCantidad) || nuevaCantidad < 1) {
                     nuevaCantidad = 1;
                     this.value = 1;
                 }
-                if (nuevaCantidad > producto.stockMax) {
-                    nuevaCantidad = producto.stockMax;
-                    this.value = producto.stockMax;
-                    alert(`La cantidad no puede exceder el stock disponible (${producto.stockMax}).`);
+                
+                // Calcular el máximo stock permitido (stock original - cantidades de otros productos seleccionados)
+                let cantidadPrevia = producto.cantidad;
+                
+                // Restablecer el stock al valor anterior antes de recalcular
+                stockActualizado[productoId] += cantidadPrevia;
+                
+                // Verificar si la nueva cantidad excede el stock disponible
+                if (nuevaCantidad > stockActualizado[productoId]) {
+                    nuevaCantidad = stockActualizado[productoId];
+                    this.value = nuevaCantidad;
+                    alert(`La cantidad no puede exceder el stock disponible (${stockActualizado[productoId]}).`);
                 }
                 
+                // Actualizar la cantidad y el stock
                 producto.cantidad = nuevaCantidad;
+                stockActualizado[productoId] -= nuevaCantidad;
+                
                 renderTablaProductosSeleccionados();
+                actualizarVisualizacionStock();
             });
         });
 
         document.querySelectorAll('.eliminar-item-venta').forEach(btn => {
             btn.addEventListener('click', function() {
                 const index = parseInt(this.dataset.index);
+                const productoId = parseInt(this.dataset.id);
+                const cantidadEliminada = productosSeleccionadosParaVenta[index].cantidad;
+                
+                // Restablecer el stock
+                stockActualizado[productoId] += cantidadEliminada;
+                
+                // Eliminar el producto de la lista
                 productosSeleccionadosParaVenta.splice(index, 1);
+                
                 renderTablaProductosSeleccionados();
+                actualizarVisualizacionStock();
             });
         });
     }
@@ -416,36 +650,36 @@ function renderTablaProductosSeleccionados() {
     }
 
     // Validación del formulario al enviar
-if (formularioVenta) {
-    formularioVenta.addEventListener('submit', function(e) {
-        // Verificar productos seleccionados
-        if (productosSeleccionadosParaVenta.length === 0) {
-            e.preventDefault();
-            alert('Debe seleccionar al menos un producto para crear la venta.');
-            return false;
-        }
-        
-        // Verificar cliente seleccionado
-        const clienteSelect = document.querySelector('select[name="cliente"]');
-        if (!clienteSelect || !clienteSelect.value) {
-            e.preventDefault();
-            alert('Debe seleccionar un cliente para crear la venta.');
-            return false;
-        }
-        
-        // Verificar que el JSON esté actualizado justo antes del submit
-        const inputJsonProductosOculto = document.getElementById('productos_json');
-        const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
-            id: p.id,
-            cantidad: p.cantidad,
-            precio_venta: p.precio
-        }));
-        inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
-        
-        console.log('Enviando formulario con productos:', inputJsonProductosOculto.value);
-        return true;
-    });
-}
+    if (formularioVenta) {
+        formularioVenta.addEventListener('submit', function(e) {
+            // Verificar productos seleccionados
+            if (productosSeleccionadosParaVenta.length === 0) {
+                e.preventDefault();
+                alert('Debe seleccionar al menos un producto para crear la venta.');
+                return false;
+            }
+            
+            // Verificar cliente seleccionado
+            const clienteSelect = document.querySelector('select[name="cliente"]');
+            if (!clienteSelect || !clienteSelect.value) {
+                e.preventDefault();
+                alert('Debe seleccionar un cliente para crear la venta.');
+                return false;
+            }
+            
+            // Verificar que el JSON esté actualizado justo antes del submit
+            const inputJsonProductosOculto = document.getElementById('productos_json');
+            const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
+                id: p.id,
+                cantidad: p.cantidad,
+                precio_venta: p.precio
+            }));
+            inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
+            
+            console.log('Enviando formulario con productos:', inputJsonProductosOculto.value);
+            return true;
+        });
+    }
     
     // Llamada inicial si el tipo de venta es crédito al cargar
     if (selectTipoVenta && selectTipoVenta.value === 'credito') {
