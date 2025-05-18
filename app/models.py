@@ -126,10 +126,10 @@ class Abono(db.Model):
     caja_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=True)
     notas = db.Column(db.Text, nullable=True)
     
-    # Restricción
+    # Restricción - al menos uno de los tres campos debe ser no nulo
     __table_args__ = (
         db.CheckConstraint('credito_id IS NOT NULL OR credito_venta_id IS NOT NULL OR venta_id IS NOT NULL', 
-                           name='check_credito_or_venta_reference'),
+                           name='check_credito_reference'),
     )
     
     # Relación bidireccional con back_populates
