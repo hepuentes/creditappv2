@@ -90,11 +90,10 @@ class VentaForm(FlaskForm):
 # --- Formulario de Abonos ---
 class AbonoForm(FlaskForm):
     cliente_id = SelectField('Cliente', coerce=int, validators=[DataRequired()])
-    # Hacemos el campo opcional para permitir el envío del formulario
     tipo_credito = SelectField('Tipo de Crédito', 
-                              choices=[('venta', 'Venta a Crédito'), ('credito', 'Crédito Directo')], 
-                              default='venta', 
-                              validators=[Optional()])  # Cambiamos a Optional
+                               choices=[('venta', 'Venta a Crédito'), ('credito', 'Crédito Directo')], 
+                               default='venta',
+                               validators=[Optional()])
     venta_id = SelectField('Venta/Crédito', coerce=int, validators=[DataRequired()])
     credito_id = HiddenField('ID Crédito')
     credito_venta_id = HiddenField('ID Crédito Venta')
