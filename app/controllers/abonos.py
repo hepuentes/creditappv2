@@ -8,6 +8,7 @@ from app.utils import registrar_movimiento_caja, calcular_comision
 from app.pdf.abono import generar_pdf_abono
 from datetime import datetime
 import logging
+from decimal import Decimal
 
 abonos_bp = Blueprint('abonos', __name__, url_prefix='/abonos')
 
@@ -183,111 +184,12 @@ def crear():
                 # Limpiar el formato y convertir a decimal para manejar valores grandes
                 # Acepta entradas como "50000" o "50,000" o "50.000"
                 monto_str = str(form.monto.data).replace(',', '').replace('.', '')
-                monto = int(monto_str)
-                
-                # Convertir a Decimal para la BD
-                from decimal import Decimal
-                monto_decimal = Decimal(monto)
+                monto = Decimal(monto_str)
                 
                 # Verificar que el monto sea positivo
-                if monto_decimal <= 0:
+                if monto <= 0:
                     flash('El monto del abono debe ser mayor a cero', 'danger')
                     return render_template('abonos/crear.html', form=form, clientes=clientes)
-                
-                # Si el monto es mayor al saldo, ajustarlo
-                if monto_decimal > venta.saldo_pendiente:
-                    monto_decimal = Decimal(str(venta.saldo_pendiente))
-                    flash(f'El monto ha sido ajustado al saldo pendiente: ${venta.saldo_pendiente:,.2f}', 'warning')
-            except Exception as e:
-                flash(f'Error al procesar el monto: {str(e)}', 'danger')
-                return render_template('abonos/crear.html', form=form, clientes=clientes)
-            
-            # Crear el abono con los campos obligatorios
-            abono = Abono(
-                venta_id=venta.id,
-                monto=monto_decimal,
-                fecha=datetime.utcnow(),
-                cobrador_id=current_user.id,
-                caja_id=form.caja_id.data,
-                notas=form.notas.data if form.notas.data else ''
-            )
-            
-            # Logging para debugging
-            current_app.logger.info(f"Intentando crear abono: venta_id={abono.venta_id}, "
-                                   f"monto={monto_decimal}, cobrador_id={abono.cobrador_id}, "
-                                   f"caja_id={abono.caja_id}")
-            
-            # Guardar el abono en la base de datos con manejo de errores específicos
-            try:
-                db.session.add(abono)
-                db.session.flush()  # Para obtener el ID del abono sin confirmar aún
-            except Exception as e:
-                db.session.rollback()
-                current_app.logger.error(f"Error al insertar abono en base de datos: {e}")
-                flash(f'Error al registrar el abono: {str(e)}', 'danger')
-                return render_template('abonos/crear.html', form=form, clientes=clientes)
-            
-            # Actualizar el saldo pendiente de la venta
-            venta.saldo_pendiente -= monto_decimal
-            
-            # Si el saldo es cero, marcar la venta como pagada
-            if venta.saldo_pendiente <= 0:
-                venta.estado = 'pagado'
-                venta.saldo_pendiente = 0  # Evitar saldos negativos
-            
-            # Registrar movimiento en caja
-            try:
-                movimiento = MovimientoCaja(
-                    caja_id=form.caja_id.data,
-                    tipo='entrada',
-                    monto=monto_decimal,
-                    descripcion=f'Abono a venta #{venta.id}',
-                    abono_id=abono.id
-                )
-                db.session.add(movimiento)
-                
-                # Actualizar saldo de la caja
-                caja = Caja.query.get(form.caja_id.data)
-                if caja:
-                    caja.saldo_actual += monto_decimal
-            except Exception as e:
-                current_app.logger.error(f"Error al registrar movimiento de caja: {e}")
-                db.session.rollback()
-                flash(f'Error al registrar movimiento de caja: {str(e)}', 'danger')
-                return render_template('abonos/crear.html', form=form, clientes=clientes)
-            
-            # Calcular comisión
-            try:
-                calcular_comision(float(monto_decimal), current_user.id)
-            except Exception as e:
-                # No es crítico, sólo log
-                current_app.logger.error(f"Error al calcular comisión: {e}")
-            
-            # Commit de todos los cambios
-            db.session.commit()
-            
-            # Mensaje de éxito
-            flash(f'Abono de ${float(monto_decimal):,.2f} registrado exitosamente', 'success')
-            
-            # Redireccionar a la lista de abonos
-            return redirect(url_for('abonos.index'))
-            
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error general al registrar abono: {e}")
-            flash(f'Error al registrar el abono: {str(e)}', 'danger')
-    
-    # Si hay errores de validación, mostrarlos
-    elif request.method == 'POST':
-        error_msg = []
-        for fieldName, errorMessages in form.errors.items():
-            error_msg.append(f"{fieldName}: {', '.join(errorMessages)}")
-        
-        current_app.logger.warning(f"Errores de validación: {form.errors}")
-        flash(f"Error en el formulario: {' | '.join(error_msg)}", 'danger')
-    
-    # Renderizar el formulario
-    return render_template('abonos/crear.html', form=form, clientes=clientes)
                 
                 # Si el monto es mayor al saldo, ajustarlo
                 if monto > venta.saldo_pendiente:
@@ -297,21 +199,20 @@ def crear():
                 flash(f'Error al procesar el monto: {str(e)}', 'danger')
                 return render_template('abonos/crear.html', form=form, clientes=clientes)
             
-            # Crear el abono de forma segura asignando los valores correctamente
-            abono = Abono()
-            abono.venta_id = venta.id  # Asignar venta_id explícitamente
-            abono.credito_id = None    # Establecer explícitamente a None
-            abono.credito_venta_id = None  # Establecer explícitamente a None
-            abono.monto = monto
-            abono.fecha = datetime.utcnow()
-            abono.cobrador_id = current_user.id
-            abono.caja_id = form.caja_id.data
-            abono.notas = form.notas.data
+            # Crear el abono con los campos obligatorios
+            abono = Abono(
+                venta_id=venta.id,
+                monto=monto,
+                fecha=datetime.utcnow(),
+                cobrador_id=current_user.id,
+                caja_id=form.caja_id.data,
+                notas=form.notas.data if form.notas.data else ''
+            )
             
             # Logging para debugging
             current_app.logger.info(f"Intentando crear abono: venta_id={abono.venta_id}, "
-                                   f"monto={monto}, credito_id={abono.credito_id}, "
-                                   f"credito_venta_id={abono.credito_venta_id}")
+                                   f"monto={monto}, cobrador_id={abono.cobrador_id}, "
+                                   f"caja_id={abono.caja_id}")
             
             # Guardar el abono en la base de datos con manejo de errores específicos
             try:
