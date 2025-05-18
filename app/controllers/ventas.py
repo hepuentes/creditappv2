@@ -77,10 +77,20 @@ def crear():
     # Inicializar el formulario
     form = VentaForm()
     
+    # Obtener cliente_id de la URL si existe
+    cliente_id_param = request.args.get('cliente_id', type=int)
+    
     # Cargar opciones para los selectores
     clientes = Cliente.query.order_by(Cliente.nombre).all()
     form.cliente.choices = [(c.id, f"{c.nombre} - {c.cedula}") for c in clientes]
     
+    # Si hay un cliente_id en la URL, preseleccionarlo
+    if cliente_id_param and request.method == 'GET':
+        cliente = Cliente.query.get(cliente_id_param)
+        if cliente:
+            form.cliente.data = cliente.id
+    
+    # Cargar opciones para los selectores de caja
     cajas = Caja.query.all()
     form.caja.choices = [(c.id, c.nombre) for c in cajas]
     
