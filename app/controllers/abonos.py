@@ -97,7 +97,6 @@ def crear():
         cliente = Cliente.query.get(cliente_id)
         if cliente:
             # Intentar seleccionar este cliente en el dropdown
-            # Asegurarse que está en las opciones
             if any(c[0] == cliente_id for c in form.cliente_id.choices):
                 form.cliente_id.data = cliente_id
                 client_selected = True
@@ -179,36 +178,51 @@ def crear():
                 flash('Esta venta ya está pagada completamente', 'success')
                 return render_template('abonos/crear.html', form=form, clientes=clientes)
             
-            # Validar el monto del abono
-            monto = float(form.monto.data)
-            if monto <= 0:
-                flash('El monto del abono debe ser mayor a cero', 'danger')
+            # Validar y procesar el monto del abono
+            try:
+                # Limpiar el formato y convertir a decimal para manejar valores grandes
+                from decimal import Decimal
+                monto_str = str(form.monto.data).replace(',', '.')
+                monto = Decimal(monto_str)
+                
+                # Verificar que el monto sea positivo
+                if monto <= 0:
+                    flash('El monto del abono debe ser mayor a cero', 'danger')
+                    return render_template('abonos/crear.html', form=form, clientes=clientes)
+                
+                # Si el monto es mayor al saldo, ajustarlo
+                if monto > venta.saldo_pendiente:
+                    monto = Decimal(str(venta.saldo_pendiente))
+                    flash(f'El monto ha sido ajustado al saldo pendiente: ${venta.saldo_pendiente:,.2f}', 'warning')
+            except Exception as e:
+                flash(f'Error al procesar el monto: {str(e)}', 'danger')
                 return render_template('abonos/crear.html', form=form, clientes=clientes)
             
-            # Si el monto es mayor al saldo, ajustarlo
-            if monto > venta.saldo_pendiente:
-                monto = venta.saldo_pendiente
-                flash(f'El monto ha sido ajustado al saldo pendiente: ${venta.saldo_pendiente:,.2f}', 'warning')
+            # Crear el abono de forma segura asignando los valores correctamente
+            abono = Abono()
+            abono.venta_id = venta.id  # Asignar venta_id explícitamente
+            abono.credito_id = None    # Establecer explícitamente a None
+            abono.credito_venta_id = None  # Establecer explícitamente a None
+            abono.monto = monto
+            abono.fecha = datetime.utcnow()
+            abono.cobrador_id = current_user.id
+            abono.caja_id = form.caja_id.data
+            abono.notas = form.notas.data
             
-            # Crear el abono - IMPORTANTE: debemos establecer todos los campos requeridos por la restricción
-            abono = Abono(
-                venta_id=venta.id,
-                monto=monto,
-                cobrador_id=current_user.id,
-                caja_id=form.caja_id.data,
-                notas=form.notas.data,
-                fecha=datetime.utcnow(),
-                credito_id=None,  # Establecer explícitamente a None
-                credito_venta_id=None  # Establecer explícitamente a None
-            )
+            # Logging para debugging
+            current_app.logger.info(f"Intentando crear abono: venta_id={abono.venta_id}, "
+                                   f"monto={monto}, credito_id={abono.credito_id}, "
+                                   f"credito_venta_id={abono.credito_venta_id}")
             
-            # Verificar que se está cumpliendo con la restricción check_credito_reference
-            if not abono.venta_id and not abono.credito_id and not abono.credito_venta_id:
-                flash('Debe especificar una venta, un crédito o un crédito de venta para el abono', 'danger')
+            # Guardar el abono en la base de datos con manejo de errores específicos
+            try:
+                db.session.add(abono)
+                db.session.flush()  # Para obtener el ID del abono sin confirmar aún
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Error al insertar abono en base de datos: {e}")
+                flash(f'Error al registrar el abono: {str(e)}', 'danger')
                 return render_template('abonos/crear.html', form=form, clientes=clientes)
-            
-            db.session.add(abono)
-            db.session.flush()  # Para obtener el ID del abono
             
             # Actualizar el saldo pendiente de la venta
             venta.saldo_pendiente -= monto
@@ -241,7 +255,7 @@ def crear():
             
             # Calcular comisión
             try:
-                calcular_comision(monto, current_user.id)
+                calcular_comision(float(monto), current_user.id)
             except Exception as e:
                 # No es crítico, sólo log
                 current_app.logger.error(f"Error al calcular comisión: {e}")
@@ -250,14 +264,14 @@ def crear():
             db.session.commit()
             
             # Mensaje de éxito
-            flash(f'Abono de ${monto:,.2f} registrado exitosamente', 'success')
+            flash(f'Abono de ${float(monto):,.2f} registrado exitosamente', 'success')
             
-            # Redireccionar a la lista de abonos o al detalle del abono
+            # Redireccionar a la lista de abonos
             return redirect(url_for('abonos.index'))
             
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error al registrar abono: {e}")
+            current_app.logger.error(f"Error general al registrar abono: {e}")
             flash(f'Error al registrar el abono: {str(e)}', 'danger')
     
     # Si hay errores de validación, mostrarlos
