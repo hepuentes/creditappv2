@@ -9,10 +9,25 @@ from app.models import Configuracion, Comision, Venta, Abono, MovimientoCaja
 
 def format_currency(amount):
     """Formatea un monto como moneda (sin decimales)"""
+    from decimal import Decimal
     config = Configuracion.query.first()
+    
+    # Convertir a Decimal si no lo es ya
+    if not isinstance(amount, Decimal):
+        try:
+            amount = Decimal(str(amount))
+        except:
+            pass
+    
+    # Formatear sin decimales
+    try:
+        formatted_amount = f"{int(amount):,}"
+    except:
+        formatted_amount = f"{amount:,}"
+    
     if not config:
-        return f"$ {int(amount):,}"
-    return f"{config.moneda} {int(amount):,}"
+        return f"$ {formatted_amount}"
+    return f"{config.moneda} {formatted_amount}"
 
 def calcular_comision(monto, usuario_id):
     """Calcula la comisión sobre un monto para un usuario"""
