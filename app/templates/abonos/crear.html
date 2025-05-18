@@ -112,11 +112,19 @@ document.addEventListener('DOMContentLoaded', function() {
             const saldoMatch = selectedText.match(/Saldo: \$([\d,\.]+)/);
             
             if (saldoMatch && saldoMatch[1]) {
-                const saldoPendiente = parseFloat(saldoMatch[1].replace(/,/g, ''));
+                // Usar localString para formatear el número adecuadamente
+                const saldoPendienteStr = saldoMatch[1];
+                // Quitar comas y puntos para convertir a número correctamente
+                const saldoPendiente = parseFloat(saldoPendienteStr.replace(/,/g, ''));
                 saldoInfo.textContent = `Saldo pendiente: $${saldoPendiente.toLocaleString('es')}`;
                 
-                // Actualizar max del monto
-                montoInput.setAttribute('max', saldoPendiente);
+                // NO asignar máximo, solo mostrar el saldo pendiente para referencia
+                // montoInput.setAttribute('max', saldoPendiente);
+                
+                // Sugerir el saldo pendiente como valor inicial si no hay otro valor
+                if (!montoInput.value) {
+                    montoInput.value = saldoPendiente;
+                }
             } else {
                 saldoInfo.textContent = '';
             }
@@ -205,6 +213,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (montoInput) {
         montoInput.addEventListener('input', function() {
             const monto = parseFloat(this.value || 0);
+            
+            if (!saldoInfo || !saldoInfo.textContent) return;
+            
             const saldoMatch = saldoInfo.textContent.match(/\$([\d,\.]+)/);
             
             if (saldoMatch && saldoMatch[1]) {
