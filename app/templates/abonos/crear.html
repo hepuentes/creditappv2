@@ -57,45 +57,17 @@
 
                         <!-- Monto del abono -->
                         <div class="mb-3">
-                            <label class="form-label">Monto *</label>
-                            <div class="input-group">
-                                <span class="input-group-text">$</span>
-                                <input type="number" class="form-control" id="monto_input" name="monto" required
-                                       value="{{ form.monto.data or '' }}" min="0.01" step="0.01">
-                            </div>
-                        </div>
-
-                        <!-- Caja para el abono -->
-                        <div class="mb-3">
-                            <label class="form-label">Caja *</label>
-                            <select class="form-select" id="caja_id" name="caja_id" required>
-                                {% for id, nombre in form.caja_id.choices %}
-                                    <option value="{{ id }}" {% if form.caja_id.data == id %}selected{% endif %}>{{ nombre }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <!-- Notas adicionales -->
-                        <div class="mb-3">
-                            <label class="form-label">Notas</label>
-                            <textarea class="form-control" id="notas" name="notas" rows="3" 
-                                      placeholder="Observaciones adicionales...">{{ form.notas.data or '' }}</textarea>
-                        </div>
-
-                        <!-- Botones de acción -->
-                        <div class="d-flex justify-content-end mt-4">
-                            <a href="{{ url_for('abonos.index') }}" class="btn btn-secondary me-2">Cancelar</a>
-                            <button type="submit" class="btn btn-success">Registrar Abono</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+    <label class="form-label">Monto *</label>
+    <div class="input-group">
+        <span class="input-group-text">$</span>
+        <!-- Cambiado a type="text" para permitir valores más grandes -->
+        <input type="text" class="form-control" id="monto_input" name="monto" required
+               value="{{ form.monto.data or '' }}" placeholder="Ingrese el monto (ej: 116000)">
     </div>
+    <small class="form-text text-muted">Ingrese el monto sin puntos ni comas para valores grandes.</small>
 </div>
-{% endblock %}
 
-{% block extra_js %}
+<!-- JavaScript mejorado para procesar el monto -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const buscarClienteInput = document.getElementById('buscar-cliente');
@@ -112,16 +84,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const saldoMatch = selectedText.match(/Saldo: \$([\d,\.]+)/);
             
             if (saldoMatch && saldoMatch[1]) {
-                // Usar localString para formatear el número adecuadamente
-                const saldoPendienteStr = saldoMatch[1];
-                // Quitar comas y puntos para convertir a número correctamente
-                const saldoPendiente = parseFloat(saldoPendienteStr.replace(/,/g, ''));
+                // Extraer el saldo pendiente correctamente
+                const saldoPendienteStr = saldoMatch[1].replace(/,/g, '');
+                const saldoPendiente = parseFloat(saldoPendienteStr);
                 saldoInfo.textContent = `Saldo pendiente: $${saldoPendiente.toLocaleString('es')}`;
                 
-                // NO asignar máximo, solo mostrar el saldo pendiente para referencia
-                // montoInput.setAttribute('max', saldoPendiente);
-                
-                // Sugerir el saldo pendiente como valor inicial si no hay otro valor
+                // Sugerir el saldo pendiente como valor inicial
                 if (!montoInput.value) {
                     montoInput.value = saldoPendiente;
                 }
@@ -209,21 +177,28 @@ document.addEventListener('DOMContentLoaded', function() {
         ventaSelect.addEventListener('change', actualizarSaldoInfo);
     }
     
-    // Validar monto
+    // Validar y formatear el monto
     if (montoInput) {
         montoInput.addEventListener('input', function() {
-            const monto = parseFloat(this.value || 0);
+            // Permitir solo dígitos, punto y coma
+            this.value = this.value.replace(/[^\d.,]/g, '');
             
+            // Validar que no exceda el saldo pendiente
             if (!saldoInfo || !saldoInfo.textContent) return;
             
             const saldoMatch = saldoInfo.textContent.match(/\$([\d,\.]+)/);
-            
             if (saldoMatch && saldoMatch[1]) {
-                const saldoPendiente = parseFloat(saldoMatch[1].replace(/,/g, ''));
+                // Extraer y procesar el saldo pendiente
+                const saldoStr = saldoMatch[1].replace(/,/g, '');
+                const saldoPendiente = parseFloat(saldoStr);
                 
-                // Solo limitamos si el monto es mayor al saldo
-                if (monto > saldoPendiente) {
-                    this.value = saldoPendiente;
+                // Procesar el monto ingresado
+                const montoStr = this.value.replace(/,/g, '.');
+                const monto = parseFloat(montoStr);
+                
+                // Validar que el monto no sea mayor al saldo pendiente
+                if (!isNaN(monto) && monto > saldoPendiente) {
+                    this.value = saldoPendiente.toString();
                     alert(`El monto no puede ser mayor al saldo pendiente ($${saldoPendiente.toLocaleString('es')})`);
                 }
             }
