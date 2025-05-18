@@ -9,26 +9,43 @@ from app.models import Configuracion, Comision, Venta, Abono, MovimientoCaja
 
 def format_currency(amount):
     """Formatea un monto como moneda (sin decimales)"""
-    from decimal import Decimal
-
-    config = Configuracion.query.first()
-
-    # Convertir a Decimal si no lo es ya
-    if not isinstance(amount, Decimal):
-        try:
-            amount = Decimal(str(amount))
-        except Exception:
-            pass
-
-    # Formatear sin decimales
+    from decimal import Decimal, InvalidOperation
+    
+    # Obtener símbolo de moneda de la configuración
     try:
-        formatted_amount = f"{int(amount):,}"
+        config = Configuracion.query.first()
+        moneda = config.moneda if config else "$"
     except Exception:
-        formatted_amount = f"{amount:,}"
-
-    if not config:
-        return f"$ {formatted_amount}"
-    return f"{config.moneda} {formatted_amount}"
+        moneda = "$"
+        
+    # Si amount es None o vacío, devolver cero formateado
+    if amount is None:
+        return f"{moneda} 0"
+        
+    # Convertir a Decimal para manejo preciso
+    try:
+        # Si es string, primero limpiar formato
+        if isinstance(amount, str):
+            # Eliminar cualquier símbolo de moneda y espacios
+            amount = amount.replace(moneda, '').strip()
+            # Reemplazar comas por nada (formato de miles)
+            amount = amount.replace(',', '')
+        
+        # Convertir a Decimal
+        decimal_amount = Decimal(str(amount))
+        
+        # Formatear sin decimales y con separador de miles
+        formatted_amount = f"{int(decimal_amount):,}" if decimal_amount == int(decimal_amount) else f"{float(decimal_amount):,.2f}"
+        
+    except (ValueError, InvalidOperation, TypeError):
+        # Si hay error de conversión, intentar el mejor esfuerzo
+        try:
+            formatted_amount = f"{float(amount):,.2f}"
+        except:
+            formatted_amount = str(amount)
+    
+    # Retornar con el símbolo de moneda
+    return f"{moneda} {formatted_amount}"
 
 
 def calcular_comision(monto, usuario_id):
