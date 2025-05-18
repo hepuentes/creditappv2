@@ -20,73 +20,66 @@
                     <h5 class="mb-0">Datos del Abono</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST">
+                    <form method="POST" id="abonoForm">
                         {{ form.hidden_tag() }}
 
-                        <!-- Búsqueda de cliente mejorada -->
+                        <!-- Cliente -->
                         <div class="mb-3">
-                            <label class="form-label">Buscar Cliente</label>
+                            <label class="form-label">Cliente *</label>
+                            <div class="input-group mb-2">
+                                <select class="form-select" id="cliente_select" name="cliente_id" required>
+                                    {% for id, nombre in form.cliente_id.choices %}
+                                        <option value="{{ id }}" {% if form.cliente_id.data == id %}selected{% endif %}>{{ nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
                             <div class="input-group">
-                                <input type="text" class="form-control" id="buscar-cliente-input" placeholder="Buscar cliente por nombre o cédula...">
-                                <button class="btn btn-outline-primary" type="button" id="btn-buscar-cliente">
+                                <input type="text" class="form-control" id="buscar-cliente" placeholder="Buscar cliente...">
+                                <button type="button" class="btn btn-outline-secondary" id="btn-buscar-cliente">
                                     <i class="fas fa-search"></i>
                                 </button>
                             </div>
                         </div>
 
+                        <!-- Venta a abonar -->
                         <div class="mb-3">
-                            <label class="form-label">Cliente</label>
-                            <select class="form-select" id="cliente_select" name="cliente_id" required>
-                                <option value="" selected disabled>Seleccione un cliente</option>
-                                {% for cliente in clientes %}
-                                <option value="{{ cliente.id }}">{{ cliente.nombre }} - {{ cliente.cedula }}</option>
+                            <label class="form-label">Venta/Crédito *</label>
+                            <select class="form-select" id="venta_select" name="venta_id" required>
+                                {% for id, texto in form.venta_id.choices %}
+                                    <option value="{{ id }}" {% if form.venta_id.data == id %}selected{% endif %}>{{ texto }}</option>
                                 {% endfor %}
                             </select>
-                            <div class="invalid-feedback">
-                                Por favor seleccione un cliente.
-                            </div>
+                            <div id="saldo_info" class="form-text"></div>
                         </div>
 
+                        <!-- Monto del abono -->
                         <div class="mb-3">
-                            <label class="form-label">Venta/Crédito</label>
-                            <select class="form-select" id="venta_select" name="venta_id" required>
-                                <option value="" selected disabled>Primero seleccione un cliente</option>
-                            </select>
-                            <div class="invalid-feedback">
-                                Por favor seleccione una venta.
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Monto</label>
+                            <label class="form-label">Monto *</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
-                                <input type="number" class="form-control" id="monto_input" name="monto" required min="0.01" step="0.01">
-                                <div class="invalid-feedback">
-                                    Por favor ingrese un monto válido.
-                                </div>
+                                <input type="number" class="form-control" id="monto_input" name="monto" required
+                                       value="{{ form.monto.data or '' }}" min="0.01" step="0.01">
                             </div>
-                            <div class="form-text" id="saldo_info">Saldo pendiente: $0.00</div>
                         </div>
 
+                        <!-- Caja para el abono -->
                         <div class="mb-3">
-                            <label class="form-label">Caja</label>
+                            <label class="form-label">Caja *</label>
                             <select class="form-select" id="caja_id" name="caja_id" required>
-                                <option value="" selected disabled>Seleccione una caja</option>
-                                {% for caja in form.caja_id.choices %}
-                                <option value="{{ caja[0] }}">{{ caja[1] }}</option>
+                                {% for id, nombre in form.caja_id.choices %}
+                                    <option value="{{ id }}" {% if form.caja_id.data == id %}selected{% endif %}>{{ nombre }}</option>
                                 {% endfor %}
                             </select>
-                            <div class="invalid-feedback">
-                                Por favor seleccione una caja.
-                            </div>
                         </div>
 
+                        <!-- Notas adicionales -->
                         <div class="mb-3">
                             <label class="form-label">Notas</label>
-                            <textarea class="form-control" id="notas" name="notas" rows="3" placeholder="Observaciones adicionales..."></textarea>
+                            <textarea class="form-control" id="notas" name="notas" rows="3" 
+                                      placeholder="Observaciones adicionales...">{{ form.notas.data or '' }}</textarea>
                         </div>
 
+                        <!-- Botones de acción -->
                         <div class="d-flex justify-content-end mt-4">
                             <a href="{{ url_for('abonos.index') }}" class="btn btn-secondary me-2">Cancelar</a>
                             <button type="submit" class="btn btn-success">Registrar Abono</button>
@@ -102,54 +95,35 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const buscarClienteInput = document.getElementById('buscar-cliente-input');
+    const buscarClienteInput = document.getElementById('buscar-cliente');
     const clienteSelect = document.getElementById('cliente_select');
     const ventaSelect = document.getElementById('venta_select');
     const montoInput = document.getElementById('monto_input');
     const saldoInfo = document.getElementById('saldo_info');
     const btnBuscarCliente = document.getElementById('btn-buscar-cliente');
 
-    // Variable para almacenar el saldo pendiente de la venta seleccionada
-    let saldoPendiente = 0;
-
-    // Función para filtrar clientes
-    function filtrarClientes() {
-        const busqueda = buscarClienteInput.value.toLowerCase().trim();
-        Array.from(clienteSelect.options).forEach(option => {
-            if (option.value === "") return; // No ocultar la opción predeterminada
-            const textoOpcion = option.text.toLowerCase();
-            option.style.display = textoOpcion.includes(busqueda) ? '' : 'none';
-        });
-    }
-
-    // Evento para buscar clientes al escribir
-    if (buscarClienteInput) {
-        buscarClienteInput.addEventListener('input', filtrarClientes);
-    }
-
-    // Evento para el botón de búsqueda
-    if (btnBuscarCliente) {
-        btnBuscarCliente.addEventListener('click', filtrarClientes);
-    }
-
-    // Función para actualizar el saldo info
+    // Función para extraer y mostrar el saldo pendiente
     function actualizarSaldoInfo() {
-        const ventaOption = ventaSelect.options[ventaSelect.selectedIndex];
-        if (ventaOption && ventaOption.value) {
-            const texto = ventaOption.text;
-            const match = texto.match(/Saldo: \$([\d,]+\.\d+)/);
-            if (match) {
-                saldoPendiente = parseFloat(match[1].replace(/,/g, ''));
-                saldoInfo.textContent = `Saldo pendiente: $${saldoPendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-
-                // Establecer el valor máximo del monto
-                montoInput.max = saldoPendiente;
-
-                // Si el monto actual es mayor al saldo, ajustarlo
-                if (parseFloat(montoInput.value) > saldoPendiente) {
+        if (ventaSelect.selectedIndex > 0) {
+            const selectedText = ventaSelect.options[ventaSelect.selectedIndex].text;
+            const saldoMatch = selectedText.match(/Saldo: \$([\d,\.]+)/);
+            
+            if (saldoMatch && saldoMatch[1]) {
+                const saldoPendiente = parseFloat(saldoMatch[1].replace(/,/g, ''));
+                saldoInfo.textContent = `Saldo pendiente: $${saldoPendiente.toLocaleString('es')}`;
+                
+                // Actualizar max del monto
+                montoInput.setAttribute('max', saldoPendiente);
+                
+                // Si el monto es mayor al saldo, ajustarlo
+                if (montoInput.value && parseFloat(montoInput.value) > saldoPendiente) {
                     montoInput.value = saldoPendiente;
                 }
+            } else {
+                saldoInfo.textContent = '';
             }
+        } else {
+            saldoInfo.textContent = '';
         }
     }
 
@@ -157,58 +131,103 @@ document.addEventListener('DOMContentLoaded', function() {
     if (clienteSelect) {
         clienteSelect.addEventListener('change', function() {
             const clienteId = this.value;
-            if (!clienteId) return;
-
-            // Limpiar el select de ventas
-            ventaSelect.innerHTML = '<option value="" selected disabled>Cargando ventas...</option>';
-
-            // Cargar las ventas del cliente seleccionado
+            if (!clienteId || clienteId < 0) return;
+            
+            // Limpiar el selector de ventas y mostrar cargando
+            ventaSelect.innerHTML = '<option value="" selected>Cargando ventas...</option>';
+            saldoInfo.textContent = '';
+            
+            // Cargar ventas del cliente seleccionado
             fetch(`/abonos/cargar-ventas/${clienteId}`)
                 .then(response => response.json())
                 .then(ventas => {
                     ventaSelect.innerHTML = '';
-
+                    
                     if (ventas.length === 0) {
-                        ventaSelect.innerHTML = '<option value="" selected disabled>No hay ventas pendientes</option>';
+                        ventaSelect.innerHTML = '<option value="" selected>No hay ventas pendientes</option>';
                         return;
                     }
-
+                    
+                    // Agregar opción por defecto
+                    ventaSelect.innerHTML = '<option value="" selected>Seleccione una venta</option>';
+                    
+                    // Agregar las ventas disponibles
                     ventas.forEach(venta => {
                         const option = document.createElement('option');
                         option.value = venta.id;
                         option.textContent = venta.texto;
                         ventaSelect.appendChild(option);
                     });
-
-                    // Actualizar la información de saldo
-                    actualizarSaldoInfo();
+                    
+                    // Si hay parámetro venta_id en la URL, seleccionarla
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const ventaId = urlParams.get('venta_id');
+                    
+                    if (ventaId) {
+                        const option = ventaSelect.querySelector(`option[value="${ventaId}"]`);
+                        if (option) {
+                            option.selected = true;
+                            actualizarSaldoInfo();
+                        }
+                    }
                 })
                 .catch(error => {
                     console.error('Error al cargar ventas:', error);
-                    ventaSelect.innerHTML = '<option value="" selected disabled>Error al cargar ventas</option>';
+                    ventaSelect.innerHTML = '<option value="" selected>Error al cargar ventas</option>';
                 });
         });
     }
-
+    
+    // Filtrar clientes al escribir
+    if (buscarClienteInput && clienteSelect) {
+        function filtrarClientes() {
+            const busqueda = buscarClienteInput.value.toLowerCase().trim();
+            
+            for (let i = 0; i < clienteSelect.options.length; i++) {
+                const option = clienteSelect.options[i];
+                if (option.value === '' || option.value < 0) continue;  // Saltar opciones no válidas
+                
+                const texto = option.text.toLowerCase();
+                option.style.display = texto.includes(busqueda) ? '' : 'none';
+            }
+        }
+        
+        buscarClienteInput.addEventListener('input', filtrarClientes);
+        if (btnBuscarCliente) {
+            btnBuscarCliente.addEventListener('click', filtrarClientes);
+        }
+    }
+    
     // Actualizar saldo cuando cambia la venta
     if (ventaSelect) {
         ventaSelect.addEventListener('change', actualizarSaldoInfo);
     }
-
-    // Validar que el monto no exceda el saldo pendiente
+    
+    // Validar monto
     if (montoInput) {
         montoInput.addEventListener('input', function() {
-            const monto = parseFloat(this.value) || 0;
-
-            if (monto > saldoPendiente) {
-                this.value = saldoPendiente;
-                alert(`El monto no puede ser mayor al saldo pendiente ($${saldoPendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})})`);
+            const monto = parseFloat(this.value || 0);
+            const saldoMatch = saldoInfo.textContent.match(/\$([\d,\.]+)/);
+            
+            if (saldoMatch && saldoMatch[1]) {
+                const saldoPendiente = parseFloat(saldoMatch[1].replace(/,/g, ''));
+                
+                if (monto > saldoPendiente) {
+                    this.value = saldoPendiente;
+                    alert(`El monto no puede ser mayor al saldo pendiente ($${saldoPendiente.toLocaleString('es')})`);
+                }
             }
         });
     }
-
-    // Inicializar la información de saldo
+    
+    // Ejecutar una vez al cargar para configurar valores iniciales
     actualizarSaldoInfo();
+    
+    // Si hay cliente seleccionado, disparar el evento change para cargar sus ventas
+    if (clienteSelect && clienteSelect.value && clienteSelect.value > 0) {
+        // Simular cambio para cargar las ventas
+        clienteSelect.dispatchEvent(new Event('change'));
+    }
 });
 </script>
 {% endblock %}
