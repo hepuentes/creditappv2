@@ -1,115 +1,110 @@
 from app.pdf.utils import CreditAppPDF
-from datetime import datetime
+from datetime import datetime, timedelta
 
-def generar_pdf_historial(cliente, ventas, creditos, abonos):
-    """Genera un PDF mejorado visualmente para el historial de un cliente"""
+def generar_pdf_credito(credito):
+    """Genera un PDF mejorado visualmente para un contrato de crédito"""
     # Crear PDF
     pdf = CreditAppPDF()
     pdf.alias_nb_pages()
     pdf.add_page()
     
     # Título
-    pdf.titulo(f"HISTORIAL DEL CLIENTE")
+    pdf.titulo("CONTRATO DE CRÉDITO")
+    
+    # Número y fecha
+    pdf.seccion("INFORMACIÓN DEL CRÉDITO")
+    pdf.campo("Número de Crédito", f"{credito.id}")
+    pdf.campo("Fecha", credito.fecha.strftime("%d/%m/%Y"))
+    fecha_vencimiento = credito.fecha + timedelta(days=credito.plazo)
+    pdf.campo("Fecha Vencimiento", fecha_vencimiento.strftime("%d/%m/%Y"))
     
     # Información del cliente
-    pdf.seccion("DATOS DEL CLIENTE")
-    pdf.campo("Nombre", cliente.nombre)
-    pdf.campo("Documento", cliente.cedula)
-    if cliente.telefono:
-        pdf.campo("Teléfono", cliente.telefono)
-    if cliente.email:
-        pdf.campo("Email", cliente.email)
-    if cliente.direccion:
-        pdf.campo("Dirección", cliente.direccion)
-    pdf.campo("Fecha Registro", cliente.fecha_registro.strftime("%d/%m/%Y"))
-    
-    # Ventas realizadas
-    if ventas:
-        pdf.ln(10)
-        pdf.seccion("VENTAS REALIZADAS")
-        
-        # Tabla de ventas
-        headers = ["Fecha", "Factura", "Tipo", "Total", "Estado"]
-        col_widths = pdf.tabla_inicio(headers, [40, 25, 30, 50, 45])
-        
-        fill = False
-        for venta in sorted(ventas, key=lambda v: v.fecha, reverse=True):
-            tipo = "CONTADO" if venta.tipo == 'contado' else "CRÉDITO"
-            estado = "PAGADO" if venta.estado == 'pagado' else "PENDIENTE"
-            
-            datos = [
-                venta.fecha.strftime("%d/%m/%Y"),
-                f"#{venta.id}",
-                tipo,
-                pdf.formato_moneda(venta.total),
-                estado
-            ]
-            pdf.tabla_fila(datos, col_widths, fill)
-            fill = not fill
-        
-        # Total de ventas
-        total_ventas = sum(v.total for v in ventas)
-        pdf.tabla_total("TOTAL VENTAS", pdf.formato_moneda(total_ventas), col_widths)
-    
-    # Abonos realizados
-    # Recopilamos todos los abonos del cliente a través de sus ventas
-    todos_abonos = []
-    for venta in ventas:
-        if hasattr(venta, 'abonos') and venta.abonos:
-            for abono in venta.abonos:
-                todos_abonos.append(abono)
-    
-    if todos_abonos:
-        pdf.ln(10)
-        pdf.seccion("ABONOS REALIZADOS")
-        
-        # Tabla de abonos
-        headers = ["Fecha", "Abono", "Factura", "Monto", "Cobrador"]
-        col_widths = pdf.tabla_inicio(headers, [40, 25, 25, 50, 50])
-        
-        fill = False
-        for abono in sorted(todos_abonos, key=lambda a: a.fecha, reverse=True):
-            datos = [
-                abono.fecha.strftime("%d/%m/%Y"),
-                f"#{abono.id}",
-                f"#{abono.venta_id}",
-                pdf.formato_moneda(abono.monto),
-                abono.cobrador.nombre
-            ]
-            pdf.tabla_fila(datos, col_widths, fill)
-            fill = not fill
-        
-        # Total de abonos
-        total_abonos = sum(a.monto for a in todos_abonos)
-        pdf.tabla_total("TOTAL ABONOS", pdf.formato_moneda(total_abonos), col_widths)
-    
-    # Resumen de situación financiera
-    pdf.ln(10)
-    pdf.seccion("RESUMEN FINANCIERO")
-    
-    # Calcular saldo pendiente
-    saldo_pendiente = sum(v.saldo_pendiente for v in ventas if v.tipo == 'credito' and v.saldo_pendiente > 0)
-    
-    pdf.campo("Total Compras Realizadas", pdf.formato_moneda(sum(v.total for v in ventas)))
-    pdf.campo("Total Ventas a Crédito", pdf.formato_moneda(sum(v.total for v in ventas if v.tipo == 'credito')))
-    pdf.campo("Total Abonos Realizados", pdf.formato_moneda(sum(a.monto for a in todos_abonos) if todos_abonos else 0))
-    pdf.campo("Saldo Pendiente Actual", pdf.formato_moneda(saldo_pendiente))
-    
-    # Estado del cliente
     pdf.ln(5)
-    pdf.set_font('Roboto', 'B', 12)
-    if saldo_pendiente > 0:
-        pdf.set_text_color(192, 0, 0)  # Rojo
-        pdf.cell(0, 8, "ESTADO: TIENE CRÉDITOS PENDIENTES", 0, 1, 'C')
-    else:
-        pdf.set_text_color(0, 128, 0)  # Verde
-        pdf.cell(0, 8, "ESTADO: AL DÍA, SIN SALDOS PENDIENTES", 0, 1, 'C')
+    pdf.seccion("INFORMACIÓN DEL CLIENTE")
+    pdf.campo("Cliente", credito.cliente.nombre)
+    pdf.campo("Documento", credito.cliente.cedula)
+    if credito.cliente.telefono:
+        pdf.campo("Teléfono", credito.cliente.telefono)
+    if credito.cliente.direccion:
+        pdf.campo("Dirección", credito.cliente.direccion)
     
-    # Pie de página extra
+    # Condiciones del crédito
+    pdf.ln(5)
+    pdf.seccion("CONDICIONES DEL CRÉDITO")
+    pdf.campo("Monto Total", pdf.formato_moneda(credito.monto))
+    pdf.campo("Plazo (días)", str(credito.plazo))
+    pdf.campo("Tasa de Interés", f"{credito.tasa}%")
+    
+    # Calcular intereses y total a pagar
+    interes = (credito.monto * credito.tasa) / 100
+    total_pagar = credito.monto + interes
+    
+    pdf.campo("Interés", pdf.formato_moneda(interes))
+    pdf.campo("Total a Pagar", pdf.formato_moneda(total_pagar))
+    
+    # Plan de pagos
+    pdf.ln(5)
+    pdf.seccion("PLAN DE PAGOS")
+    
+    # Tabla de pagos
+    headers = ["Cuota", "Fecha", "Monto", "Estado"]
+    col_widths = pdf.tabla_inicio(headers, [20, 60, 60, 50])
+    
+    # Calcular fechas de pago
+    # Suponemos pagos mensuales para este ejemplo
+    fecha_cuota = credito.fecha
+    monto_cuota = total_pagar / 3  # 3 cuotas como ejemplo
+    
+    fill = False
+    for i in range(3):  # 3 cuotas como ejemplo
+        fecha_cuota = fecha_cuota + timedelta(days=30)
+        estado = "PENDIENTE"  # Por defecto todas pendientes
+        
+        # Si hay abonos, verificar si esta cuota está pagada
+        if hasattr(credito, 'abonos') and credito.abonos:
+            total_abonado = sum(a.monto for a in credito.abonos)
+            if total_abonado >= monto_cuota * (i + 1):
+                estado = "PAGADO"
+        
+        datos = [
+            f"{i+1}",
+            fecha_cuota.strftime("%d/%m/%Y"),
+            pdf.formato_moneda(monto_cuota),
+            estado
+        ]
+        pdf.tabla_fila(datos, col_widths, fill)
+        fill = not fill
+    
+    # Tabla total
+    pdf.tabla_total("TOTAL", pdf.formato_moneda(total_pagar), col_widths)
+    
+    # Términos y condiciones
     pdf.ln(10)
-    pdf.set_font('Roboto', 'I', 9)
-    pdf.set_text_color(100, 100, 100)
-    pdf.multi_cell(0, 5, "Este documento es un reporte generado por el sistema CreditApp.\nLos datos reflejados corresponden al historial de transacciones del cliente hasta la fecha actual.")
+    pdf.seccion("TÉRMINOS Y CONDICIONES")
+    pdf.set_font('Roboto', '', 9)
+    terminos = """
+1. El cliente se compromete a pagar el monto total más los intereses en los plazos establecidos.
+2. Los pagos deben realizarse en la fecha indicada o antes para evitar recargos por mora.
+3. El pago anticipado del crédito no genera penalización.
+4. El incumplimiento en los pagos generará intereses moratorios según la tasa establecida.
+5. Este documento constituye un comprobante válido del compromiso de crédito.
+    """
+    pdf.multi_cell(0, 5, terminos.strip())
+    
+    # Firmas
+    pdf.ln(15)
+    pdf.set_font('Roboto', '', 10)
+    
+    # Líneas para firmas
+    pdf.line(30, pdf.get_y() + 20, 90, pdf.get_y() + 20)  # Línea para firma cliente
+    pdf.line(120, pdf.get_y() + 20, 180, pdf.get_y() + 20)  # Línea para firma acreedor
+    
+    # Textos de firma
+    pdf.set_xy(30, pdf.get_y() + 22)
+    pdf.cell(60, 5, "Firma Cliente", 0, 0, 'C')
+    
+    pdf.set_xy(120, pdf.get_y())
+    pdf.cell(60, 5, "Firma Autorizada", 0, 1, 'C')
     
     # Generar PDF en bytes
     pdf_bytes = pdf.output(dest='S')
