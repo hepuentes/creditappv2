@@ -157,28 +157,6 @@ def crear():
                 flash(f"No se encontró la venta #{venta_id}", "warning")
     
     # Si es una petición POST, validar y procesar el formulario
-    if request.method == 'POST':
-        # Asegurarnos de que el formulario tenga las opciones de venta_id correctas
-        # Este paso es crítico porque sin él, la validación del formulario fallará
-        try:
-            selected_cliente_id = request.form.get('cliente_id', type=int)
-            if selected_cliente_id:
-                ventas_pendientes = Venta.query.filter(
-                    Venta.cliente_id == selected_cliente_id,
-                    Venta.tipo == 'credito', 
-                    Venta.saldo_pendiente > 0
-                ).all()
-                
-                if ventas_pendientes:
-                    # Actualizar las opciones del formulario con los datos actuales
-                    form.venta_id.choices = [
-                        (v.id, f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.0f}")
-                        for v in ventas_pendientes
-                    ]
-        except Exception as e:
-            current_app.logger.error(f"Error al cargar ventas para validación: {e}")
-    
-    # Validar el formulario
     if form.validate_on_submit():
         try:
             # Verificar si el formulario tiene todos los datos necesarios
@@ -260,15 +238,9 @@ def crear():
                                    f"monto={monto}, cobrador_id={abono.cobrador_id}, "
                                    f"caja_id={abono.caja_id}")
             
-            # Guardar el abono en la base de datos con manejo de errores específicos
-            try:
-                db.session.add(abono)
-                db.session.flush()  # Para obtener el ID del abono sin confirmar aún
-            except Exception as e:
-                db.session.rollback()
-                current_app.logger.error(f"Error al insertar abono en base de datos: {e}")
-                flash(f'Error al registrar el abono: {str(e)}', 'danger')
-                return render_template('abonos/crear.html', form=form, clientes=clientes)
+            # Guardar el abono en la base de datos
+            db.session.add(abono)
+            db.session.flush()  # Para obtener el ID del abono sin confirmar aún
             
             # Actualizar el saldo pendiente de la venta
             venta.saldo_pendiente -= monto
