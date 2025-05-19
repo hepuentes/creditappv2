@@ -77,43 +77,51 @@
                     <tbody>
                         {% if cajas %}
                             {% for caja in cajas %}
-                            <tr>
-                                <td>{{ caja.nombre }}</td>
-                                <td>
-                                    {% if caja.tipo == 'efectivo' %}
-                                    <span class="badge bg-success">Efectivo</span>
-                                    {% elif caja.tipo == 'nequi' %}
-                                    <span class="badge bg-primary">Nequi</span>
-                                    {% elif caja.tipo == 'daviplata' %}
-                                    <span class="badge bg-warning text-dark">Daviplata</span>
-                                    {% else %}
-                                    <span class="badge bg-info">Transferencia</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ "${:,}".format(caja.saldo_inicial|default(0)) }}</td>
-                                <td>{{ "${:,}".format(caja.saldo_actual|default(0)) }}</td>
-                                <td>{{ caja.fecha_apertura.strftime('%d/%m/%Y %H:%M') }}</td>
-                                <td>
-                                    <div class="btn-group">
-                                        <a href="{{ url_for('cajas.detalle', id=caja.id) }}" class="btn btn-sm btn-info" data-bs-toggle="tooltip" title="Ver Detalle">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        <a href="{{ url_for('cajas.movimientos', id=caja.id) }}" class="btn btn-sm btn-primary" data-bs-toggle="tooltip" title="Ver Movimientos">
-                                            <i class="fas fa-exchange-alt"></i>
-                                        </a>
+                                <tr>
+                                    <td>{{ caja.nombre }}</td>
+                                    <td>
+                                        {% if caja.tipo == 'efectivo' %}
+                                            <span class="badge bg-success">Efectivo</span>
+                                        {% elif caja.tipo == 'nequi' %}
+                                            <span class="badge bg-primary">Nequi</span>
+                                        {% elif caja.tipo == 'daviplata' %}
+                                            <span class="badge bg-warning text-dark">Daviplata</span>
+                                        {% else %}
+                                            <span class="badge bg-info">Transferencia</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ "${:,}".format(caja.saldo_inicial|default(0)) }}</td>
+                                    <td>{{ "${:,}".format(caja.saldo_actual|default(0)) }}</td>
+                                    <td>{{ caja.fecha_apertura.strftime('%d/%m/%Y %H:%M') }}</td>
+                                    <td>
                                         <div class="btn-group">
-                                            <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                                                <i class="fas fa-plus"></i> Movimiento
+                                            <a href="{{ url_for('cajas.detalle', id=caja.id) }}" class="btn btn-sm btn-info" data-bs-toggle="tooltip" title="Ver Detalle">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{{ url_for('cajas.movimientos', id=caja.id) }}" class="btn btn-sm btn-primary" data-bs-toggle="tooltip" title="Ver Movimientos">
+                                                <i class="fas fa-exchange-alt"></i>
+                                            </a>
+                                            <div class="btn-group">
+                                                <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <i class="fas fa-plus"></i> Movimiento
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                    <li><a class="dropdown-item" href="{{ url_for('cajas.nuevo_movimiento', id=caja.id, tipo='entrada') }}">Entrada</a></li>
+                                                    <li><a class="dropdown-item" href="{{ url_for('cajas.nuevo_movimiento', id=caja.id, tipo='salida') }}">Salida</a></li>
+                                                    <li><a class="dropdown-item" href="{{ url_for('cajas.nuevo_movimiento', id=caja.id, tipo='transferencia') }}">Transferencia</a></li>
+                                                </ul>
+                                            </div>
+                                            {% if current_user.is_admin() %}
+                                            <a href="{{ url_for('cajas.editar', id=caja.id) }}" class="btn btn-sm btn-warning" data-bs-toggle="tooltip" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#eliminarCajaModal{{ caja.id }}" title="Eliminar">
+                                                <i class="fas fa-trash"></i>
                                             </button>
-                                            <ul class="dropdown-menu dropdown-menu-end">
-                                                <li><a class="dropdown-item" href="{{ url_for('cajas.nuevo_movimiento', id=caja.id, tipo='entrada') }}">Entrada</a></li>
-                                                <li><a class="dropdown-item" href="{{ url_for('cajas.nuevo_movimiento', id=caja.id, tipo='salida') }}">Salida</a></li>
-                                                <li><a class="dropdown-item" href="{{ url_for('cajas.nuevo_movimiento', id=caja.id, tipo='transferencia') }}">Transferencia</a></li>
-                                            </ul>
+                                            {% endif %}
                                         </div>
-                                    </div>
-                                </td>
-                            </tr>
+                                    </td>
+                                </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
