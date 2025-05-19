@@ -195,51 +195,49 @@ document.addEventListener('DOMContentLoaded', function() {
         ventaSelect.addEventListener('change', actualizarSaldoInfo);
     }
 
-    // Permitir valores grandes sin puntos ni comas
+    // Permitir valores grandes sin puntos ni comas - VERSIÓN MEJORADA
     if (montoInput) {
         montoInput.addEventListener('input', function() {
-    // Permitir dígitos y un único punto decimal
-    let value = this.value;
-    
-    // Reemplazar comas por puntos (para facilitar entrada)
-    value = value.replace(/,/g, '.');
-    
-    // Asegurar un solo punto decimal
-    const parts = value.split('.');
-    if (parts.length > 2) {
-        value = parts[0] + '.' + parts.slice(1).join('');
-    }
-    
-    // Limitar a solo dígitos y un punto decimal
-    value = value.replace(/[^\d.]/g, '');
-    
-    this.value = value;
-    
-    // Validar contra saldo pendiente
-    if (!saldoInfo.textContent) return;
-    
-    // Obtener el saldo pendiente del texto informativo
-    const match = saldoInfo.textContent.match(/\$([\d,\.]+)/);
-    if (match && match[1]) {
-        // Limpiar el saldo para comparación
-        const saldoStr = match[1].replace(/,/g, '');
-        const saldo = parseFloat(saldoStr);
-        const monto = parseFloat(this.value);
-        
-        // Solo validar si tenemos un monto válido
-        if (!isNaN(monto) && monto > 0) {
-            if (monto > saldo) {
-                // No reemplazar automáticamente, solo advertir
-                // this.value = saldo.toString();
-                // Usar un mensaje más visible que alert() para mejor UX
-                saldoInfo.innerHTML = `<span class="text-danger">El monto excede el saldo pendiente ($${saldo.toLocaleString('es')})</span>`;
-            } else {
-                // Restablecer el mensaje normal
-                saldoInfo.textContent = `Saldo pendiente: $${saldo.toLocaleString('es')}`;
+            // Permitir dígitos y un único punto decimal
+            let value = this.value;
+            
+            // Reemplazar comas por puntos (para facilitar entrada)
+            value = value.replace(/,/g, '.');
+            
+            // Asegurar un solo punto decimal
+            const parts = value.split('.');
+            if (parts.length > 2) {
+                value = parts[0] + '.' + parts.slice(1).join('');
             }
-        }
-    }
-});
+            
+            // Limitar a solo dígitos y un punto decimal
+            value = value.replace(/[^\d.]/g, '');
+            
+            this.value = value;
+            
+            // Validar contra saldo pendiente
+            if (!saldoInfo.textContent) return;
+            
+            // Obtener el saldo pendiente del texto informativo
+            const match = saldoInfo.textContent.match(/\$([\d,\.]+)/);
+            if (match && match[1]) {
+                // Limpiar el saldo para comparación
+                const saldoStr = match[1].replace(/,/g, '');
+                const saldo = parseFloat(saldoStr);
+                const monto = parseFloat(this.value);
+                
+                // Solo validar si tenemos un monto válido
+                if (!isNaN(monto) && monto > 0) {
+                    if (monto > saldo) {
+                        // No reemplazar automáticamente, solo advertir
+                        saldoInfo.innerHTML = `<span class="text-danger">El monto excede el saldo pendiente ($${saldo.toLocaleString('es')})</span>`;
+                    } else {
+                        // Restablecer el mensaje normal
+                        saldoInfo.textContent = `Saldo pendiente: $${saldo.toLocaleString('es')}`;
+                    }
+                }
+            }
+        });
     }
     
     // Agregar validación antes de enviar el formulario
