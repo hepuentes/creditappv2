@@ -6,7 +6,7 @@ from wtforms import (
 )
 from wtforms.validators import (
     DataRequired, Email, Length, EqualTo,
-    NumberRange, Optional
+    NumberRange, Optional, InputRequired  
 )
 
 # --- Formulario de Login ---
