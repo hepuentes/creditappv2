@@ -107,6 +107,9 @@ def crear():
         
         # Obtener productos del campo JSON
         productos_json = request.form.get('productos_json', '[]')
+        if not productos_json or productos_json.strip() == '':
+            productos_json = '[]'  # Asegurar que sea una lista JSON válida si está vacío
+            
         current_app.logger.info(f"Productos JSON: {productos_json}")
         
         try:
