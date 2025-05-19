@@ -79,3 +79,34 @@
     </div>
 </div>
 {% endblock %}
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.querySelector('form');
+        const saldoInicialInput = document.getElementById('saldo_inicial');
+        
+        if (form && saldoInicialInput) {
+            // Permitir el valor 0 explícitamente
+            saldoInicialInput.addEventListener('input', function() {
+                // Permitir solo números y un punto decimal
+                this.value = this.value.replace(/[^\d.]/g, '');
+                
+                // Asegurar que solo haya un punto decimal
+                const parts = this.value.split('.');
+                if (parts.length > 2) {
+                    this.value = parts[0] + '.' + parts.slice(1).join('');
+                }
+            });
+            
+            form.addEventListener('submit', function(e) {
+                // Verificar que el campo tenga un valor (puede ser 0)
+                if (saldoInicialInput.value === '') {
+                    e.preventDefault();
+                    alert('Debe ingresar un saldo inicial (puede ser 0)');
+                    saldoInicialInput.focus();
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
