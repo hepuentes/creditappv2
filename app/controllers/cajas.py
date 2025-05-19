@@ -4,7 +4,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.models import Caja, MovimientoCaja
 from app.forms import MovimientoCajaForm, CajaForm
-from app.decorators import (vendedor_required, cobrador_required)
+from app.decorators import (vendedor_required, cobrador_required, admin_required)
 
 cajas_bp = Blueprint('cajas', __name__, url_prefix='/cajas')
 
