@@ -158,3 +158,72 @@ def nuevo_movimiento(id):
 def detalle(id):
     caja = Caja.query.get_or_404(id)
     return render_template('cajas/detalle.html', caja=caja)
+
+@cajas_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
+@login_required
+@admin_required  # Restringe a administradores
+def editar(id):
+    caja = Caja.query.get_or_404(id)
+    form = CajaForm(obj=caja)
+    
+    if form.validate_on_submit():
+        # Guardar saldo actual para calcular la diferencia
+        saldo_inicial_anterior = caja.saldo_inicial
+        saldo_actual_anterior = caja.saldo_actual
+        
+        # Actualizar nombre y tipo
+        caja.nombre = form.nombre.data
+        caja.tipo = form.tipo.data
+        
+        # Calcular el efecto en saldo_actual si cambia saldo_inicial
+        if form.saldo_inicial.data != saldo_inicial_anterior:
+            # Ajustar saldo_actual proporcionalmente
+            diferencia = form.saldo_inicial.data - saldo_inicial_anterior
+            caja.saldo_actual = saldo_actual_anterior + diferencia
+            caja.saldo_inicial = form.saldo_inicial.data
+            
+            # Registrar este cambio como un movimiento de ajuste si hay diferencia
+            if diferencia != 0:
+                tipo_movimiento = 'entrada' if diferencia > 0 else 'salida'
+                monto_movimiento = abs(diferencia)
+                
+                movimiento = MovimientoCaja(
+                    caja_id=caja.id,
+                    tipo=tipo_movimiento,
+                    monto=monto_movimiento,
+                    descripcion=f"Ajuste por modificación de saldo inicial",
+                    fecha=datetime.now()
+                )
+                db.session.add(movimiento)
+        
+        # Guardar los cambios
+        db.session.commit()
+        flash('Caja actualizada exitosamente', 'success')
+        return redirect(url_for('cajas.index'))
+        
+    return render_template('cajas/editar.html', form=form, caja=caja)
+
+@cajas_bp.route('/<int:id>/eliminar', methods=['POST'])
+@login_required
+@admin_required  # Restringe a administradores
+def eliminar(id):
+    caja = Caja.query.get_or_404(id)
+    
+    # Verificar si hay movimientos asociados a esta caja
+    movimientos = MovimientoCaja.query.filter_by(caja_id=id).first()
+    
+    if movimientos:
+        flash('No se puede eliminar la caja porque tiene movimientos asociados.', 'danger')
+        return redirect(url_for('cajas.index'))
+    
+    # Si no hay movimientos asociados, procedemos a eliminar
+    try:
+        nombre_caja = caja.nombre  # Guardamos para el mensaje
+        db.session.delete(caja)
+        db.session.commit()
+        flash(f'Caja "{nombre_caja}" eliminada exitosamente', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error al eliminar la caja: {str(e)}', 'danger')
+    
+    return redirect(url_for('cajas.index'))
