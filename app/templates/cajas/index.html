@@ -135,3 +135,27 @@
     </div>
 </div>
 {% endblock %}
+<!-- Modales de Eliminación para cada caja -->
+{% for caja in cajas %}
+<div class="modal fade" id="eliminarCajaModal{{ caja.id }}" tabindex="-1" aria-labelledby="eliminarCajaModalLabel{{ caja.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="eliminarCajaModalLabel{{ caja.id }}">Confirmar Eliminación</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Está seguro de eliminar la caja <strong>{{ caja.nombre }}</strong>?</p>
+                <p class="text-danger"><i class="fas fa-exclamation-triangle"></i> Esta acción no se puede deshacer.</p>
+                <p class="text-warning"><i class="fas fa-info-circle"></i> No se podrá eliminar la caja si tiene movimientos asociados.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form action="{{ url_for('cajas.eliminar', id=caja.id) }}" method="POST">
+                    <button type="submit" class="btn btn-danger">Eliminar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
