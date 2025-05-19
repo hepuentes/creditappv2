@@ -161,34 +161,35 @@
                 </div>
                 <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
                     <div class="row m-2" id="productos-disponibles-container">
-                        {% if productos %}
-                            {% for prod in productos %}
-                                <div class="col-12 mb-2 producto-item-disponible" 
-                                     data-id="{{ prod.id }}" 
-                                     data-nombre="{{ prod.nombre }}" 
-                                     data-precio="{{ prod.precio_venta }}" 
-                                     data-stock="{{ prod.stock }}" 
-                                     data-codigo="{{ prod.codigo }}">
-                                    <div class="card p-2">
-                                        <div class="d-flex justify-content-between">
-                                            <div>
-                                                <h6 class="card-title mb-0">{{ prod.nombre }}</h6>
-                                                <small class="text-muted">Código: {{ prod.codigo }}</small>
-                                            </div>
-                                            <div class="text-end">
-                                                <span class="badge bg-primary">${{ "{:,.0f}".format(prod.precio_venta) }}</span><br>
-                                                <small class="text-muted">Stock: {{ prod.stock }}</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="col-12">
-                                <p class="text-center p-3">No hay productos disponibles.</p>
-                            </div>
-                        {% endif %}
+    {% if productos %}
+        {% for prod in productos %}
+            <div class="col-12 mb-2 producto-item-disponible" 
+                data-id="{{ prod.id }}" 
+                data-nombre="{{ prod.nombre }}" 
+                data-precio="{{ prod.precio_venta }}" 
+                data-stock="{{ prod.stock }}" 
+                data-codigo="{{ prod.codigo }}"
+                onclick="seleccionarProducto(this)"> <!-- Aquí añadimos un manejador de eventos directo -->
+                <div class="card p-2">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title mb-0">{{ prod.nombre }}</h6>
+                            <small class="text-muted">Código: {{ prod.codigo }}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-primary">${{ "{:,.0f}".format(prod.precio_venta) }}</span><br>
+                            <small class="text-muted">Stock: {{ prod.stock }}</small>
+                        </div>
                     </div>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="col-12">
+            <p class="text-center p-3">No hay productos disponibles.</p>
+        </div>
+    {% endif %}
+</div>
                 </div>
             </div>
         </div>
