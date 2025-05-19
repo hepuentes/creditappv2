@@ -121,9 +121,13 @@ class CajaForm(FlaskForm):
         ('daviplata', 'Daviplata'),
         ('transferencia', 'Transferencia Bancaria')
     ], validators=[DataRequired()])
-    saldo_inicial = FloatField('Saldo Inicial', validators=[DataRequired(), NumberRange(min=0)])
+    # Modificado el validador para aceptar explícitamente 0
+    saldo_inicial = FloatField('Saldo Inicial', 
+        validators=[
+            DataRequired(message="Este campo es obligatorio"),
+            NumberRange(min=0, message="El saldo inicial debe ser mayor o igual a 0")
+        ])
     submit = SubmitField('Crear Caja')
-
 
 # --- Formulario de Movimientos de Caja ---
 class MovimientoCajaForm(FlaskForm):
