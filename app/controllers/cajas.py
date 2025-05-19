@@ -33,8 +33,11 @@ def crear():
     form = CajaForm()
     if form.validate_on_submit():
         try:
-            # Convertir explícitamente a float para asegurar compatibilidad
-            saldo_inicial = float(form.saldo_inicial.data)
+            # Manejar explícitamente el caso de valor 0
+            if form.saldo_inicial.data == 0 or form.saldo_inicial.data == "0":
+                saldo_inicial = 0.0
+            else:
+                saldo_inicial = float(form.saldo_inicial.data)
             
             # Crear la caja con los datos validados
             caja = Caja(
