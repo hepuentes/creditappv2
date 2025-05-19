@@ -32,17 +32,32 @@ def index():
 def crear():
     form = CajaForm()
     if form.validate_on_submit():
-        caja = Caja(
-            nombre=form.nombre.data,
-            tipo=form.tipo.data,
-            saldo_inicial=form.saldo_inicial.data,
-            saldo_actual=form.saldo_inicial.data,
-            fecha_apertura=datetime.now()
-        )
-        db.session.add(caja)
-        db.session.commit()
-        flash('Caja creada exitosamente', 'success')
-        return redirect(url_for('cajas.index'))
+        try:
+            # Convertir explícitamente a float para asegurar compatibilidad
+            saldo_inicial = float(form.saldo_inicial.data)
+            
+            # Crear la caja con los datos validados
+            caja = Caja(
+                nombre=form.nombre.data,
+                tipo=form.tipo.data,
+                saldo_inicial=saldo_inicial,
+                saldo_actual=saldo_inicial,
+                fecha_apertura=datetime.now()
+            )
+            db.session.add(caja)
+            db.session.commit()
+            flash('Caja creada exitosamente', 'success')
+            return redirect(url_for('cajas.index'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al crear la caja: {str(e)}', 'danger')
+    
+    # Si hay errores de validación, mostrarlos
+    if form.errors:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'Error en {field}: {error}', 'danger')
+    
     return render_template('cajas/crear.html', form=form)
 
 @cajas_bp.route('/<int:id>/movimientos')
