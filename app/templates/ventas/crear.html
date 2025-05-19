@@ -347,16 +347,13 @@ def crear():
         flash('Por favor corrija los errores en el formulario.', 'warning')
     
     return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
-3. Actualización dinámica del stock en la interfaz de ventas
-Archivo modificado: app/templates/ventas/crear.html
-Vamos a modificar la parte del JavaScript que maneja la selección de productos:
-javascript// Reemplaza la sección de JavaScript en ventas/crear.html con este código
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Variables y elementos del DOM
-    let productosSeleccionadosParaVenta = [];
+    // Variables globales para facilitar la depuración
+    window.productosSeleccionadosParaVenta = [];
     const productosDisponiblesContainer = document.getElementById('productos-disponibles-container');
-    const tablaProductosVentaBody = document.getElementById('tabla-productos').getElementsByTagName('tbody')[0];
+    const tablaProductos = document.getElementById('tabla-productos');
+    const tablaProductosVentaBody = tablaProductos ? tablaProductos.querySelector('tbody') : null;
     const inputJsonProductosOculto = document.getElementById('productos_json');
     const displayTotalVenta = document.getElementById('total-venta');
     const inputBuscarProductoDisponible = document.getElementById('buscar-producto-disponible');
@@ -372,8 +369,36 @@ document.addEventListener('DOMContentLoaded', function() {
     const inputNumeroCuotas = document.getElementById('numero_cuotas');
     const clienteSelect = document.querySelector('select[name="cliente"]');
 
-    // Objeto para almacenar el stock disponible actualizado
+    // Validar elementos críticos
+    if (!productosDisponiblesContainer) {
+        console.error("Error: No se encontró el contenedor de productos disponibles");
+        return;
+    }
+    
+    if (!tablaProductos || !tablaProductosVentaBody) {
+        console.error("Error: No se encontró la tabla de productos o su cuerpo");
+        return;
+    }
+    
+    if (!inputJsonProductosOculto) {
+        console.error("Error: No se encontró el campo oculto para JSON de productos");
+        return;
+    }
+
+    // Objeto para almacenar el stock actualizado
     const stockActualizado = {};
+
+    // Inicializar el stock actual
+    const items = productosDisponiblesContainer.querySelectorAll('.producto-item-disponible');
+    items.forEach(item => {
+        try {
+            const id = parseInt(item.dataset.id);
+            stockActualizado[id] = parseInt(item.dataset.stock);
+            console.log(`Inicializando stock para producto ID ${id}: ${stockActualizado[id]}`);
+        } catch (e) {
+            console.error("Error al inicializar stock:", e);
+        }
+    });
 
     // Formateador de moneda
     const currencyFormatter = new Intl.NumberFormat('es-CO', { 
@@ -407,8 +432,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (selectTipoVenta) {
         selectTipoVenta.addEventListener('change', function() {
             const esCredito = this.value === 'credito';
-            divSeccionCredito.style.display = esCredito ? 'flex' : 'none';
-            divResumenCredito.style.display = esCredito && productosSeleccionadosParaVenta.length > 0 ? 'block' : 'none';
+            if (divSeccionCredito) divSeccionCredito.style.display = esCredito ? 'flex' : 'none';
+            if (divResumenCredito) divResumenCredito.style.display = esCredito && window.productosSeleccionadosParaVenta.length > 0 ? 'block' : 'none';
             if (esCredito) {
                 actualizarResumenVentaCredito();
             }
@@ -416,32 +441,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function actualizarResumenVentaCredito() {
-        if (!selectTipoVenta || selectTipoVenta.value !== 'credito' || productosSeleccionadosParaVenta.length === 0) {
-            divResumenCredito.style.display = 'none';
+        if (!selectTipoVenta || !divResumenCredito || selectTipoVenta.value !== 'credito' || window.productosSeleccionadosParaVenta.length === 0) {
+            if (divResumenCredito) divResumenCredito.style.display = 'none';
             return;
         }
 
-        const opcionClienteSeleccionado = clienteSelect.options[clienteSelect.selectedIndex];
-        const nombreCliente = opcionClienteSeleccionado && opcionClienteSeleccionado.value ? opcionClienteSeleccionado.text.split(' - ')[0] : 'N/A';
-        const textoFrecuencia = selectFrecuenciaPago.options[selectFrecuenciaPago.selectedIndex].text;
-        const numCuotas = parseInt(inputNumeroCuotas.value) || 1;
-        const totalVentaActual = productosSeleccionadosParaVenta.reduce((sum, p) => sum + (p.precio * p.cantidad), 0);
+        try {
+            const opcionClienteSeleccionado = clienteSelect.options[clienteSelect.selectedIndex];
+            const nombreCliente = opcionClienteSeleccionado && opcionClienteSeleccionado.value ? opcionClienteSeleccionado.text.split(' - ')[0] : 'N/A';
+            const textoFrecuencia = selectFrecuenciaPago.options[selectFrecuenciaPago.selectedIndex].text;
+            const numCuotas = parseInt(inputNumeroCuotas.value) || 1;
+            const totalVentaActual = window.productosSeleccionadosParaVenta.reduce((sum, p) => sum + (p.precio * p.cantidad), 0);
 
-        document.getElementById('resumen_cliente_nombre').textContent = nombreCliente;
-        document.getElementById('resumen_frecuencia_pago').textContent = textoFrecuencia;
-        document.getElementById('resumen_numero_cuotas').textContent = numCuotas;
-        document.getElementById('resumen_valor_cuota').textContent = currencyFormatter.format(numCuotas > 0 ? totalVentaActual / numCuotas : totalVentaActual);
-        
-        const hoy = new Date();
-        let diasParaPrimerPago = 30; // mensual por defecto
-        if (selectFrecuenciaPago.value === 'semanal') diasParaPrimerPago = 7;
-        else if (selectFrecuenciaPago.value === 'quincenal') diasParaPrimerPago = 15;
-        
-        const fechaPrimerPago = new Date(hoy.setDate(hoy.getDate() + diasParaPrimerPago));
-        document.getElementById('resumen_fecha_primer_pago').textContent = `${fechaPrimerPago.getDate().toString().padStart(2, '0')}/${(fechaPrimerPago.getMonth() + 1).toString().padStart(2, '0')}/${fechaPrimerPago.getFullYear()}`;
-        document.getElementById('resumen_total_venta_credito').textContent = currencyFormatter.format(totalVentaActual);
-        
-        divResumenCredito.style.display = 'block';
+            document.getElementById('resumen_cliente_nombre').textContent = nombreCliente;
+            document.getElementById('resumen_frecuencia_pago').textContent = textoFrecuencia;
+            document.getElementById('resumen_numero_cuotas').textContent = numCuotas;
+            document.getElementById('resumen_valor_cuota').textContent = currencyFormatter.format(numCuotas > 0 ? totalVentaActual / numCuotas : totalVentaActual);
+            
+            const hoy = new Date();
+            let diasParaPrimerPago = 30; // mensual por defecto
+            if (selectFrecuenciaPago.value === 'semanal') diasParaPrimerPago = 7;
+            else if (selectFrecuenciaPago.value === 'quincenal') diasParaPrimerPago = 15;
+            
+            const fechaPrimerPago = new Date(hoy);
+            fechaPrimerPago.setDate(hoy.getDate() + diasParaPrimerPago);
+            document.getElementById('resumen_fecha_primer_pago').textContent = `${fechaPrimerPago.getDate().toString().padStart(2, '0')}/${(fechaPrimerPago.getMonth() + 1).toString().padStart(2, '0')}/${fechaPrimerPago.getFullYear()}`;
+            document.getElementById('resumen_total_venta_credito').textContent = currencyFormatter.format(totalVentaActual);
+            
+            divResumenCredito.style.display = 'block';
+        } catch (e) {
+            console.error("Error al actualizar resumen de crédito:", e);
+        }
     }
 
     if (selectFrecuenciaPago) selectFrecuenciaPago.addEventListener('change', actualizarResumenVentaCredito);
@@ -452,188 +482,177 @@ document.addEventListener('DOMContentLoaded', function() {
     function actualizarVisualizacionStock() {
         if (!productosDisponiblesContainer) return;
         
-        const items = productosDisponiblesContainer.querySelectorAll('.producto-item-disponible');
-        items.forEach(item => {
-            const id = parseInt(item.dataset.id);
-            
-            // Si el producto está en el carrito, actualizar visualización de stock
-            if (id in stockActualizado) {
-                const stockOriginal = parseInt(item.dataset.stock);
-                const stockRestante = stockActualizado[id];
+        try {
+            const items = productosDisponiblesContainer.querySelectorAll('.producto-item-disponible');
+            items.forEach(item => {
+                const id = parseInt(item.dataset.id);
                 
-                // Actualizar el texto del stock
-                const stockText = item.querySelector('small.text-muted');
-                if (stockText) {
-                    stockText.textContent = `Stock: ${stockRestante}`;
+                // Si el producto está en el control de stock, actualizar visualización
+                if (id in stockActualizado) {
+                    const stockRestante = stockActualizado[id];
                     
-                    // Cambiar color si el stock está bajo o agotado
-                    if (stockRestante <= 0) {
-                        item.classList.add('bg-danger', 'text-white');
-                        item.style.opacity = '0.5';
-                        item.style.cursor = 'not-allowed';
-                    } else if (stockRestante <= 5) {
-                        item.classList.add('bg-warning');
-                        item.classList.remove('bg-danger', 'text-white');
-                        item.style.opacity = '1';
-                        item.style.cursor = 'pointer';
-                    } else {
-                        item.classList.remove('bg-warning', 'bg-danger', 'text-white');
-                        item.style.opacity = '1';
-                        item.style.cursor = 'pointer';
+                    // Actualizar el texto del stock
+                    const stockText = item.querySelector('small.text-muted:last-child');
+                    if (stockText) {
+                        stockText.textContent = `Stock: ${stockRestante}`;
+                        
+                        // Cambiar color si el stock está bajo o agotado
+                        if (stockRestante <= 0) {
+                            item.classList.add('bg-danger', 'text-white');
+                            item.style.opacity = '0.5';
+                            item.style.cursor = 'not-allowed';
+                        } else if (stockRestante <= 5) {
+                            item.classList.add('bg-warning');
+                            item.classList.remove('bg-danger', 'text-white');
+                            item.style.opacity = '1';
+                            item.style.cursor = 'pointer';
+                        } else {
+                            item.classList.remove('bg-warning', 'bg-danger', 'text-white');
+                            item.style.opacity = '1';
+                            item.style.cursor = 'pointer';
+                        }
                     }
                 }
-            }
-        });
-    }
-
-    // Manejar clic en productos disponibles para agregarlos
-    if (productosDisponiblesContainer) {
-        // Inicializar el stock actual
-        const items = productosDisponiblesContainer.querySelectorAll('.producto-item-disponible');
-        items.forEach(item => {
-            const id = parseInt(item.dataset.id);
-            stockActualizado[id] = parseInt(item.dataset.stock);
-        });
-        
-        productosDisponiblesContainer.addEventListener('click', function(e) {
-            const itemProducto = e.target.closest('.producto-item-disponible');
-            if (itemProducto) {
-                const id = parseInt(itemProducto.dataset.id);
-                const nombre = itemProducto.dataset.nombre;
-                const precio = parseFloat(itemProducto.dataset.precio);
-                const stockOriginal = parseInt(itemProducto.dataset.stock);
-                const codigo = itemProducto.dataset.codigo;
-                
-                // Usar el stock actualizado si existe, sino el original
-                const stockActual = stockActualizado[id] !== undefined ? stockActualizado[id] : stockOriginal;
-
-                const productoYaSeleccionado = productosSeleccionadosParaVenta.find(p => p.id === id);
-
-                if (productoYaSeleccionado) {
-                    if (stockActual > 0) {
-                        productoYaSeleccionado.cantidad++;
-                        // Actualizar el stock restante
-                        stockActualizado[id] = stockActual - 1;
-                        renderTablaProductosSeleccionados();
-                        actualizarVisualizacionStock();
-                    } else {
-                        alert(`No hay más stock disponible para ${nombre}. Stock máximo: 0`);
-                    }
-                } else {
-                    if (stockActual > 0) {
-                        productosSeleccionadosParaVenta.push({ id, codigo, nombre, precio, cantidad: 1, stockMax: stockActual });
-                        // Actualizar el stock restante
-                        stockActualizado[id] = stockActual - 1;
-                        renderTablaProductosSeleccionados();
-                        actualizarVisualizacionStock();
-                    } else {
-                        alert(`El producto ${nombre} está agotado.`);
-                    }
-                }
-            }
-        });
+            });
+        } catch (e) {
+            console.error("Error actualizando visualización de stock:", e);
+        }
     }
 
     // Renderizar tabla de productos seleccionados
     function renderTablaProductosSeleccionados() {
-        tablaProductosVentaBody.innerHTML = '';
-        let granTotal = 0;
-
-        productosSeleccionadosParaVenta.forEach((producto, index) => {
-            const subtotal = producto.precio * producto.cantidad;
-            granTotal += subtotal;
-
-            const fila = tablaProductosVentaBody.insertRow();
-            fila.innerHTML = `
-                <td>${producto.codigo}</td>
-                <td>${producto.nombre}</td>
-                <td>
-                    <input type="number" class="form-control form-control-sm cantidad-item-venta" 
-                           value="${producto.cantidad}" min="1" max="${producto.stockMax}" 
-                           data-index="${index}" data-id="${producto.id}">
-                </td>
-                <td class="text-end">${currencyFormatter.format(producto.precio)}</td>
-                <td class="text-end subtotal">${currencyFormatter.format(subtotal)}</td>
-                <td>
-                    <button type="button" class="btn btn-sm btn-danger eliminar-item-venta" data-index="${index}" data-id="${producto.id}">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </td>
-            `;
-        });
-
-        displayTotalVenta.textContent = currencyFormatter.format(granTotal);
-        
-        // Prepara el JSON para el backend
-        const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
-            id: p.id,
-            cantidad: p.cantidad,
-            precio_venta: p.precio
-        }));
-        document.getElementById('productos_json').value = JSON.stringify(productosParaEnviar);
+        try {
+            if (!tablaProductosVentaBody) return;
             
-        actualizarResumenVentaCredito(); // Actualizar resumen si es crédito
-        bindEventosItemsTabla();
+            tablaProductosVentaBody.innerHTML = '';
+            let granTotal = 0;
+
+            window.productosSeleccionadosParaVenta.forEach((producto, index) => {
+                const subtotal = producto.precio * producto.cantidad;
+                granTotal += subtotal;
+
+                const fila = tablaProductosVentaBody.insertRow();
+                fila.innerHTML = `
+                    <td>${producto.codigo}</td>
+                    <td>${producto.nombre}</td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm cantidad-item-venta" 
+                            value="${producto.cantidad}" min="1" max="${producto.stockMax}" 
+                            data-index="${index}" data-id="${producto.id}">
+                    </td>
+                    <td class="text-end">${currencyFormatter.format(producto.precio)}</td>
+                    <td class="text-end subtotal">${currencyFormatter.format(subtotal)}</td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-danger eliminar-item-venta" data-index="${index}" data-id="${producto.id}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+            });
+
+            if (displayTotalVenta) {
+                displayTotalVenta.textContent = currencyFormatter.format(granTotal);
+            }
+            
+            // Preparar el JSON para el backend
+            const productosParaEnviar = window.productosSeleccionadosParaVenta.map(p => ({
+                id: p.id,
+                cantidad: p.cantidad,
+                precio_venta: p.precio
+            }));
+            
+            if (inputJsonProductosOculto) {
+                inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
+                console.log("JSON actualizado:", inputJsonProductosOculto.value);
+            }
+                
+            actualizarResumenVentaCredito(); // Actualizar resumen si es crédito
+            bindEventosItemsTabla();
+        } catch (e) {
+            console.error("Error al renderizar tabla:", e);
+        }
     }
 
     // Agregar eventos a los elementos de la tabla de productos seleccionados
     function bindEventosItemsTabla() {
-        document.querySelectorAll('.cantidad-item-venta').forEach(input => {
-            input.addEventListener('change', function() {
-                const index = parseInt(this.dataset.index);
-                const productoId = parseInt(this.dataset.id);
-                let nuevaCantidad = parseInt(this.value);
-                const producto = productosSeleccionadosParaVenta[index];
-                const stockOriginal = parseInt(document.querySelector(`.producto-item-disponible[data-id="${productoId}"]`).dataset.stock);
-                
-                if (isNaN(nuevaCantidad) || nuevaCantidad < 1) {
-                    nuevaCantidad = 1;
-                    this.value = 1;
-                }
-                
-                // Calcular el máximo stock permitido (stock original - cantidades de otros productos seleccionados)
-                let cantidadPrevia = producto.cantidad;
-                
-                // Restablecer el stock al valor anterior antes de recalcular
-                stockActualizado[productoId] += cantidadPrevia;
-                
-                // Verificar si la nueva cantidad excede el stock disponible
-                if (nuevaCantidad > stockActualizado[productoId]) {
-                    nuevaCantidad = stockActualizado[productoId];
-                    this.value = nuevaCantidad;
-                    alert(`La cantidad no puede exceder el stock disponible (${stockActualizado[productoId]}).`);
-                }
-                
-                // Actualizar la cantidad y el stock
-                producto.cantidad = nuevaCantidad;
-                stockActualizado[productoId] -= nuevaCantidad;
-                
-                renderTablaProductosSeleccionados();
-                actualizarVisualizacionStock();
+        try {
+            document.querySelectorAll('.cantidad-item-venta').forEach(input => {
+                input.addEventListener('change', function() {
+                    try {
+                        const index = parseInt(this.dataset.index);
+                        const productoId = parseInt(this.dataset.id);
+                        let nuevaCantidad = parseInt(this.value);
+                        
+                        if (isNaN(nuevaCantidad) || nuevaCantidad < 1) {
+                            nuevaCantidad = 1;
+                            this.value = 1;
+                        }
+                        
+                        const producto = window.productosSeleccionadosParaVenta[index];
+                        if (!producto) {
+                            console.error("Producto no encontrado en el índice:", index);
+                            return;
+                        }
+                        
+                        // Calcular el máximo stock permitido
+                        let cantidadPrevia = producto.cantidad;
+                        
+                        // Restablecer el stock al valor anterior antes de recalcular
+                        stockActualizado[productoId] += cantidadPrevia;
+                        
+                        // Verificar si la nueva cantidad excede el stock disponible
+                        if (nuevaCantidad > stockActualizado[productoId]) {
+                            nuevaCantidad = stockActualizado[productoId];
+                            this.value = nuevaCantidad;
+                            alert(`La cantidad no puede exceder el stock disponible (${stockActualizado[productoId]}).`);
+                        }
+                        
+                        // Actualizar la cantidad y el stock
+                        producto.cantidad = nuevaCantidad;
+                        stockActualizado[productoId] -= nuevaCantidad;
+                        
+                        renderTablaProductosSeleccionados();
+                        actualizarVisualizacionStock();
+                    } catch (e) {
+                        console.error("Error al cambiar cantidad:", e);
+                    }
+                });
             });
-        });
 
-        document.querySelectorAll('.eliminar-item-venta').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const index = parseInt(this.dataset.index);
-                const productoId = parseInt(this.dataset.id);
-                const cantidadEliminada = productosSeleccionadosParaVenta[index].cantidad;
-                
-                // Restablecer el stock
-                stockActualizado[productoId] += cantidadEliminada;
-                
-                // Eliminar el producto de la lista
-                productosSeleccionadosParaVenta.splice(index, 1);
-                
-                renderTablaProductosSeleccionados();
-                actualizarVisualizacionStock();
+            document.querySelectorAll('.eliminar-item-venta').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    try {
+                        const index = parseInt(this.dataset.index);
+                        const productoId = parseInt(this.dataset.id);
+                        
+                        if (isNaN(index) || index < 0 || index >= window.productosSeleccionadosParaVenta.length) {
+                            console.error("Índice inválido:", index);
+                            return;
+                        }
+                        
+                        const cantidadEliminada = window.productosSeleccionadosParaVenta[index].cantidad;
+                        
+                        // Restablecer el stock
+                        stockActualizado[productoId] += cantidadEliminada;
+                        
+                        // Eliminar el producto de la lista
+                        window.productosSeleccionadosParaVenta.splice(index, 1);
+                        
+                        renderTablaProductosSeleccionados();
+                        actualizarVisualizacionStock();
+                    } catch (e) {
+                        console.error("Error al eliminar item:", e);
+                    }
+                });
             });
-        });
+        } catch (e) {
+            console.error("Error al vincular eventos:", e);
+        }
     }
 
     // Buscar productos disponibles
     function buscarProductos() {
-        const busqueda = inputBuscarProductoDisponible.value.toLowerCase().trim();
+        const busqueda = inputBuscarProductoDisponible ? inputBuscarProductoDisponible.value.toLowerCase().trim() : '';
         document.querySelectorAll('#productos-disponibles-container .producto-item-disponible').forEach(item => {
             const nombre = item.dataset.nombre.toLowerCase();
             const codigo = item.dataset.codigo.toLowerCase();
@@ -649,42 +668,124 @@ document.addEventListener('DOMContentLoaded', function() {
         btnBuscarProducto.addEventListener('click', buscarProductos);
     }
 
+    // PARTE CRUCIAL: Mejorar el manejo de eventos de clic en productos disponibles
+    if (productosDisponiblesContainer) {
+        console.log("Configurando evento de clic en productos disponibles");
+        
+        productosDisponiblesContainer.addEventListener('click', function(e) {
+            try {
+                // Encontrar el elemento producto más cercano
+                const itemProducto = e.target.closest('.producto-item-disponible');
+                if (!itemProducto) {
+                    console.log("Clic no reconocido como producto");
+                    return;
+                }
+                
+                // Extraer datos del producto
+                const id = parseInt(itemProducto.dataset.id);
+                const nombre = itemProducto.dataset.nombre;
+                const precio = parseFloat(itemProducto.dataset.precio);
+                const stockOriginal = parseInt(itemProducto.dataset.stock);
+                const codigo = itemProducto.dataset.codigo;
+                
+                console.log("Producto clickeado:", {id, nombre, precio, stockOriginal, codigo});
+                
+                // Verificar si hay datos válidos
+                if (isNaN(id) || !nombre || isNaN(precio)) {
+                    console.error("Datos inválidos en producto:", {id, nombre, precio});
+                    return;
+                }
+                
+                // Usar el stock actualizado si existe, sino el original
+                const stockActual = stockActualizado[id] !== undefined ? stockActualizado[id] : stockOriginal;
+
+                // Buscar si el producto ya está en la lista
+                const productoYaSeleccionado = window.productosSeleccionadosParaVenta.find(p => p.id === id);
+
+                if (productoYaSeleccionado) {
+                    // Si ya está en la lista, incrementar cantidad
+                    if (stockActual > 0) {
+                        productoYaSeleccionado.cantidad++;
+                        // Actualizar el stock restante
+                        stockActualizado[id] = stockActual - 1;
+                        console.log(`Producto ${nombre} incrementado, nueva cantidad: ${productoYaSeleccionado.cantidad}`);
+                    } else {
+                        alert(`No hay más stock disponible para ${nombre}. Stock máximo: 0`);
+                    }
+                } else {
+                    // Si no está en la lista, agregarlo
+                    if (stockActual > 0) {
+                        window.productosSeleccionadosParaVenta.push({ 
+                            id, 
+                            codigo, 
+                            nombre, 
+                            precio, 
+                            cantidad: 1, 
+                            stockMax: stockActual 
+                        });
+                        // Actualizar el stock restante
+                        stockActualizado[id] = stockActual - 1;
+                        console.log(`Producto nuevo agregado: ${nombre}`);
+                    } else {
+                        alert(`El producto ${nombre} está agotado.`);
+                    }
+                }
+                
+                // Actualizar la visualización
+                renderTablaProductosSeleccionados();
+                actualizarVisualizacionStock();
+            } catch (e) {
+                console.error("Error al seleccionar producto:", e);
+            }
+        });
+    }
+
     // Validación del formulario al enviar
     if (formularioVenta) {
         formularioVenta.addEventListener('submit', function(e) {
-            // Verificar productos seleccionados
-            if (productosSeleccionadosParaVenta.length === 0) {
+            try {
+                // Verificar productos seleccionados
+                if (window.productosSeleccionadosParaVenta.length === 0) {
+                    e.preventDefault();
+                    alert('Debe seleccionar al menos un producto para crear la venta.');
+                    return false;
+                }
+                
+                // Verificar cliente seleccionado
+                const clienteSelect = document.querySelector('select[name="cliente"]');
+                if (!clienteSelect || !clienteSelect.value) {
+                    e.preventDefault();
+                    alert('Debe seleccionar un cliente para crear la venta.');
+                    return false;
+                }
+                
+                // Asegurar que el JSON esté actualizado justo antes del submit
+                if (inputJsonProductosOculto) {
+                    const productosParaEnviar = window.productosSeleccionadosParaVenta.map(p => ({
+                        id: p.id,
+                        cantidad: p.cantidad,
+                        precio_venta: p.precio
+                    }));
+                    inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
+                    
+                    console.log('Enviando formulario con productos:', inputJsonProductosOculto.value);
+                }
+                
+                return true;
+            } catch (e) {
+                console.error("Error al enviar formulario:", e);
                 e.preventDefault();
-                alert('Debe seleccionar al menos un producto para crear la venta.');
                 return false;
             }
-            
-            // Verificar cliente seleccionado
-            const clienteSelect = document.querySelector('select[name="cliente"]');
-            if (!clienteSelect || !clienteSelect.value) {
-                e.preventDefault();
-                alert('Debe seleccionar un cliente para crear la venta.');
-                return false;
-            }
-            
-            // Verificar que el JSON esté actualizado justo antes del submit
-            const inputJsonProductosOculto = document.getElementById('productos_json');
-            const productosParaEnviar = productosSeleccionadosParaVenta.map(p => ({
-                id: p.id,
-                cantidad: p.cantidad,
-                precio_venta: p.precio
-            }));
-            inputJsonProductosOculto.value = JSON.stringify(productosParaEnviar);
-            
-            console.log('Enviando formulario con productos:', inputJsonProductosOculto.value);
-            return true;
         });
     }
     
     // Llamada inicial si el tipo de venta es crédito al cargar
-    if (selectTipoVenta && selectTipoVenta.value === 'credito') {
+    if (selectTipoVenta && selectTipoVenta.value === 'credito' && divSeccionCredito) {
         divSeccionCredito.style.display = 'flex';
     }
+    
+    console.log("Inicialización de JavaScript completada");
 });
 </script>
 {% endblock %}
