@@ -1,9 +1,9 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response
 from flask_login import login_required, current_user
 from app import db
-from app.models import Credito, Cliente, Venta  # Agregamos Venta aquí
+from app.models import Credito, Cliente, Venta
 from app.forms import CreditoForm
-from app.decorators import cobrador_required
+from app.decorators import vendedor_cobrador_required, cobrador_required
 from app.pdf.credito import generar_pdf_credito
 from datetime import datetime
 
@@ -11,7 +11,7 @@ creditos_bp = Blueprint('creditos', __name__, url_prefix='/creditos')
 
 @creditos_bp.route('/')
 @login_required
-@vendedor_cobrador_required  # Cambiado de cobrador_required
+@vendedor_cobrador_required
 def index():
     try:
         # Obtener parámetros de filtro
