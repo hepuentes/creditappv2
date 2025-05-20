@@ -325,34 +325,41 @@ def crear():
 
 @abonos_bp.route('/cargar-ventas/<int:cliente_id>')
 @login_required
-@vendedor_cobrador_required  # Cambiado de cobrador_required para permitir vendedores
+@vendedor_cobrador_required  # Cambiado para permitir a vendedores
 def cargar_ventas(cliente_id):
     try:
-        # Filtrar ventas según el rol del usuario
+        # Consulta base para ventas a crédito con saldo pendiente
         query = Venta.query.filter(
             Venta.cliente_id == cliente_id,
             Venta.tipo == 'credito',
             Venta.saldo_pendiente > 0
         )
         
-        # Si el usuario es vendedor, filtrar solo sus ventas
+        # Si es vendedor, filtrar solo sus ventas
         if current_user.is_vendedor() and not current_user.is_admin():
             query = query.filter(Venta.vendedor_id == current_user.id)
-            
+        
         ventas = query.all()
         
         # Preparar datos para la respuesta JSON
         ventas_json = []
-        for v in ventas:
+        if ventas:
+            for v in ventas:
+                ventas_json.append({
+                    'id': v.id,
+                    'texto': f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.0f}"
+                })
+        else:
+            # Incluir una opción informativa si no hay ventas
             ventas_json.append({
-                'id': v.id,
-                'texto': f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.0f}"
+                'id': -1,  # ID inválido para detectar en el front
+                'texto': "Este cliente no tiene ventas a crédito pendientes"
             })
         
         return jsonify(ventas_json)
     except Exception as e:
         current_app.logger.error(f"Error al cargar ventas: {e}")
-        return jsonify([])
+        return jsonify([{"id": -1, "texto": "Error al cargar ventas"}])
 
 @abonos_bp.route('/<int:id>')
 @login_required
