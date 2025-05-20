@@ -17,58 +17,62 @@
             <form method="POST" id="reporteForm">
                 {{ form.hidden_tag() }}
                 
-                <div class="col-md-3">
-    {{ form.usuario_id.label(class="form-label") }}
-    <select name="usuario_id" id="usuario_id" class="form-select {% if form.usuario_id.errors %}is-invalid{% endif %}">
-        <option value="0" selected>Todos</option>
-        {% for id, nombre in form.usuario_id.choices[1:] %}
-            <option value="{{ id }}" {% if form.usuario_id.data == id %}selected{% endif %}>{{ nombre }}</option>
-        {% endfor %}
-    </select>
-    {% if form.usuario_id.errors %}
-        <div class="invalid-feedback">
-            {% for error in form.usuario_id.errors %}
-                {{ error }}
+                <div class="row mb-3">
+    {% if current_user.is_vendedor() and not current_user.is_admin() %}
+    <input type="hidden" name="usuario_id" value="{{ current_user.id }}">
+    {% else %}
+    <div class="col-md-3">
+        {{ form.usuario_id.label(class="form-label") }}
+        <select name="usuario_id" id="usuario_id" class="form-select {% if form.usuario_id.errors %}is-invalid{% endif %}">
+            <option value="0" {% if form.usuario_id.data == 0 %}selected{% endif %}>Todos</option>
+            {% for id, nombre in form.usuario_id.choices[1:] %}
+                <option value="{{ id }}" {% if form.usuario_id.data == id %}selected{% endif %}>{{ nombre }}</option>
             {% endfor %}
-        </div>
+        </select>
+        {% if form.usuario_id.errors %}
+            <div class="invalid-feedback">
+                {% for error in form.usuario_id.errors %}
+                    {{ error }}
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
     {% endif %}
-</div>
-                    
-                    <div class="col-md-3">
-                        {{ form.fecha_inicio.label(class="form-label") }}
-                        {% if form.fecha_inicio.errors %}
-                            {{ form.fecha_inicio(class="form-control is-invalid", type="date") }}
-                            <div class="invalid-feedback">
-                                {% for error in form.fecha_inicio.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            {{ form.fecha_inicio(class="form-control", type="date") }}
-                        {% endif %}
-                    </div>
-                    
-                    <div class="col-md-3">
-                        {{ form.fecha_fin.label(class="form-label") }}
-                        {% if form.fecha_fin.errors %}
-                            {{ form.fecha_fin(class="form-control is-invalid", type="date") }}
-                            <div class="invalid-feedback">
-                                {% for error in form.fecha_fin.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            {{ form.fecha_fin(class="form-control", type="date") }}
-                        {% endif %}
-                    </div>
-                    
-                    <div class="col-md-3 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100" name="generar">
-                            <i class="fas fa-search"></i> Generar Reporte
-                        </button>
-                    </div>
-                </div>
-            </form>
+    
+    <div class="col-md-3">
+        {{ form.fecha_inicio.label(class="form-label") }}
+        {% if form.fecha_inicio.errors %}
+            {{ form.fecha_inicio(class="form-control is-invalid", type="date") }}
+            <div class="invalid-feedback">
+                {% for error in form.fecha_inicio.errors %}
+                    {{ error }}
+                {% endfor %}
+            </div>
+        {% else %}
+            {{ form.fecha_inicio(class="form-control", type="date") }}
+        {% endif %}
+    </div>
+    
+    <div class="col-md-3">
+        {{ form.fecha_fin.label(class="form-label") }}
+        {% if form.fecha_fin.errors %}
+            {{ form.fecha_fin(class="form-control is-invalid", type="date") }}
+            <div class="invalid-feedback">
+                {% for error in form.fecha_fin.errors %}
+                    {{ error }}
+                {% endfor %}
+            </div>
+        {% else %}
+            {{ form.fecha_fin(class="form-control", type="date") }}
+        {% endif %}
+    </div>
+    
+    <div class="col-md-3 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100" name="generar">
+            <i class="fas fa-search"></i> Generar Reporte
+        </button>
+    </div>
+</div>            </form>
         </div>
     </div>
     
