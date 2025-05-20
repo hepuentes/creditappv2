@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.models import Abono, Cliente, Credito, CreditoVenta, Venta, Caja, MovimientoCaja
 from app.forms import AbonoForm
-from app.decorators import cobrador_required
+from app.decorators import cobrador_required, vendedor_cobrador_required
 from app.utils import registrar_movimiento_caja, calcular_comision
 from app.pdf.abono import generar_pdf_abono
 from datetime import datetime
@@ -14,9 +14,9 @@ abonos_bp = Blueprint('abonos', __name__, url_prefix='/abonos')
 
 @abonos_bp.route('/')
 @login_required
-@vendedor_cobrador_required  # Cambiado de cobrador_required
+@vendedor_cobrador_required
 def index():
-    # Filtrar abonos según el rol del usuario
+    # Obtener parámetros de filtro
     busqueda = request.args.get('busqueda', '')
     desde_str = request.args.get('desde', '')
     hasta_str = request.args.get('hasta', '')
@@ -26,7 +26,6 @@ def index():
     
     # Si es vendedor, filtrar solo sus propias ventas/abonos
     if current_user.is_vendedor():
-        # Unir con ventas para filtrar por vendedor_id
         query = query.join(Abono.venta).filter(Venta.vendedor_id == current_user.id)
     
     if busqueda:
