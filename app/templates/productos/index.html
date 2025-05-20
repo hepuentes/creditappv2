@@ -64,13 +64,18 @@
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-success text-white h-100">
-                <div class="card-body text-center">
-                    <h3 class="mb-0">{{ "${:,}".format(productos|sum(attribute='precio_compra')|default(0)|float) }}</h3>
-                    <p class="mb-0">Valor Inventario (Costo)</p>
-                </div>
-            </div>
+    <div class="card bg-success text-white h-100">
+        <div class="card-body text-center">
+            {% if current_user.is_admin() %}
+            <h3 class="mb-0">{{ "${:,}".format(productos|sum(attribute='precio_compra')|default(0)|float) }}</h3>
+            <p class="mb-0">Valor Inventario (Costo)</p>
+            {% else %}
+            <h3 class="mb-0">{{ productos|length - (productos|selectattr('esta_agotado')|list|length|default(0)) }}</h3>
+            <p class="mb-0">Productos Disponibles</p>
+            {% endif %}
         </div>
+    </div>
+</div>
     </div>
 
     <!-- Listado de productos -->
