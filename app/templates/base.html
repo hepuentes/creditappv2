@@ -36,28 +36,29 @@
                     <a href="{{ url_for('clientes.index') }}"><i class="fas fa-users"></i> Clientes</a>
                 </li>
                 {% endif %}
-                <!-- Menú para vendedor -->
-{% if current_user.is_vendedor() or current_user.is_admin() %}
-<li {% if 'productos' in request.endpoint %}class="active"{% endif %}>
-    <a href="{{ url_for('productos.index') }}"><i class="fas fa-box"></i> Inventario</a>
-</li>
-<li {% if 'ventas' in request.endpoint %}class="active"{% endif %}>
-    <a href="{{ url_for('ventas.index') }}"><i class="fas fa-shopping-cart"></i> Ventas</a>
-</li>
-{% endif %}
-
-<!-- Menú compartido por vendedor y cobrador -->
-{% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}
-<li {% if 'creditos' in request.endpoint %}class="active"{% endif %}>
-    <a href="{{ url_for('creditos.index') }}"><i class="fas fa-credit-card"></i> Créditos</a>
-</li>
-<li {% if 'abonos' in request.endpoint %}class="active"{% endif %}>
-    <a href="{{ url_for('abonos.index') }}"><i class="fas fa-money-bill-wave"></i> Abonos</a>
-</li>
-<li {% if 'reportes/comisiones' in request.endpoint %}class="active"{% endif %}>
-    <a href="{{ url_for('reportes.comisiones') }}"><i class="fas fa-percentage"></i> Comisiones</a>
-</li>
-{% endif %}
+                {% if current_user.is_vendedor() or current_user.is_admin() %}
+                <li {% if 'productos' in request.endpoint %}class="active"{% endif %}>
+                    <a href="{{ url_for('productos.index') }}"><i class="fas fa-box"></i> Inventario</a>
+                </li>
+                <li {% if 'ventas' in request.endpoint %}class="active"{% endif %}>
+                    <a href="{{ url_for('ventas.index') }}"><i class="fas fa-shopping-cart"></i> Ventas</a>
+                </li>
+                {% endif %}
+                {% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}
+                <li {% if 'creditos' in request.endpoint %}class="active"{% endif %}>
+                    <a href="{{ url_for('creditos.index') }}"><i class="fas fa-credit-card"></i> Créditos</a>
+                </li>
+                <li {% if 'abonos' in request.endpoint %}class="active"{% endif %}>
+                    <a href="{{ url_for('abonos.index') }}"><i class="fas fa-money-bill-wave"></i> Abonos</a>
+                </li>
+                {% endif %}
+                {% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}
+                <li {% if 'cajas' in request.endpoint %}class="active"{% endif %}>
+                    <a href="{{ url_for('cajas.index') }}"><i class="fas fa-cash-register"></i> Cajas</a>
+                </li>
+                {% endif %}
+                {% if current_user.is_admin() %}
+                <li>
                     <a href="#reportesSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
                         <i class="fas fa-chart-bar"></i> Reportes
                     </a>
@@ -70,6 +71,11 @@
                 </li>
                 <li {% if 'config' in request.endpoint %}class="active"{% endif %}>
                     <a href="{{ url_for('config.editar') }}"><i class="fas fa-cogs"></i> Configuración</a>
+                </li>
+                {% endif %}
+                {% if current_user.is_vendedor() and not current_user.is_admin() %}
+                <li {% if 'reportes/comisiones' in request.endpoint %}class="active"{% endif %}>
+                    <a href="{{ url_for('reportes.comisiones') }}"><i class="fas fa-percentage"></i> Mis Comisiones</a>
                 </li>
                 {% endif %}
             </ul>
