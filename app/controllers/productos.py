@@ -1,9 +1,9 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app import db
 from app.models import Producto
 from app.forms import ProductoForm
-from app.decorators import vendedor_required
+from app.decorators import vendedor_required, admin_required
 
 productos_bp = Blueprint('productos', __name__, url_prefix='/productos')
 
@@ -30,7 +30,7 @@ def detalle(id):
 
 @productos_bp.route('/crear', methods=['GET','POST'])
 @login_required
-@admin_required  
+@admin_required
 def crear():
     form = ProductoForm()
     if form.validate_on_submit():
@@ -42,9 +42,9 @@ def crear():
         return redirect(url_for('productos.index'))
     return render_template('productos/crear.html', form=form)
 
-@productos_bp.route('/<int:id>/editar', methods=['GET','POST']) 
+@productos_bp.route('/<int:id>/editar', methods=['GET','POST'])
 @login_required
-@admin_required  
+@admin_required
 def editar(id):
     producto = Producto.query.get_or_404(id)
     form = ProductoForm(obj=producto)
@@ -57,7 +57,7 @@ def editar(id):
 
 @productos_bp.route('/<int:id>/eliminar', methods=['POST'])
 @login_required
-@admin_required 
+@admin_required
 def eliminar(id):
     producto = Producto.query.get_or_404(id)
     try:
