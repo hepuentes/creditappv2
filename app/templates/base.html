@@ -52,11 +52,11 @@
                     <a href="{{ url_for('abonos.index') }}"><i class="fas fa-money-bill-wave"></i> Abonos</a>
                 </li>
                 {% endif %}
-                {% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}
-                <li {% if 'cajas' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('cajas.index') }}"><i class="fas fa-cash-register"></i> Cajas</a>
-                </li>
-                {% endif %}
+                {% if current_user.is_admin() or current_user.is_cobrador() %}
+<li {% if 'cajas' in request.endpoint %}class="active"{% endif %}>
+    <a href="{{ url_for('cajas.index') }}"><i class="fas fa-cash-register"></i> Cajas</a>
+</li>
+{% endif %}
                 {% if current_user.is_admin() %}
                 <li>
                     <a href="#reportesSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
