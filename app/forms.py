@@ -97,12 +97,16 @@ class AbonoForm(FlaskForm):
     venta_id = SelectField('Venta/Crédito', coerce=int, validators=[DataRequired()])
     credito_id = HiddenField('ID Crédito')
     credito_venta_id = HiddenField('ID Crédito Venta')
-    # Cambiado para permitir valores muy grandes
     monto = StringField('Monto', validators=[DataRequired()])
     caja_id = SelectField('Caja', coerce=int, validators=[DataRequired()])
     notas = TextAreaField('Notas', validators=[Optional(), Length(max=500)])
     submit = SubmitField('Registrar Abono')
-
+    
+    def validate_venta_id(self, field):
+        # Permitir -1 temporalmente durante la selección
+        if field.data == -1:
+            return True
+            
 # --- Formulario de Créditos ---
 class CreditoForm(FlaskForm):
     cliente = SelectField('Cliente', coerce=int, validators=[DataRequired()])
