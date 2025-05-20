@@ -325,22 +325,27 @@ def crear():
 
 @abonos_bp.route('/cargar-ventas/<int:cliente_id>')
 @login_required
-@cobrador_required
+@vendedor_cobrador_required  # Cambiado de cobrador_required para permitir vendedores
 def cargar_ventas(cliente_id):
     try:
-        # Cargar ventas a crédito con saldo pendiente
-        ventas = Venta.query.filter(
+        # Filtrar ventas según el rol del usuario
+        query = Venta.query.filter(
             Venta.cliente_id == cliente_id,
             Venta.tipo == 'credito',
             Venta.saldo_pendiente > 0
-        ).all()
+        )
+        
+        # Si el usuario es vendedor, filtrar solo sus ventas
+        if current_user.is_vendedor() and not current_user.is_admin():
+            query = query.filter(Venta.vendedor_id == current_user.id)
+            
+        ventas = query.all()
         
         # Preparar datos para la respuesta JSON
         ventas_json = []
         for v in ventas:
             ventas_json.append({
                 'id': v.id,
-                # Formatear sin decimales para mantener consistencia
                 'texto': f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.0f}"
             })
         
