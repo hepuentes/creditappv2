@@ -15,16 +15,25 @@ def index():
         now = datetime.now()
         primer_dia_mes = datetime(now.year, now.month, 1)
 
-        # Total de clientes
-        total_clientes = Cliente.query.count()
+        # Filtraciones específicas para vendedor
+        vendedor_filter = {}
+        if current_user.is_vendedor():
+            vendedor_filter = {'vendedor_id': current_user.id}
+        
+        # Total de clientes (para vendedor, solo sus clientes)
+        if current_user.is_vendedor():
+            # Obtener clientes de las ventas del vendedor
+            clientes_ids = db.session.query(Venta.cliente_id).filter_by(vendedor_id=current_user.id).distinct()
+            total_clientes = db.session.query(Cliente).filter(Cliente.id.in_(clientes_ids)).count()
+        else:
+            total_clientes = Cliente.query.count()
 
         # Total de productos
         total_productos = Producto.query.count()
         productos_agotados = Producto.query.filter(Producto.stock <= 0).count()
         productos_stock_bajo = Producto.query.filter(Producto.stock <= Producto.stock_minimo, Producto.stock > 0).count()
 
-        # Ventas del mes - Modificamos esta parte para evitar el error de columna vendedor_id
-        # En lugar de usar filter, usaremos all() y luego filtraremos en Python
+        
         try:
             todas_ventas = Venta.query.all()
             ventas_mes = [v for v in todas_ventas if v.fecha and v.fecha >= primer_dia_mes]
@@ -35,7 +44,7 @@ def index():
             ventas_mes_count = 0
             total_ventas_mes = 0
 
-        # Créditos activos - También modificado para evitar problemas con consultas complejas
+        # Créditos activos 
         try:
             todas_ventas = Venta.query.all()
             creditos_activos = len([v for v in todas_ventas if v.tipo == 'credito' and v.saldo_pendiente and v.saldo_pendiente > 0])
