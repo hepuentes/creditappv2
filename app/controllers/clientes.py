@@ -17,10 +17,22 @@ clientes_bp = Blueprint('clientes', __name__, url_prefix='/clientes')
 def index():
     busqueda = request.args.get('busqueda', '')
     query = Cliente.query
+    
+    # Filtrar por vendedor si es vendedor y no admin
+    if current_user.is_vendedor() and not current_user.is_admin():
+        # Obtener IDs de clientes que tienen ventas hechas por este vendedor
+        clientes_ids = db.session.query(Venta.cliente_id).filter_by(vendedor_id=current_user.id).distinct()
+        query = query.filter(Cliente.id.in_(clientes_ids))
+    
     if busqueda:
         query = query.filter(Cliente.nombre.ilike(f"%{busqueda}%") | Cliente.cedula.ilike(f"%{busqueda}%"))
+    
     clientes = query.all()
-    return render_template('clientes/index.html', clientes=clientes, busqueda=busqueda)
+    
+    # Determinar si el usuario actual solo puede consultar
+    solo_consulta = current_user.is_vendedor() and not current_user.is_admin()
+    
+    return render_template('clientes/index.html', clientes=clientes, busqueda=busqueda, solo_consulta=solo_consulta)
 
 @clientes_bp.route('/crear', methods=['GET', 'POST'])
 @login_required
