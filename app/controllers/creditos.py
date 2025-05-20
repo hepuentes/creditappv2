@@ -11,7 +11,7 @@ creditos_bp = Blueprint('creditos', __name__, url_prefix='/creditos')
 
 @creditos_bp.route('/')
 @login_required
-@cobrador_required
+@vendedor_cobrador_required  # Cambiado de cobrador_required
 def index():
     try:
         # Obtener parámetros de filtro
@@ -24,6 +24,10 @@ def index():
             Venta.tipo == 'credito',
             Venta.saldo_pendiente > 0
         )
+        
+        # Si es vendedor, filtrar por sus propias ventas
+        if current_user.is_vendedor():
+            query = query.filter(Venta.vendedor_id == current_user.id)
         
         if busqueda:
             # Buscar por nombre de cliente
