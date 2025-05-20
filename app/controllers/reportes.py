@@ -12,21 +12,18 @@ reportes_bp = Blueprint('reportes', __name__, url_prefix='/reportes')
 
 @reportes_bp.route('/comisiones', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@vendedor_extended_required  # Cambiado de admin_required
 def comisiones():
     form = ReporteComisionesForm()
 
-    # Cargar usuarios para el select
-    usuarios = Usuario.query.filter(Usuario.rol.in_(['vendedor', 'cobrador', 'administrador'])).all()
-    form.usuario_id.choices = [(0, 'Todos')] + [(u.id, u.nombre) for u in usuarios]
-
-    # Valores por defecto para fechas
-    today = datetime.now()
-    primer_dia_mes = datetime(today.year, today.month, 1)
-    if today.month == 12:
-        ultimo_dia_mes = datetime(today.year + 1, 1, 1) - timedelta(days=1)
+    # Si el usuario es vendedor, solo mostrar sus propias comisiones
+    if current_user.is_vendedor():
+        form.usuario_id.choices = [(current_user.id, current_user.nombre)]
+        form.usuario_id.data = current_user.id
     else:
-        ultimo_dia_mes = datetime(today.year, today.month + 1, 1) - timedelta(days=1)
+        # Cargar usuarios para el select (admin ve todos)
+        usuarios = Usuario.query.filter(Usuario.rol.in_(['vendedor', 'cobrador', 'administrador'])).all()
+        form.usuario_id.choices = [(0, 'Todos')] + [(u.id, u.nombre) for u in usuarios]
 
     # Si se envía el formulario
     if form.validate_on_submit():
