@@ -65,6 +65,8 @@ def comisiones():
                 Comision.usuario_id == usuario_id
             )
 
+        # Incluir la relación usuario para acceder a sus datos
+        query = query.join(Usuario, Comision.usuario_id == Usuario.id)
         comisiones = query.all()
         
         # Si no hay resultados, informar al usuario
@@ -74,18 +76,25 @@ def comisiones():
         # Agrupar por usuario
         comisiones_por_usuario = {}
         for comision in comisiones:
-            usuario = comision.usuario
-            if usuario.id not in comisiones_por_usuario:
-                comisiones_por_usuario[usuario.id] = {
-                    'usuario': usuario,
-                    'comisiones': [],
-                    'total_base': 0,
-                    'total_comision': 0
-                }
+            try:
+                usuario = Usuario.query.get(comision.usuario_id)
+                if not usuario:
+                    continue  # Saltamos si no encontramos el usuario
+                    
+                if usuario.id not in comisiones_por_usuario:
+                    comisiones_por_usuario[usuario.id] = {
+                        'usuario': usuario,
+                        'comisiones': [],
+                        'total_base': 0,
+                        'total_comision': 0
+                    }
 
-            comisiones_por_usuario[usuario.id]['comisiones'].append(comision)
-            comisiones_por_usuario[usuario.id]['total_base'] += comision.monto_base
-            comisiones_por_usuario[usuario.id]['total_comision'] += comision.monto_comision
+                comisiones_por_usuario[usuario.id]['comisiones'].append(comision)
+                comisiones_por_usuario[usuario.id]['total_base'] += comision.monto_base
+                comisiones_por_usuario[usuario.id]['total_comision'] += comision.monto_comision
+            except Exception as e:
+                current_app.logger.error(f"Error procesando comisión ID {comision.id}: {str(e)}")
+                continue
 
         # Calcular totales generales
         total_base = sum(datos['total_base'] for datos in comisiones_por_usuario.values())
