@@ -224,12 +224,18 @@ def crear():
     
     return render_template('ventas/crear.html', form=form, productos=productos_disponibles)
 
-@ventas_bp.route('/<int:id>/detalle')
+@ventas_bp.route('/<int:id>')
 @login_required
 def detalle(id):
     venta = Venta.query.get_or_404(id)
+    
+    # Si es vendedor y no administrador, verificar que sea su venta
+    if current_user.is_vendedor() and not current_user.is_admin():
+        if venta.vendedor_id != current_user.id:
+            flash('No tienes permiso para ver esta venta', 'danger')
+            return redirect(url_for('ventas.index'))
+    
     return render_template('ventas/detalle.html', venta=venta)
-
 @ventas_bp.route('/<int:id>/pdf')
 @login_required
 def pdf(id):
