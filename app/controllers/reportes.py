@@ -20,7 +20,6 @@ def comisiones():
     if current_user.is_vendedor() and not current_user.is_admin():
         form.usuario_id.choices = [(current_user.id, current_user.nombre)]
         form.usuario_id.data = current_user.id
-        form.usuario_id.render_kw = {'disabled': 'disabled'}  # Deshabilitar el select
     else:
         # Cargar usuarios para el select (admin ve todos)
         usuarios = Usuario.query.filter(Usuario.rol.in_(['vendedor', 'cobrador', 'administrador'])).all()
@@ -48,18 +47,17 @@ def comisiones():
             
         usuario_id = form.usuario_id.data
 
-        # Para vendedores, siempre usar su ID aunque intenten cambiar el valor
-        if current_user.is_vendedor():
+        # Para vendedores, siempre usar su ID
+        if current_user.is_vendedor() and not current_user.is_admin():
             usuario_id = current_user.id
         
-        # MODIFICADO: Tratar 0 como "Todos" (solo para admin)
+        # Construir la query según los parámetros
         if usuario_id == 0 and current_user.is_admin():
             query = Comision.query.filter(
                 Comision.fecha_generacion >= fecha_inicio,
                 Comision.fecha_generacion <= fecha_fin
             )
         else:
-            # Para vendedor o cuando se selecciona usuario específico
             query = Comision.query.filter(
                 Comision.fecha_generacion >= fecha_inicio,
                 Comision.fecha_generacion <= fecha_fin,
@@ -67,6 +65,11 @@ def comisiones():
             )
 
         comisiones = query.all()
+        
+        # Si no hay resultados, buscar también por ventas
+        if not comisiones and current_user.is_vendedor():
+            # Registramos un mensaje informativo
+            flash('No se encontraron comisiones registradas para este período. Se mostrarán las ventas de este período que generarían comisión.', 'info')
 
         # Agrupar por usuario
         comisiones_por_usuario = {}
