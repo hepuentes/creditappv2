@@ -1,9 +1,9 @@
 from flask import Blueprint, render_template, redirect, url_for, request, make_response
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app import db
 from app.models import Comision, Usuario
 from app.forms import ReporteComisionesForm
-from app.decorators import admin_required
+from app.decorators import admin_required, vendedor_extended_required
 from datetime import datetime, timedelta
 import csv
 from io import StringIO
@@ -12,7 +12,7 @@ reportes_bp = Blueprint('reportes', __name__, url_prefix='/reportes')
 
 @reportes_bp.route('/comisiones', methods=['GET', 'POST'])
 @login_required
-@vendedor_extended_required  # Cambiado de admin_required
+@vendedor_extended_required
 def comisiones():
     form = ReporteComisionesForm()
 
@@ -24,6 +24,14 @@ def comisiones():
         # Cargar usuarios para el select (admin ve todos)
         usuarios = Usuario.query.filter(Usuario.rol.in_(['vendedor', 'cobrador', 'administrador'])).all()
         form.usuario_id.choices = [(0, 'Todos')] + [(u.id, u.nombre) for u in usuarios]
+
+    # Valores por defecto para fechas
+    today = datetime.now()
+    primer_dia_mes = datetime(today.year, today.month, 1)
+    if today.month == 12:
+        ultimo_dia_mes = datetime(today.year + 1, 1, 1) - timedelta(days=1)
+    else:
+        ultimo_dia_mes = datetime(today.year, today.month + 1, 1) - timedelta(days=1)
 
     # Si se envía el formulario
     if form.validate_on_submit():
@@ -39,13 +47,18 @@ def comisiones():
             
         usuario_id = form.usuario_id.data
 
-        # MODIFICADO: Tratar 0 como "Todos"
-        if usuario_id == 0:
+        # Para vendedores, siempre usar su ID aunque intenten cambiar el valor
+        if current_user.is_vendedor():
+            usuario_id = current_user.id
+        
+        # MODIFICADO: Tratar 0 como "Todos" (solo para admin)
+        if usuario_id == 0 and current_user.is_admin():
             query = Comision.query.filter(
                 Comision.fecha_generacion >= fecha_inicio,
                 Comision.fecha_generacion <= fecha_fin
             )
         else:
+            # Para vendedor o cuando se selecciona usuario específico
             query = Comision.query.filter(
                 Comision.fecha_generacion >= fecha_inicio,
                 Comision.fecha_generacion <= fecha_fin,
@@ -92,6 +105,7 @@ def comisiones():
         form.fecha_fin.data = ultimo_dia_mes.strftime('%Y-%m-%d')
 
     return render_template('reportes/comisiones.html', form=form)
+
 
 def exportar_csv_comisiones(comisiones, fecha_inicio, fecha_fin):
     """Exporta las comisiones a un archivo CSV"""
