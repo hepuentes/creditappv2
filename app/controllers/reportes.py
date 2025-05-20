@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, make_response
+from flask import Blueprint, render_template, redirect, url_for, request, make_response, flash
 from flask_login import login_required, current_user
 from app import db
 from app.models import Comision, Usuario
@@ -51,13 +51,14 @@ def comisiones():
         if current_user.is_vendedor() and not current_user.is_admin():
             usuario_id = current_user.id
         
-        # Construir la query según los parámetros
+        # Construir la consulta según los parámetros
         if usuario_id == 0 and current_user.is_admin():
             query = Comision.query.filter(
                 Comision.fecha_generacion >= fecha_inicio,
                 Comision.fecha_generacion <= fecha_fin
             )
         else:
+            # Para vendedor o cuando se selecciona usuario específico
             query = Comision.query.filter(
                 Comision.fecha_generacion >= fecha_inicio,
                 Comision.fecha_generacion <= fecha_fin,
@@ -66,10 +67,9 @@ def comisiones():
 
         comisiones = query.all()
         
-        # Si no hay resultados, buscar también por ventas
+        # Si no hay resultados, informar al usuario
         if not comisiones and current_user.is_vendedor():
-            # Registramos un mensaje informativo
-            flash('No se encontraron comisiones registradas para este período. Se mostrarán las ventas de este período que generarían comisión.', 'info')
+            flash('No se encontraron comisiones registradas para este período.', 'info')
 
         # Agrupar por usuario
         comisiones_por_usuario = {}
