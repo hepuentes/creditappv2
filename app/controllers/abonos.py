@@ -14,15 +14,20 @@ abonos_bp = Blueprint('abonos', __name__, url_prefix='/abonos')
 
 @abonos_bp.route('/')
 @login_required
-@cobrador_required
+@vendedor_cobrador_required  # Cambiado de cobrador_required
 def index():
-    # Obtener parámetros de filtro
+    # Filtrar abonos según el rol del usuario
     busqueda = request.args.get('busqueda', '')
     desde_str = request.args.get('desde', '')
     hasta_str = request.args.get('hasta', '')
     
     # Consulta base
     query = Abono.query
+    
+    # Si es vendedor, filtrar solo sus propias ventas/abonos
+    if current_user.is_vendedor():
+        # Unir con ventas para filtrar por vendedor_id
+        query = query.join(Abono.venta).filter(Venta.vendedor_id == current_user.id)
     
     if busqueda:
         # Buscar por nombre de cliente asociado a la venta del abono
