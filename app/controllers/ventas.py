@@ -25,7 +25,11 @@ def index():
     estado_filtro = request.args.get('estado', '')
 
     query = Venta.query
-
+    
+    # Filtrar por vendedor si el usuario es vendedor y no admin
+    if current_user.is_vendedor() and not current_user.is_admin():
+        query = query.filter(Venta.vendedor_id == current_user.id)
+        
     if busqueda:
         query = query.join(Cliente).filter(Cliente.nombre.ilike(f"%{busqueda}%"))
     
