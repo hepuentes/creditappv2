@@ -241,34 +241,34 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Agregar validación antes de enviar el formulario
     if (abonoForm) {
-        abonoForm.addEventListener('submit', function(e) {
-            // Verificar si se ha seleccionado una venta
-            if (ventaSelect.value === "" || ventaSelect.selectedIndex === 0) {
-                e.preventDefault();
-                alert("Por favor seleccione una venta antes de continuar.");
-                return false;
-            }
-            
-            // Verificar que el monto sea válido
-            const monto = montoInput.value.trim();
-            if (!monto || monto === "0") {
-                e.preventDefault();
-                alert("Por favor ingrese un monto válido.");
-                return false;
-            }
-            
-            // Verificar que el monto no exceda el saldo pendiente
-            const saldoElement = document.querySelector('#saldo_info span.text-danger');
-            if (saldoElement) {
-                e.preventDefault();
-                alert("El monto no puede ser mayor al saldo pendiente.");
-                return false;
-            }
-            
-            // Todo correcto, enviar el formulario
-            return true;
-        });
-    }
+    abonoForm.addEventListener('submit', function(e) {
+        // Verificar si se ha seleccionado una venta
+        if (ventaSelect.value === "" || parseInt(ventaSelect.value) <= 0) {
+            e.preventDefault();
+            alert("Por favor seleccione una venta válida antes de continuar.");
+            return false;
+        }
+        
+        // Verificar que el monto sea válido
+        const monto = montoInput.value.trim();
+        if (!monto || monto === "0") {
+            e.preventDefault();
+            alert("Por favor ingrese un monto válido.");
+            return false;
+        }
+        
+        // Verificar que el monto no exceda el saldo pendiente
+        const saldoElement = document.querySelector('#saldo_info span.text-danger');
+        if (saldoElement) {
+            e.preventDefault();
+            alert("El monto no puede ser mayor al saldo pendiente.");
+            return false;
+        }
+        
+        // Todo correcto, enviar el formulario
+        return true;
+    });
+}
 
     // Inicializar datos al cargar
     actualizarSaldoInfo();
