@@ -325,7 +325,7 @@ def crear():
 
 @abonos_bp.route('/cargar-ventas/<int:cliente_id>')
 @login_required
-@vendedor_cobrador_required  # Cambiado para permitir a vendedores
+@vendedor_cobrador_required
 def cargar_ventas(cliente_id):
     try:
         # Consulta base para ventas a crédito con saldo pendiente
@@ -346,7 +346,7 @@ def cargar_ventas(cliente_id):
         if ventas:
             for v in ventas:
                 ventas_json.append({
-                    'id': v.id,
+                    'id': int(v.id),  # Aseguramos que sea entero
                     'texto': f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.0f}"
                 })
         else:
