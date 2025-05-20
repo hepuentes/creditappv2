@@ -59,10 +59,16 @@ def index():
                           busqueda=busqueda,
                           desde=desde_str,
                           hasta=hasta_str)
+   # Si se solicita una venta específica y el usuario es vendedor, verificar que sea suya
+    if venta_id and current_user.is_vendedor() and not current_user.is_admin():
+        venta = Venta.query.get(venta_id)
+        if venta and venta.vendedor_id != current_user.id:
+            flash('No tienes permisos para abonar a esta venta', 'danger')
+            return redirect(url_for('abonos.index'))
 
 @abonos_bp.route('/crear', methods=['GET', 'POST'])
 @login_required
-@cobrador_required
+@vendedor_cobrador_required
 def crear():
     form = AbonoForm()
     
@@ -74,13 +80,21 @@ def crear():
     cliente_id = request.args.get('cliente_id', type=int)
     venta_id = request.args.get('venta_id', type=int)
     
-    # Obtener todos los clientes con ventas a crédito pendientes
-    clientes_query = db.session.query(Cliente).join(Venta).filter(
-        Venta.tipo == 'credito',
-        Venta.saldo_pendiente > 0
-    ).distinct().order_by(Cliente.nombre)
+    # Modificar la consulta para vendedores - solo mostrar sus clientes
+    if current_user.is_vendedor() and not current_user.is_admin():
+        clientes_query = db.session.query(Cliente).join(Venta).filter(
+            Venta.tipo == 'credito',
+            Venta.saldo_pendiente > 0,
+            Venta.vendedor_id == current_user.id
+        ).distinct().order_by(Cliente.nombre)
+    else:
+        clientes_query = db.session.query(Cliente).join(Venta).filter(
+            Venta.tipo == 'credito',
+            Venta.saldo_pendiente > 0
+        ).distinct().order_by(Cliente.nombre)
     
     clientes = clientes_query.all()
+
     
     # Configurar opciones para el select de clientes
     if clientes:
