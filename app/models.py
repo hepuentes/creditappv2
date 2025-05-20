@@ -232,6 +232,9 @@ class Comision(db.Model):
     periodo = db.Column(db.String(20), nullable=False)
     pagado = db.Column(db.Boolean, default=False, nullable=False)
     fecha_generacion = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relación con Usuario
+    usuario = db.relationship('Usuario', foreign_keys=[usuario_id], backref='comisiones')
 
 
 class Configuracion(db.Model):
