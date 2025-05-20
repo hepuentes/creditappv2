@@ -16,10 +16,11 @@ reportes_bp = Blueprint('reportes', __name__, url_prefix='/reportes')
 def comisiones():
     form = ReporteComisionesForm()
 
-    # Si el usuario es vendedor, solo mostrar sus propias comisiones
-    if current_user.is_vendedor():
+    # Si el usuario es vendedor, solo mostrar y seleccionar sus propias comisiones
+    if current_user.is_vendedor() and not current_user.is_admin():
         form.usuario_id.choices = [(current_user.id, current_user.nombre)]
         form.usuario_id.data = current_user.id
+        form.usuario_id.render_kw = {'disabled': 'disabled'}  # Deshabilitar el select
     else:
         # Cargar usuarios para el select (admin ve todos)
         usuarios = Usuario.query.filter(Usuario.rol.in_(['vendedor', 'cobrador', 'administrador'])).all()
