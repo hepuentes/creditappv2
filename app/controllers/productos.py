@@ -16,7 +16,9 @@ def index():
     if busqueda:
         query = query.filter(Producto.nombre.ilike(f"%{busqueda}%"))
     productos = query.all()
-    return render_template('productos/index.html', productos=productos, busqueda=busqueda)
+    # Pasamos el flag de solo_consulta para vendedores
+    solo_consulta = current_user.is_vendedor() and not current_user.is_admin()
+    return render_template('productos/index.html', productos=productos, busqueda=busqueda, solo_consulta=solo_consulta)
 
 @productos_bp.route('/<int:id>')
 @login_required
@@ -28,7 +30,7 @@ def detalle(id):
 
 @productos_bp.route('/crear', methods=['GET','POST'])
 @login_required
-@vendedor_required
+@admin_required  
 def crear():
     form = ProductoForm()
     if form.validate_on_submit():
@@ -40,9 +42,9 @@ def crear():
         return redirect(url_for('productos.index'))
     return render_template('productos/crear.html', form=form)
 
-@productos_bp.route('/<int:id>/editar', methods=['GET','POST'])
+@productos_bp.route('/<int:id>/editar', methods=['GET','POST']) 
 @login_required
-@vendedor_required
+@admin_required  
 def editar(id):
     producto = Producto.query.get_or_404(id)
     form = ProductoForm(obj=producto)
@@ -55,7 +57,7 @@ def editar(id):
 
 @productos_bp.route('/<int:id>/eliminar', methods=['POST'])
 @login_required
-@vendedor_required
+@admin_required 
 def eliminar(id):
     producto = Producto.query.get_or_404(id)
     try:
