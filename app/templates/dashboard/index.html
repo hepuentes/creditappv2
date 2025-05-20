@@ -107,20 +107,22 @@
         </div>
 
         <!-- Saldo en Cajas -->
-        <div class="col-md-4 col-xl-3">
-            <div class="card card-dashboard bg-light mt-4">
-                <div class="card-body">
-                    <div class="card-icon text-info">
-                        <i class="fas fa-cash-register"></i>
-                    </div>
-                    <h1 class="card-value">{{ total_cajas }}</h1>
-                    <div class="card-label">Saldo en Cajas</div>
-                </div>
-                <div class="card-footer p-2">
-                    <a href="{{ url_for('cajas.index') }}" class="btn btn-sm btn-info w-100">Ver Cajas</a>
-                </div>
+        {% if current_user.is_admin() or current_user.is_cobrador() %}
+<div class="col-md-4 col-xl-3">
+    <div class="card card-dashboard bg-light mt-4">
+        <div class="card-body text-center">
+            <div class="card-icon text-info">
+                <i class="fas fa-cash-register"></i>
             </div>
+            <h1 class="card-value">{{ total_cajas }}</h1>
+            <div class="card-label">Saldo en Cajas</div>
         </div>
+        <div class="card-footer p-2">
+            <a href="{{ url_for('cajas.index') }}" class="btn btn-sm btn-info w-100">Ver Cajas</a>
+        </div>
+    </div>
+</div>
+{% endif %}
 
         <!-- Comisión Acumulada -->
         <div class="col-md-4 col-xl-3">
