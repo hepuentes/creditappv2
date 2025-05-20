@@ -144,8 +144,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(res => res.json())
                 .then(ventas => {
                     ventaSelect.innerHTML = '';
+                    
                     if (ventas.length === 0) {
                         ventaSelect.innerHTML = '<option value="" selected>No hay ventas pendientes</option>';
+                        return;
+                    }
+                    
+                    // Verificar si es un mensaje de error o sin resultados
+                    if (ventas.length === 1 && ventas[0].id === -1) {
+                        ventaSelect.innerHTML = `<option value="" selected>${ventas[0].texto}</option>`;
                         return;
                     }
                     
