@@ -79,13 +79,13 @@
                             </a>
                         </div>
                         {% endif %}
-                        {% if venta.abonos|length == 0 %}
-                        <div class="col-md-4 mb-2">
-                            <button type="button" class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#eliminarModal">
-                                <i class="fas fa-trash"></i> Eliminar
-                            </button>
-                        </div>
-                        {% endif %}
+                        {% if venta.abonos|length == 0 and current_user.is_admin() %}
+<div class="col-md-4 mb-2">
+    <button type="button" class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#eliminarModal">
+        <i class="fas fa-trash"></i> Eliminar
+    </button>
+</div>
+{% endif %}
                     </div>
 
                     <div class="mt-3">
