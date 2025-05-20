@@ -65,15 +65,17 @@
                     </div>
                 </div>
                 <div class="card-footer">
-                    <div class="btn-group">
-                        <a href="{{ url_for('productos.editar', id=producto.id) }}" class="btn btn-warning">
-                            <i class="fas fa-edit"></i> Editar
-                        </a>
-                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#eliminarModal">
-                            <i class="fas fa-trash"></i> Eliminar
-                        </button>
-                    </div>
-                </div>
+    <div class="btn-group">
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('productos.editar', id=producto.id) }}" class="btn btn-warning">
+            <i class="fas fa-edit"></i> Editar
+        </a>
+        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#eliminarModal">
+            <i class="fas fa-trash"></i> Eliminar
+        </button>
+        {% endif %}
+    </div>
+</div>
             </div>
         </div>
 
