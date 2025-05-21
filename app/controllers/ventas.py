@@ -5,7 +5,7 @@ from app.models import Venta, DetalleVenta, Producto, Cliente, Caja, MovimientoC
 from app.forms import VentaForm
 from app.decorators import vendedor_required, admin_required, cobrador_required
 from app.pdf.venta import generar_pdf_venta
-from app.utils import registrar_movimiento_caja
+from app.utils import registrar_movimiento_caja, calcular_comision
 from datetime import datetime
 import traceback
 import json
@@ -201,6 +201,13 @@ def crear():
                     current_app.logger.error(f"Error al registrar movimiento de caja: {e}")
                     # Continuar a pesar del error en la caja
             
+            # Calcular comisión por la venta
+            try:
+                calcular_comision(total_venta_calculado, current_user.id, nueva_venta.id)
+            except Exception as e:
+                current_app.logger.error(f"Error al calcular comisión: {e}")
+                # Continuar a pesar del error en la comisión
+            
             # Confirmar cambios
             db.session.commit()
             flash(f'Venta #{nueva_venta.id} creada exitosamente!', 'success')
@@ -236,6 +243,7 @@ def detalle(id):
             return redirect(url_for('ventas.index'))
     
     return render_template('ventas/detalle.html', venta=venta)
+
 @ventas_bp.route('/<int:id>/pdf')
 @login_required
 def pdf(id):
