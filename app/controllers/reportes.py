@@ -15,6 +15,11 @@ reportes_bp = Blueprint('reportes', __name__, url_prefix='/reportes')
 @vendedor_extended_required
 def comisiones():
     form = ReporteComisionesForm()
+    comisiones_por_usuario = {}
+    total_base = 0
+    total_comision = 0
+    fecha_inicio = None
+    fecha_fin = None
 
     # Si el usuario es vendedor, solo mostrar y seleccionar sus propias comisiones
     if current_user.is_vendedor() and not current_user.is_admin():
@@ -33,54 +38,46 @@ def comisiones():
     else:
         ultimo_dia_mes = datetime(today.year, today.month + 1, 1) - timedelta(days=1)
 
+    # Establecer valores por defecto para las fechas si es GET
+    if request.method == 'GET':
+        form.fecha_inicio.data = primer_dia_mes.strftime('%Y-%m-%d')
+        form.fecha_fin.data = ultimo_dia_mes.strftime('%Y-%m-%d')
+
     # Si se envía el formulario
     if form.validate_on_submit():
         try:
             fecha_inicio = datetime.strptime(form.fecha_inicio.data, '%Y-%m-%d')
-        except:
-            fecha_inicio = primer_dia_mes
-            
-        try:
             fecha_fin = datetime.strptime(form.fecha_fin.data, '%Y-%m-%d')
-        except:
-            fecha_fin = ultimo_dia_mes
+            usuario_id = form.usuario_id.data
+
+            # Para vendedores, siempre usar su ID
+            if current_user.is_vendedor() and not current_user.is_admin():
+                usuario_id = current_user.id
             
-        usuario_id = form.usuario_id.data
+            # Construir la consulta según los parámetros
+            if usuario_id == 0 and current_user.is_admin():
+                comisiones = db.session.query(Comision, Usuario)\
+                    .join(Usuario, Comision.usuario_id == Usuario.id)\
+                    .filter(
+                        Comision.fecha_generacion >= fecha_inicio,
+                        Comision.fecha_generacion <= fecha_fin
+                    ).all()
+            else:
+                # Para vendedor o cuando se selecciona usuario específico
+                comisiones = db.session.query(Comision, Usuario)\
+                    .join(Usuario, Comision.usuario_id == Usuario.id)\
+                    .filter(
+                        Comision.fecha_generacion >= fecha_inicio,
+                        Comision.fecha_generacion <= fecha_fin,
+                        Comision.usuario_id == usuario_id
+                    ).all()
+            
+            # Si no hay resultados, informar al usuario
+            if not comisiones and current_user.is_vendedor():
+                flash('No se encontraron comisiones registradas para este período.', 'info')
 
-        # Para vendedores, siempre usar su ID
-        if current_user.is_vendedor() and not current_user.is_admin():
-            usuario_id = current_user.id
-        
-        # Construir la consulta según los parámetros
-        if usuario_id == 0 and current_user.is_admin():
-            query = Comision.query.filter(
-                Comision.fecha_generacion >= fecha_inicio,
-                Comision.fecha_generacion <= fecha_fin
-            )
-        else:
-            # Para vendedor o cuando se selecciona usuario específico
-            query = Comision.query.filter(
-                Comision.fecha_generacion >= fecha_inicio,
-                Comision.fecha_generacion <= fecha_fin,
-                Comision.usuario_id == usuario_id
-            )
-
-        # Incluir la relación usuario para acceder a sus datos
-        query = query.join(Usuario, Comision.usuario_id == Usuario.id)
-        comisiones = query.all()
-        
-        # Si no hay resultados, informar al usuario
-        if not comisiones and current_user.is_vendedor():
-            flash('No se encontraron comisiones registradas para este período.', 'info')
-
-        # Agrupar por usuario
-        comisiones_por_usuario = {}
-        for comision in comisiones:
-            try:
-                usuario = Usuario.query.get(comision.usuario_id)
-                if not usuario:
-                    continue  # Saltamos si no encontramos el usuario
-                    
+            # Agrupar por usuario
+            for comision, usuario in comisiones:
                 if usuario.id not in comisiones_por_usuario:
                     comisiones_por_usuario[usuario.id] = {
                         'usuario': usuario,
@@ -92,25 +89,26 @@ def comisiones():
                 comisiones_por_usuario[usuario.id]['comisiones'].append(comision)
                 comisiones_por_usuario[usuario.id]['total_base'] += comision.monto_base
                 comisiones_por_usuario[usuario.id]['total_comision'] += comision.monto_comision
-            except Exception as e:
-                current_app.logger.error(f"Error procesando comisión ID {comision.id}: {str(e)}")
-                continue
+            
+            # Calcular totales generales
+            total_base = sum(datos['total_base'] for datos in comisiones_por_usuario.values())
+            total_comision = sum(datos['total_comision'] for datos in comisiones_por_usuario.values())
 
-        # Calcular totales generales
-        total_base = sum(datos['total_base'] for datos in comisiones_por_usuario.values())
-        total_comision = sum(datos['total_comision'] for datos in comisiones_por_usuario.values())
+            # Si se solicita exportar CSV
+            if 'export' in request.form:
+                return exportar_csv_comisiones([c for c, _ in comisiones], fecha_inicio, fecha_fin)
+                
+        except Exception as e:
+            current_app.logger.error(f"Error al generar reporte de comisiones: {str(e)}")
+            flash(f"Error al generar el reporte: {str(e)}", "danger")
 
-        # Si se solicita exportar CSV
-        if 'export' in request.form:
-            return exportar_csv_comisiones(comisiones, fecha_inicio, fecha_fin)
-
-        return render_template('reportes/comisiones.html',
-                              form=form,
-                              comisiones_por_usuario=comisiones_por_usuario,
-                              total_base=total_base,
-                              total_comision=total_comision,
-                              fecha_inicio=fecha_inicio,
-                              fecha_fin=fecha_fin)
+    return render_template('reportes/comisiones.html',
+                          form=form,
+                          comisiones_por_usuario=comisiones_por_usuario,
+                          total_base=total_base,
+                          total_comision=total_comision,
+                          fecha_inicio=fecha_inicio,
+                          fecha_fin=fecha_fin)
 
     # Establecer valores por defecto para las fechas si es GET
     if request.method == 'GET':
