@@ -135,6 +135,15 @@ def comisiones():
 
     return render_template('reportes/comisiones.html', form=form)
 
+@reportes_bp.route('/comisiones/<int:id>/marcar-pagado', methods=['POST'])
+@login_required
+@admin_required
+def marcar_pagado(id):
+    comision = Comision.query.get_or_404(id)
+    comision.pagado = True
+    db.session.commit()
+    flash('Comisión marcada como pagada exitosamente', 'success')
+    return redirect(url_for('reportes.comisiones'))
 
 def exportar_csv_comisiones(comisiones, fecha_inicio, fecha_fin):
     """Exporta las comisiones a un archivo CSV"""
