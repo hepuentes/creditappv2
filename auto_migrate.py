@@ -100,6 +100,43 @@ with app.app_context():
         else:
             logger.warning("La tabla 'movimiento_caja' no existe. Se creará durante db.create_all()")
         
+        # Tabla comisiones - Añadir nuevos campos
+        logger.info("Verificando tabla 'comisiones'...")
+        
+        if 'comisiones' in inspector.get_table_names():
+            columnas = [c['name'] for c in inspector.get_columns('comisiones')]
+            
+            with db.engine.begin() as connection:
+                # Verificar columna venta_id
+                if 'venta_id' not in columnas:
+                    logger.info("  ✓ Agregando columna 'venta_id' a comisiones...")
+                    connection.execute(text("ALTER TABLE comisiones ADD COLUMN venta_id INTEGER"))
+                    # Intentar agregar foreign key si es posible
+                    try:
+                        connection.execute(text(
+                            "ALTER TABLE comisiones ADD CONSTRAINT fk_comision_venta " +
+                            "FOREIGN KEY (venta_id) REFERENCES ventas(id)"
+                        ))
+                        logger.info("  ✓ Foreign key para venta_id agregada a comisiones")
+                    except Exception as e:
+                        logger.warning(f"    No se pudo agregar foreign key para venta_id en comisiones: {e}")
+                
+                # Verificar columna abono_id
+                if 'abono_id' not in columnas:
+                    logger.info("  ✓ Agregando columna 'abono_id' a comisiones...")
+                    connection.execute(text("ALTER TABLE comisiones ADD COLUMN abono_id INTEGER"))
+                    # Intentar agregar foreign key si es posible
+                    try:
+                        connection.execute(text(
+                            "ALTER TABLE comisiones ADD CONSTRAINT fk_comision_abono " +
+                            "FOREIGN KEY (abono_id) REFERENCES abonos(id)"
+                        ))
+                        logger.info("  ✓ Foreign key para abono_id agregada a comisiones")
+                    except Exception as e:
+                        logger.warning(f"    No se pudo agregar foreign key para abono_id en comisiones: {e}")
+        else:
+            logger.warning("La tabla 'comisiones' no existe. Se creará durante db.create_all()")
+        
         # PASO 3: Crear tablas faltantes o reparar inconsistencias
         logger.info("\nCreando tablas faltantes y verificando relaciones...")
         db.create_all()
