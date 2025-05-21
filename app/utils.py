@@ -48,7 +48,7 @@ def format_currency(amount):
     return f"{moneda} {formatted_amount}"
 
 
-def calcular_comision(monto, usuario_id):
+def calcular_comision(monto, usuario_id, venta_id=None, abono_id=None):
     """Calcula la comisión sobre un monto para un usuario"""
     config = Configuracion.query.first()
     if not config:
@@ -64,7 +64,9 @@ def calcular_comision(monto, usuario_id):
         monto_base=monto,
         porcentaje=config.porcentaje_comision,
         monto_comision=monto_comision,
-        periodo=periodo
+        periodo=periodo,
+        venta_id=venta_id,
+        abono_id=abono_id
     )
 
     db.session.add(comision)
