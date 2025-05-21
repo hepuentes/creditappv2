@@ -104,13 +104,25 @@ def detalle(id):
     for venta in ventas:
         if hasattr(venta, 'abonos') and venta.abonos:
             abonos_cliente.extend(venta.abonos)
-            
+    
+    # También obtener abonos a través de creditos directos
+    for credito in creditos:
+        if hasattr(credito, 'abonos') and credito.abonos:
+            abonos_cliente.extend(credito.abonos)
+    
+    # Ordenar abonos por fecha (más recientes primero)
+    abonos_cliente.sort(key=lambda x: x.fecha, reverse=True)
+    
+    # Determinar si viene de la sección de créditos
+    from_creditos = request.referrer and 'creditos' in request.referrer
+    
     return render_template(
         'clientes/detalle.html',
         cliente=cliente,
         ventas=ventas,
         creditos=creditos,
-        abonos_cliente=abonos_cliente
+        abonos_cliente=abonos_cliente,
+        from_creditos=from_creditos
     )
 
 @clientes_bp.route('/<int:id>/historial/pdf')
