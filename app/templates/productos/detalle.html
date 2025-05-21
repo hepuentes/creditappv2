@@ -65,13 +65,12 @@
                     </div>
                 </div>
                 <div class="card-footer">
-    {% if current_user.is_admin() %}
-    <button class="btn btn-primary w-100" data-bs-toggle="modal" data-bs-target="#ajustarStockModal">
-        <i class="fas fa-boxes"></i> Ajustar Stock
-    </button>
-    {% endif %} 
-</div>
-</div>
+                    {% if current_user.is_admin() %}
+                    <button class="btn btn-primary w-100" data-bs-toggle="modal" data-bs-target="#ajustarStockModal">
+                        <i class="fas fa-boxes"></i> Ajustar Stock
+                    </button>
+                    {% endif %} 
+                </div>
             </div>
         </div>
 
@@ -121,70 +120,70 @@
 
     <!-- Histórico de ventas -->
     <div class="card">
-    <div class="card-header">
-        <h5 class="mb-0">Histórico de Ventas</h5>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Cliente</th>
-                        <th>Cantidad</th>
-                        <th>Precio Unit.</th>
-                        <th>Subtotal</th>
-                        <th>Tipo Venta</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if producto.detalles_venta %}
-                        {% set ventas_filtradas = [] %}
-                        {% for detalle in producto.detalles_venta %}
-                            {% if current_user.is_admin() or detalle.venta.vendedor_id == current_user.id %}
-                                {% set ventas_filtradas = ventas_filtradas + [detalle] %}
-                            {% endif %}
-                        {% endfor %}
-                        
-                        {% if ventas_filtradas %}
-                            {% for detalle in ventas_filtradas|sort(attribute='venta.fecha', reverse=True) %}
-                            <tr>
-                                <td>{{ detalle.venta.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
-                                <td>
-                                    <a href="{{ url_for('clientes.detalle', id=detalle.venta.cliente_id) }}">
-                                        {{ detalle.venta.cliente.nombre }}
-                                    </a>
-                                </td>
-                                <td>{{ detalle.cantidad }}</td>
-                                <td>{{ "${:,}".format(detalle.precio_unitario) }}</td>
-                                <td>{{ "${:,}".format(detalle.subtotal) }}</td>
-                                <td>
-                                    {% if detalle.venta.tipo == 'contado' %}
-                                    <span class="badge bg-success">Contado</span>
-                                    {% else %}
-                                    <span class="badge bg-warning">Crédito</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <a href="{{ url_for('ventas.detalle', id=detalle.venta_id) }}" class="btn btn-sm btn-info">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                </td>
-                            </tr>
+        <div class="card-header">
+            <h5 class="mb-0">Histórico de Ventas</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Cliente</th>
+                            <th>Cantidad</th>
+                            <th>Precio Unit.</th>
+                            <th>Subtotal</th>
+                            <th>Tipo Venta</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if producto.detalles_venta %}
+                            {% set ventas_filtradas = [] %}
+                            {% for detalle in producto.detalles_venta %}
+                                {% if current_user.is_admin() or detalle.venta.vendedor_id == current_user.id %}
+                                    {% set ventas_filtradas = ventas_filtradas + [detalle] %}
+                                {% endif %}
                             {% endfor %}
+                            
+                            {% if ventas_filtradas %}
+                                {% for detalle in ventas_filtradas|sort(attribute='venta.fecha', reverse=True) %}
+                                <tr>
+                                    <td>{{ detalle.venta.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
+                                    <td>
+                                        <a href="{{ url_for('clientes.detalle', id=detalle.venta.cliente_id) }}">
+                                            {{ detalle.venta.cliente.nombre }}
+                                        </a>
+                                    </td>
+                                    <td>{{ detalle.cantidad }}</td>
+                                    <td>{{ "${:,}".format(detalle.precio_unitario) }}</td>
+                                    <td>{{ "${:,}".format(detalle.subtotal) }}</td>
+                                    <td>
+                                        {% if detalle.venta.tipo == 'contado' %}
+                                        <span class="badge bg-success">Contado</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">Crédito</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('ventas.detalle', id=detalle.venta_id) }}" class="btn btn-sm btn-info">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center py-3">No hay ventas de este producto realizadas por ti.</td>
+                                </tr>
+                            {% endif %}
                         {% else %}
                             <tr>
-                                <td colspan="7" class="text-center py-3">No hay ventas de este producto realizadas por ti.</td>
+                                <td colspan="7" class="text-center py-3">Este producto no se ha vendido aún.</td>
                             </tr>
                         {% endif %}
-                    {% else %}
-                        <tr>
-                            <td colspan="7" class="text-center py-3">Este producto no se ha vendido aún.</td>
-                        </tr>
-                    {% endif %}
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
