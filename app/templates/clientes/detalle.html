@@ -50,12 +50,18 @@
                 </div>
                 <div class="card-footer">
                     <div class="btn-group">
+                        {% if (current_user.is_admin() or current_user.is_vendedor()) and not from_creditos %}
                         <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn btn-warning">
                             <i class="fas fa-edit"></i> Editar
                         </a>
+                        {% endif %}
+                        
+                        {% if current_user.is_admin() and not from_creditos %}
                         <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#eliminarModal">
                             <i class="fas fa-trash"></i> Eliminar
                         </button>
+                        {% endif %}
+                        
                         <a href="{{ url_for('clientes.historial_pdf', id=cliente.id) }}" target="_blank" class="btn btn-secondary">
                             <i class="fas fa-file-pdf"></i> Historial PDF
                         </a>
@@ -193,16 +199,6 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% set abonos_cliente = [] %}
-                        {% set abonos_cliente = [] %}
-{% for venta in cliente.ventas %}
-    {% if venta.abonos %}
-        {% for abono in venta.abonos %}
-            {% set abonos_cliente = abonos_cliente + [abono] %}
-        {% endfor %}
-    {% endif %}
-{% endfor %}
-
                         {% if abonos_cliente %}
                             {% for abono in abonos_cliente|sort(attribute='fecha', reverse=True) %}
                             <tr>
@@ -235,6 +231,7 @@
 </div>
 
 <!-- Modal de Eliminación -->
+{% if not from_creditos %}
 <div class="modal fade" id="eliminarModal" tabindex="-1" aria-labelledby="eliminarModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -255,4 +252,5 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
