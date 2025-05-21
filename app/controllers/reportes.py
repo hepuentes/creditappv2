@@ -148,13 +148,19 @@ def marcar_pagado(id):
 def exportar_csv_comisiones(comisiones, fecha_inicio, fecha_fin):
     """Exporta las comisiones a un archivo CSV"""
     output = StringIO()
-    writer = csv.writer(output)
+    writer = csv.writer(output, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
     # Encabezados
-    writer.writerow(['ID', 'Fecha', 'Usuario', 'Monto Base', 'Porcentaje', 'Monto Comisión', 'Periodo', 'Pagado'])
+    writer.writerow(['ID', 'Fecha', 'Usuario', 'Monto Base', 'Porcentaje', 'Monto Comisión', 'Periodo', 'Origen', 'Pagado'])
 
     # Datos
     for comision in comisiones:
+        origen = "N/A"
+        if hasattr(comision, 'venta_id') and comision.venta_id and comision.venta:
+            origen = f"Venta #{comision.venta_id} - {comision.venta.cliente.nombre}"
+        elif hasattr(comision, 'abono_id') and comision.abono_id and comision.abono:
+            origen = f"Abono #{comision.abono_id} - Venta #{comision.abono.venta_id}"
+            
         writer.writerow([
             comision.id,
             comision.fecha_generacion.strftime('%d/%m/%Y %H:%M'),
@@ -163,6 +169,7 @@ def exportar_csv_comisiones(comisiones, fecha_inicio, fecha_fin):
             f"{comision.porcentaje}%",
             comision.monto_comision,
             comision.periodo,
+            origen,
             'Sí' if comision.pagado else 'No'
         ])
 
@@ -170,6 +177,6 @@ def exportar_csv_comisiones(comisiones, fecha_inicio, fecha_fin):
     output.seek(0)
     response = make_response(output.getvalue())
     response.headers['Content-Disposition'] = f'attachment; filename=comisiones_{fecha_inicio.strftime("%Y%m%d")}-{fecha_fin.strftime("%Y%m%d")}.csv'
-    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
 
     return response
