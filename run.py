@@ -16,4 +16,5 @@ def handle_exception(e):
     return f"Error interno en la aplicación. Por favor contacte al administrador.", 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port, debug=True)
