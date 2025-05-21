@@ -20,6 +20,7 @@ def comisiones():
     total_comision = 0
     fecha_inicio = None
     fecha_fin = None
+    pagination = None
 
     # Si el usuario es vendedor, solo mostrar y seleccionar sus propias comisiones
     if current_user.is_vendedor() and not current_user.is_admin():
@@ -49,35 +50,49 @@ def comisiones():
             fecha_inicio = datetime.strptime(form.fecha_inicio.data, '%Y-%m-%d')
             fecha_fin = datetime.strptime(form.fecha_fin.data, '%Y-%m-%d')
             usuario_id = form.usuario_id.data
+            
+            # Obtener página actual de la paginación
+            page = request.args.get('page', 1, type=int)
+            per_page = 25  # Número de registros por página
 
             # Para vendedores, siempre usar su ID
             if current_user.is_vendedor() and not current_user.is_admin():
                 usuario_id = current_user.id
             
-            # Construir la consulta según los parámetros
+            # Consulta inicial sin considerar la paginación
             if usuario_id == 0 and current_user.is_admin():
-                comisiones = db.session.query(Comision, Usuario)\
+                base_query = db.session.query(Comision, Usuario)\
                     .join(Usuario, Comision.usuario_id == Usuario.id)\
                     .filter(
                         Comision.fecha_generacion >= fecha_inicio,
                         Comision.fecha_generacion <= fecha_fin
-                    ).all()
+                    )
             else:
                 # Para vendedor o cuando se selecciona usuario específico
-                comisiones = db.session.query(Comision, Usuario)\
+                base_query = db.session.query(Comision, Usuario)\
                     .join(Usuario, Comision.usuario_id == Usuario.id)\
                     .filter(
                         Comision.fecha_generacion >= fecha_inicio,
                         Comision.fecha_generacion <= fecha_fin,
                         Comision.usuario_id == usuario_id
-                    ).all()
+                    )
+            
+            # Consulta total para calcular totales generales
+            total_query = base_query
+            
+            # Aplicar paginación
+            pagination = base_query.paginate(page=page, per_page=per_page)
+            comisiones_paginadas = pagination.items
             
             # Si no hay resultados, informar al usuario
-            if not comisiones and current_user.is_vendedor():
+            if not comisiones_paginadas and current_user.is_vendedor():
                 flash('No se encontraron comisiones registradas para este período.', 'info')
-
+            
+            # Calcular totales de todas las comisiones (no solo de la página actual)
+            all_comisiones = total_query.all()
+            
             # Agrupar por usuario
-            for comision, usuario in comisiones:
+            for comision, usuario in comisiones_paginadas:
                 if usuario.id not in comisiones_por_usuario:
                     comisiones_por_usuario[usuario.id] = {
                         'usuario': usuario,
@@ -90,13 +105,15 @@ def comisiones():
                 comisiones_por_usuario[usuario.id]['total_base'] += comision.monto_base
                 comisiones_por_usuario[usuario.id]['total_comision'] += comision.monto_comision
             
-            # Calcular totales generales
-            total_base = sum(datos['total_base'] for datos in comisiones_por_usuario.values())
-            total_comision = sum(datos['total_comision'] for datos in comisiones_por_usuario.values())
+            # Calcular totales generales (de todas las comisiones, no solo de la página actual)
+            for comision, usuario in all_comisiones:
+                total_base += comision.monto_base
+                total_comision += comision.monto_comision
 
             # Si se solicita exportar CSV
             if 'export' in request.form:
-                return exportar_csv_comisiones([c for c, _ in comisiones], fecha_inicio, fecha_fin)
+                # Exportar todas las comisiones, no solo la página actual
+                return exportar_csv_comisiones([c for c, _ in all_comisiones], fecha_inicio, fecha_fin)
                 
         except Exception as e:
             current_app.logger.error(f"Error al generar reporte de comisiones: {str(e)}")
@@ -108,7 +125,8 @@ def comisiones():
                           total_base=total_base,
                           total_comision=total_comision,
                           fecha_inicio=fecha_inicio,
-                          fecha_fin=fecha_fin)
+                          fecha_fin=fecha_fin,
+                          pagination=pagination)
 
     # Establecer valores por defecto para las fechas si es GET
     if request.method == 'GET':
