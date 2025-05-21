@@ -290,11 +290,11 @@ def crear():
                 return render_template('abonos/crear.html', form=form, clientes=clientes)
             
             # Calcular comisión
-            try:
-                calcular_comision(float(monto), current_user.id)
-            except Exception as e:
-                # No es crítico, sólo log
-                current_app.logger.error(f"Error al calcular comisión: {e}")
+try:
+    calcular_comision(float(monto), current_user.id, None, abono.id)
+except Exception as e:
+    # No es crítico, sólo log
+    current_app.logger.error(f"Error al calcular comisión: {e}")
             
             # Commit de todos los cambios
             db.session.commit()
