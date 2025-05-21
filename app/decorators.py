@@ -14,8 +14,11 @@ def admin_required(f):
 def vendedor_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated or not (current_user.is_vendedor() or current_user.is_admin()):
-            flash('No tienes permisos para acceder a esta página.', 'danger')
+        if not current_user.is_authenticated:
+            flash('Debe iniciar sesión para acceder a esta página.', 'warning')
+            return redirect(url_for('auth.login'))
+        if not (current_user.is_vendedor() or current_user.is_admin()):
+            flash('No tiene permisos para acceder a esta página.', 'danger')
             return redirect(url_for('dashboard.index'))
         return f(*args, **kwargs)
     return decorated_function
