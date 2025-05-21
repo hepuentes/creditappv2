@@ -19,24 +19,24 @@
                 
                 <div class="row mb-3">
                     {% if current_user.is_vendedor() and not current_user.is_admin() %}
-                        <input type="hidden" name="usuario_id" value="{{ current_user.id }}">
+                    <input type="hidden" name="usuario_id" value="{{ current_user.id }}">
                     {% else %}
-                        <div class="col-md-3">
-                            {{ form.usuario_id.label(class="form-label") }}
-                            <select name="usuario_id" id="usuario_id" class="form-select {% if form.usuario_id.errors %}is-invalid{% endif %}">
-                                <option value="0" {% if form.usuario_id.data == 0 %}selected{% endif %}>Todos</option>
-                                {% for id, nombre in form.usuario_id.choices[1:] %}
-                                    <option value="{{ id }}" {% if form.usuario_id.data == id %}selected{% endif %}>{{ nombre }}</option>
+                    <div class="col-md-3">
+                        {{ form.usuario_id.label(class="form-label") }}
+                        <select name="usuario_id" id="usuario_id" class="form-select {% if form.usuario_id.errors %}is-invalid{% endif %}">
+                            <option value="0" {% if form.usuario_id.data == 0 %}selected{% endif %}>Todos</option>
+                            {% for id, nombre in form.usuario_id.choices[1:] %}
+                                <option value="{{ id }}" {% if form.usuario_id.data == id %}selected{% endif %}>{{ nombre }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.usuario_id.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.usuario_id.errors %}
+                                    {{ error }}
                                 {% endfor %}
-                            </select>
-                            {% if form.usuario_id.errors %}
-                                <div class="invalid-feedback">
-                                    {% for error in form.usuario_id.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                        </div>
+                            </div>
+                        {% endif %}
+                    </div>
                     {% endif %}
                     
                     <div class="col-md-3">
@@ -81,7 +81,7 @@
     <!-- Resultados del Reporte -->
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Reporte de Comisiones ({{ fecha_inicio.strftime('%d/%m/%Y') }} - {{ fecha_fin.strftime('%d/%m/%Y') }})</h5>
+            <h5 class="mb-0">Reporte de Comisiones ({{ fecha_inicio.strftime('%d/%m/%Y') if fecha_inicio else '' }} - {{ fecha_fin.strftime('%d/%m/%Y') if fecha_fin else '' }})</h5>
             <button type="submit" form="reporteForm" class="btn btn-success" name="export">
                 <i class="fas fa-file-csv"></i> Exportar CSV
             </button>
@@ -98,8 +98,8 @@
                             <th>Acciones</th>
                         </tr>
                     </thead>
-                    {% if comisiones_por_usuario %}
-                        <tbody>
+                    <tbody>
+                        {% if comisiones_por_usuario %}
                             {% for usuario_id, datos in comisiones_por_usuario.items() %}
                             <tr>
                                 <td>{{ datos.usuario.nombre }}</td>
@@ -157,14 +157,12 @@
                                 </td>
                             </tr>
                             {% endfor %}
-                        </tbody>
-                    {% else %}
-                        <tbody>
+                        {% else %}
                             <tr>
                                 <td colspan="5" class="text-center py-3">No se encontraron comisiones en el período seleccionado.</td>
                             </tr>
-                        </tbody>
-                    {% endif %}
+                        {% endif %}
+                    </tbody>
                     <tfoot class="table-light">
                         <tr>
                             <th colspan="2" class="text-end">Totales:</th>
@@ -175,6 +173,57 @@
                     </tfoot>
                 </table>
             </div>
+            
+            <!-- Paginación -->
+            {% if pagination and pagination.pages > 1 %}
+            <div class="d-flex justify-content-center mt-4 mb-3">
+                <nav aria-label="Navegación de páginas">
+                    <ul class="pagination">
+                        {% if pagination.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('reportes.comisiones', page=pagination.prev_num) }}">
+                                    <i class="fas fa-chevron-left"></i> Anterior
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link"><i class="fas fa-chevron-left"></i> Anterior</span>
+                            </li>
+                        {% endif %}
+                        
+                        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if page_num %}
+                                {% if page_num == pagination.page %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('reportes.comisiones', page=page_num) }}">{{ page_num }}</a>
+                                    </li>
+                                {% endif %}
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if pagination.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('reportes.comisiones', page=pagination.next_num) }}">
+                                    Siguiente <i class="fas fa-chevron-right"></i>
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Siguiente <i class="fas fa-chevron-right"></i></span>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
         </div>
     </div>
     {% endif %}
