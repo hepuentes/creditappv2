@@ -233,8 +233,16 @@ class Comision(db.Model):
     pagado = db.Column(db.Boolean, default=False, nullable=False)
     fecha_generacion = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Nuevos campos para vincular con ventas o abonos
+    venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=True)
+    abono_id = db.Column(db.Integer, db.ForeignKey('abonos.id'), nullable=True)
+    
     # Relación explícita con Usuario
     usuario = db.relationship('Usuario', foreign_keys=[usuario_id], backref='comisiones')
+    
+    # Relaciones con ventas y abonos
+    venta = db.relationship('Venta', foreign_keys=[venta_id], backref='comisiones')
+    abono = db.relationship('Abono', foreign_keys=[abono_id], backref='comisiones')
 
 
 class Configuracion(db.Model):
