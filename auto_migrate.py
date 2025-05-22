@@ -209,6 +209,56 @@ with app.app_context():
         except Exception as e:
             logger.error(f"  ✗ Error al validar integridad referencial: {e}")
         
+        # PASO 6: Verificar y actualizar tabla configuraciones
+        logger.info("\nVerificando tabla 'configuraciones'...")
+        
+        try:
+            with db.engine.begin() as connection:
+                # Verificar si las columnas existen
+                result = connection.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'configuraciones'
+                """))
+                existing_columns = [row[0] for row in result.fetchall()]
+                
+                # Columnas que deben existir
+                required_columns = {
+                    'porcentaje_comision_vendedor': 'INTEGER DEFAULT 5',
+                    'porcentaje_comision_cobrador': 'INTEGER DEFAULT 3',
+                    'periodo_comision': 'VARCHAR(20) DEFAULT \'mensual\''
+                }
+                
+                # Agregar columnas faltantes
+                for column_name, column_definition in required_columns.items():
+                    if column_name not in existing_columns:
+                        connection.execute(text(f"""
+                            ALTER TABLE configuraciones 
+                            ADD COLUMN {column_name} {column_definition}
+                        """))
+                        logger.info(f"  ✓ Columna {column_name} agregada a configuraciones")
+                    else:
+                        logger.info(f"  ✓ Columna {column_name} ya existe en configuraciones")
+                
+                # Verificar si existe algún registro de configuración
+                config_count = connection.execute(text("SELECT COUNT(*) FROM configuraciones")).scalar()
+                
+                if config_count == 0:
+                    # Crear registro de configuración inicial
+                    connection.execute(text("""
+                        INSERT INTO configuraciones (
+                            nombre_empresa, direccion, telefono, logo, iva, moneda,
+                            porcentaje_comision_vendedor, porcentaje_comision_cobrador,
+                            periodo_comision, min_password
+                        ) VALUES (
+                            'CreditApp', 'Dirección de la empresa', '123456789', NULL, 19, '$',
+                            5, 3, 'mensual', 6
+                        )
+                    """))
+                    logger.info("  ✓ Registro de configuración inicial creado")
+        except Exception as e:
+            logger.error(f"  ✗ Error al verificar/actualizar tabla configuraciones: {e}")
+        
         logger.info("=== PROCESO DE REPARACIÓN DE BASE DE DATOS COMPLETADO ===")
         
     except Exception as e:
