@@ -335,11 +335,28 @@ def egresos():
         fecha_inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d')
         fecha_fin = datetime.strptime(request.form['fecha_fin'], '%Y-%m-%d')
         
+        # Ajustar fecha_fin para incluir todo el día
+        fecha_fin_completa = datetime.combine(fecha_fin, datetime.max.time())
+        
         egresos = MovimientoCaja.query.filter(
             MovimientoCaja.tipo == 'salida',
             MovimientoCaja.fecha >= fecha_inicio,
-            MovimientoCaja.fecha <= fecha_fin
+            MovimientoCaja.fecha <= fecha_fin_completa
         ).all()
+        
+        # DEBUG: Agregar información de debug
+        current_app.logger.info(f"Buscando egresos desde {fecha_inicio} hasta {fecha_fin_completa}")
+        current_app.logger.info(f"Encontrados {len(egresos)} egresos")
+        
+        # Si no encuentra egresos, mostrar todos los movimientos para debug
+        if not egresos:
+            todos_movimientos = MovimientoCaja.query.filter(
+                MovimientoCaja.fecha >= fecha_inicio,
+                MovimientoCaja.fecha <= fecha_fin_completa
+            ).all()
+            current_app.logger.info(f"Total movimientos en el período: {len(todos_movimientos)}")
+            for mov in todos_movimientos:
+                current_app.logger.info(f"Movimiento ID: {mov.id}, Tipo: {mov.tipo}, Fecha: {mov.fecha}, Monto: {mov.monto}")
         
         if 'export' in request.form:
             return exportar_excel_egresos(egresos, fecha_inicio, fecha_fin)
