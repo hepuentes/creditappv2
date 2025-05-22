@@ -43,9 +43,33 @@ def crear():
         # Verificar si la cédula ya existe
         cliente_existente = Cliente.query.filter_by(cedula=form.cedula.data).first()
         if cliente_existente:
-            flash('Error: Ya existe un cliente con esta cédula/NIT. Por favor verifique e intente nuevamente.', 'danger')
-            return render_template('clientes/crear.html', form=form, titulo='Nuevo Cliente')
+            # Para vendedores, verificar si pueden acceder a ese cliente
+            if current_user.is_vendedor() and not current_user.is_admin():
+                # Verificar si este vendedor ya ha hecho ventas a este cliente
+                venta_existente = Venta.query.filter_by(
+                    cliente_id=cliente_existente.id,
+                    vendedor_id=current_user.id
+                ).first()
+                
+                if venta_existente:
+                    # El vendedor ya tiene ventas con este cliente
+                    flash(f'Ya existe un cliente con la cédula {form.cedula.data}. '
+                          f'Cliente: {cliente_existente.nombre}. '
+                          f'Puede encontrarlo en su lista de clientes.', 'warning')
+                    return redirect(url_for('clientes.detalle', id=cliente_existente.id))
+                else:
+                    # El cliente existe pero este vendedor no le ha vendido
+                    flash(f'Ya existe un cliente con la cédula {form.cedula.data}. '
+                          f'Cliente: {cliente_existente.nombre}. '
+                          f'Para hacer una venta a este cliente, use el botón "Nueva Venta" a continuación.', 'info')
+                    return redirect(url_for('ventas.crear', cliente_id=cliente_existente.id))
+            else:
+                # Para administradores
+                flash(f'Ya existe un cliente con la cédula {form.cedula.data}. '
+                      f'Cliente: {cliente_existente.nombre}.', 'warning')
+                return redirect(url_for('clientes.detalle', id=cliente_existente.id))
         
+        # Si no existe, crear el nuevo cliente
         cliente = Cliente(
             nombre=form.nombre.data,
             cedula=form.cedula.data,
@@ -66,6 +90,14 @@ def editar(id):
     cliente = Cliente.query.get_or_404(id)
     form = ClienteForm(obj=cliente)
     if form.validate_on_submit():
+        # Verificar si la nueva cédula ya existe en otro cliente
+        if form.cedula.data != cliente.cedula:
+            cliente_existente = Cliente.query.filter_by(cedula=form.cedula.data).first()
+            if cliente_existente:
+                flash(f'Ya existe otro cliente con la cédula {form.cedula.data}. '
+                      f'Cliente: {cliente_existente.nombre}.', 'danger')
+                return render_template('clientes/crear.html', form=form, titulo='Editar Cliente')
+        
         form.populate_obj(cliente)
         db.session.commit()
         flash('Cliente actualizado exitosamente', 'success')
