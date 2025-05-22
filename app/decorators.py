@@ -32,8 +32,8 @@ def cobrador_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# Nuevo decorador para permitir acceso a vendedores y cobradores
-def vendedor_cobrador_required(f):
+# decorador para permitir acceso a vendedores y cobradores
+def vendedor_cobrador_comisiones_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or not (current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin()):
@@ -42,7 +42,7 @@ def vendedor_cobrador_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# Nuevo decorador para vendedores con acceso extendido (comisiones, etc.)
+# decorador para vendedores con acceso extendido (comisiones, etc.)
 def vendedor_extended_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
