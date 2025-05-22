@@ -20,39 +20,52 @@ def index():
         if current_user.is_vendedor():
             vendedor_filter = {'vendedor_id': current_user.id}
         
-        # Total de clientes
+        # Total de clientes (solo para vendedores y admin)
         if current_user.is_vendedor():
             # Obtener clientes de las ventas del vendedor
             clientes_ids = db.session.query(Venta.cliente_id).filter_by(vendedor_id=current_user.id).distinct()
             total_clientes = db.session.query(Cliente).filter(Cliente.id.in_(clientes_ids)).count()
-        else:
+        elif current_user.is_admin():
             total_clientes = Cliente.query.count()
+        else:
+            # Para cobradores, obtener clientes con créditos
+            clientes_ids = db.session.query(Venta.cliente_id).filter(
+                Venta.tipo == 'credito',
+                Venta.saldo_pendiente > 0
+            ).distinct()
+            total_clientes = db.session.query(Cliente).filter(Cliente.id.in_(clientes_ids)).count()
 
-        # Total de productos
-        total_productos = Producto.query.count()
-        productos_agotados = Producto.query.filter(Producto.stock <= 0).count()
-        productos_stock_bajo = Producto.query.filter(Producto.stock <= Producto.stock_minimo, Producto.stock > 0).count()
+        # Total de productos (solo para vendedores y admin)
+        if current_user.is_vendedor() or current_user.is_admin():
+            total_productos = Producto.query.count()
+            productos_agotados = Producto.query.filter(Producto.stock <= 0).count()
+            productos_stock_bajo = Producto.query.filter(Producto.stock <= Producto.stock_minimo, Producto.stock > 0).count()
+        else:
+            total_productos = 0
+            productos_agotados = 0
+            productos_stock_bajo = 0
 
-        # Ventas del mes - Modificamos esta parte para evitar el error de columna vendedor_id
-        # En lugar de usar filter, usaremos all() y luego filtraremos en Python
-        try:
-            # Si es vendedor, solo mostrar sus ventas
-            if current_user.is_vendedor():
-                todas_ventas = Venta.query.filter_by(vendedor_id=current_user.id).all()
-            else:
-                todas_ventas = Venta.query.all()
-                
-            ventas_mes = [v for v in todas_ventas if v.fecha and v.fecha >= primer_dia_mes]
-            ventas_mes_count = len(ventas_mes)
-            total_ventas_mes = sum(v.total for v in ventas_mes)
-        except Exception as e:
-            print(f"Error al consultar ventas: {e}")
+        # Ventas del mes (solo para vendedores y admin)
+        if current_user.is_vendedor() or current_user.is_admin():
+            try:
+                if current_user.is_vendedor():
+                    todas_ventas = Venta.query.filter_by(vendedor_id=current_user.id).all()
+                else:
+                    todas_ventas = Venta.query.all()
+                    
+                ventas_mes = [v for v in todas_ventas if v.fecha and v.fecha >= primer_dia_mes]
+                ventas_mes_count = len(ventas_mes)
+                total_ventas_mes = sum(v.total for v in ventas_mes)
+            except Exception as e:
+                print(f"Error al consultar ventas: {e}")
+                ventas_mes_count = 0
+                total_ventas_mes = 0
+        else:
             ventas_mes_count = 0
             total_ventas_mes = 0
 
-        # Créditos activos - También modificado para evitar problemas con consultas complejas
+        # Créditos activos (para todos los roles)
         try:
-            # Si es vendedor, solo mostrar sus créditos
             if current_user.is_vendedor():
                 todas_ventas = Venta.query.filter_by(vendedor_id=current_user.id).all()
             else:
@@ -65,44 +78,50 @@ def index():
             creditos_activos = 0
             total_creditos = 0
 
-        # Abonos del mes
-        try:
-            # Si es vendedor, filtrar abonos por sus ventas
-            if current_user.is_vendedor():
-                abonos_mes = Abono.query.join(Venta).filter(
-                    Venta.vendedor_id == current_user.id,
-                    Abono.fecha >= primer_dia_mes
-                ).count()
-                
-                total_abonos_mes = db.session.query(db.func.sum(Abono.monto)).join(Venta).filter(
-                    Venta.vendedor_id == current_user.id,
-                    Abono.fecha >= primer_dia_mes
-                ).scalar() or 0
-            else:
-                abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).count()
-                total_abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).with_entities(
-                    db.func.sum(Abono.monto)).scalar() or 0
-        except Exception as e:
-            print(f"Error al consultar abonos: {e}")
+        # Abonos del mes (para cobradores y admin)
+        if current_user.is_cobrador() or current_user.is_admin():
+            try:
+                if current_user.is_cobrador():
+                    abonos_mes = Abono.query.filter(
+                        Abono.cobrador_id == current_user.id,
+                        Abono.fecha >= primer_dia_mes
+                    ).count()
+                    
+                    total_abonos_mes = db.session.query(db.func.sum(Abono.monto)).filter(
+                        Abono.cobrador_id == current_user.id,
+                        Abono.fecha >= primer_dia_mes
+                    ).scalar() or 0
+                else:
+                    abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).count()
+                    total_abonos_mes = Abono.query.filter(Abono.fecha >= primer_dia_mes).with_entities(
+                        db.func.sum(Abono.monto)).scalar() or 0
+            except Exception as e:
+                print(f"Error al consultar abonos: {e}")
+                abonos_mes = 0
+                total_abonos_mes = 0
+        else:
             abonos_mes = 0
             total_abonos_mes = 0
 
-        # Saldo en cajas
-        try:
-            cajas = Caja.query.all()
-            total_cajas = sum(caja.saldo_actual for caja in cajas)
-        except Exception as e:
-            print(f"Error al consultar cajas: {e}")
-            cajas = []
+        # Saldo en cajas (solo admin)
+        if current_user.is_admin():
+            try:
+                cajas = Caja.query.all()
+                total_cajas = sum(caja.saldo_actual for caja in cajas)
+            except Exception as e:
+                print(f"Error al consultar cajas: {e}")
+                cajas = []
+                total_cajas = 0
+        else:
             total_cajas = 0
 
-        # Comisión acumulada (para el vendedor actual)
+        # Comisión acumulada (para vendedores y cobradores)
         try:
-            # Para vendedor, mostrar solo sus comisiones
-            if current_user.is_vendedor():
+            if current_user.is_vendedor() or current_user.is_cobrador():
+                # Usar la función corregida con manejo de errores
                 comisiones = get_comisiones_periodo(current_user.id)
             else:
-                comisiones = get_comisiones_periodo(current_user.id if not current_user.is_admin() else None)
+                comisiones = get_comisiones_periodo()
                 
             total_comision = sum(comision.monto_comision for comision in comisiones)
         except Exception as e:
