@@ -255,8 +255,12 @@ class Configuracion(db.Model):
     logo = db.Column(db.String(100), nullable=True)
     iva = db.Column(db.Integer, nullable=False, default=0)
     moneda = db.Column(db.String(10), default='$', nullable=False)
-    porcentaje_comision = db.Column(db.Integer, nullable=False, default=5)
+    
+    # Comisiones separadas por rol
+    porcentaje_comision_vendedor = db.Column(db.Integer, nullable=False, default=5)
+    porcentaje_comision_cobrador = db.Column(db.Integer, nullable=False, default=3)
     periodo_comision = db.Column(db.String(20), nullable=False, default='mensual')
+    
     min_password = db.Column(db.Integer, nullable=False, default=6)
 
 
