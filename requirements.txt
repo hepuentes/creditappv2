@@ -14,3 +14,5 @@ fpdf2==2.7.6
 qrcode==7.4.2
 pillow==10.1.0
 gevent==23.9.1
+pandas==2.0.3
+openpyxl==3.1.2
