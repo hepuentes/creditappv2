@@ -103,9 +103,14 @@ class AbonoForm(FlaskForm):
     submit = SubmitField('Registrar Abono')
     
     def validate_venta_id(self, field):
-        # Permitir -1 temporalmente durante la selección
+        # Permitir -1 temporalmente durante la selección, pero no en submit final
         if field.data == -1:
-            return True
+            # Solo permitir -1 si estamos en modo de carga, no en submit
+            import flask
+            if flask.request.method == 'POST':
+                from wtforms import ValidationError
+                raise ValidationError('Debe seleccionar una venta válida')
+        return True
             
 # --- Formulario de Créditos ---
 class CreditoForm(FlaskForm):
