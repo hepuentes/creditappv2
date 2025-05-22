@@ -148,6 +148,130 @@ def marcar_todas_pagadas():
     
     return jsonify({'success': False, 'error': 'No se seleccionaron comisiones'})
 
+@reportes_bp.route('/comisiones/liquidar-masiva', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def liquidar_masiva():
+    if request.method == 'POST':
+        # Obtener fechas del formulario
+        fecha_inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d')
+        fecha_fin = datetime.strptime(request.form['fecha_fin'], '%Y-%m-%d')
+        usuario_id = request.form.get('usuario_id')
+        
+        # Construir consulta
+        query = Comision.query.filter(
+            Comision.fecha_generacion >= fecha_inicio,
+            Comision.fecha_generacion <= fecha_fin,
+            Comision.pagado == False
+        )
+        
+        if usuario_id and usuario_id != '0':
+            query = query.filter(Comision.usuario_id == usuario_id)
+        
+        comisiones = query.all()
+        
+        if 'liquidar' in request.form:
+            # Marcar todas como pagadas
+            for comision in comisiones:
+                comision.pagado = True
+            
+            db.session.commit()
+            total_liquidado = sum(c.monto_comision for c in comisiones)
+            flash(f'Liquidadas {len(comisiones)} comisiones por un total de ${total_liquidado:,.0f}', 'success')
+            return redirect(url_for('reportes.liquidar_masiva'))
+        
+        elif 'exportar' in request.form:
+            # Exportar a Excel
+            return exportar_excel_liquidacion(comisiones, fecha_inicio, fecha_fin)
+        
+        # Agrupar por usuario para mostrar resumen
+        resumen_usuarios = {}
+        for comision in comisiones:
+            if comision.usuario_id not in resumen_usuarios:
+                resumen_usuarios[comision.usuario_id] = {
+                    'usuario': comision.usuario,
+                    'total_comision': 0,
+                    'cantidad': 0
+                }
+            resumen_usuarios[comision.usuario_id]['total_comision'] += comision.monto_comision
+            resumen_usuarios[comision.usuario_id]['cantidad'] += 1
+        
+        return render_template('reportes/liquidar_masiva.html', 
+                             resumen_usuarios=resumen_usuarios,
+                             fecha_inicio=fecha_inicio,
+                             fecha_fin=fecha_fin,
+                             total_general=sum(c.monto_comision for c in comisiones))
+    
+    # GET: mostrar formulario
+    usuarios = Usuario.query.filter(Usuario.rol.in_(['vendedor', 'cobrador', 'administrador'])).all()
+    return render_template('reportes/liquidar_masiva.html', usuarios=usuarios)
+
+def exportar_excel_liquidacion(comisiones, fecha_inicio, fecha_fin):
+    """Exporta liquidación de comisiones a Excel"""
+    data = []
+    
+    # Agrupar por usuario
+    usuarios_dict = {}
+    for comision in comisiones:
+        if comision.usuario_id not in usuarios_dict:
+            usuarios_dict[comision.usuario_id] = {
+                'nombre': comision.usuario.nombre,
+                'comisiones': [],
+                'total': 0
+            }
+        usuarios_dict[comision.usuario_id]['comisiones'].append(comision)
+        usuarios_dict[comision.usuario_id]['total'] += comision.monto_comision
+    
+    # Crear data para Excel
+    for usuario_id, datos in usuarios_dict.items():
+        # Fila de resumen del usuario
+        data.append({
+            'EMPLEADO': datos['nombre'],
+            'CONCEPTO': 'TOTAL A PAGAR',
+            'CANTIDAD': len(datos['comisiones']),
+            'MONTO': f"${datos['total']:,.0f}",
+            'PERIODO': f"{fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}"
+        })
+        
+        # Detalle de cada comisión
+        for comision in datos['comisiones']:
+            origen = "Venta" if comision.venta_id else "Abono" if comision.abono_id else "N/A"
+            data.append({
+                'EMPLEADO': '',
+                'CONCEPTO': f"{origen} #{comision.venta_id or comision.abono_id or 'N/A'}",
+                'CANTIDAD': f"{comision.porcentaje}%",
+                'MONTO': f"${comision.monto_comision:,.0f}",
+                'PERIODO': comision.fecha_generacion.strftime('%d/%m/%Y')
+            })
+        
+        # Fila vacía entre empleados
+        data.append({'EMPLEADO': '', 'CONCEPTO': '', 'CANTIDAD': '', 'MONTO': '', 'PERIODO': ''})
+    
+    df = pd.DataFrame(data)
+    
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Liquidación Comisiones', index=False)
+        
+        # Formatear el Excel
+        workbook = writer.book
+        worksheet = writer.sheets['Liquidación Comisiones']
+        
+        # Ajustar anchos de columna
+        worksheet.column_dimensions['A'].width = 20
+        worksheet.column_dimensions['B'].width = 25
+        worksheet.column_dimensions['C'].width = 15
+        worksheet.column_dimensions['D'].width = 15
+        worksheet.column_dimensions['E'].width = 20
+    
+    output.seek(0)
+    
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = f'attachment; filename=liquidacion_comisiones_{fecha_inicio.strftime("%Y%m%d")}-{fecha_fin.strftime("%Y%m%d")}.xlsx'
+    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    
+    return response
+
 # NUEVOS REPORTES
 @reportes_bp.route('/ventas', methods=['GET', 'POST'])
 @login_required
