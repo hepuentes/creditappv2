@@ -226,15 +226,14 @@
                 <div class="card-header">
                     <h5 class="mb-0">Información Actual</h5>
                 </div>
-                <div class="card-body">
-                    <p><strong>Nombre de la Empresa:</strong> {{ config.nombre_empresa }}</p>
-                    <p><strong>Dirección:</strong> {{ config.direccion or 'No configurada' }}</p>
-                    <p><strong>Teléfono:</strong> {{ config.telefono or 'No configurado' }}</p>
-                    <p><strong>Símbolo de Moneda:</strong> {{ config.moneda }}</p>
-                    <p><strong>IVA:</strong> {{ config.iva }}%</p>
-                    <p><strong>Comisión:</strong> {{ config.porcentaje_comision }}% ({{ config.periodo_comision }})</p>
-                    <p><strong>Tamaño Mínimo de Contraseña:</strong> {{ config.min_password }} caracteres</p>
-                </div>
+                <div class="info-section">
+    <h5>Información financiera</h5>
+    <p><strong>Símbolo de Moneda:</strong> {{ config.moneda }}</p>
+    <p><strong>IVA:</strong> {{ config.iva }}%</p>
+    <p><strong>Comisión Vendedores:</strong> {{ config.porcentaje_comision_vendedor or 5 }}% ({{ config.periodo_comision }})</p>
+    <p><strong>Comisión Cobradores:</strong> {{ config.porcentaje_comision_cobrador or 3 }}% ({{ config.periodo_comision }})</p>
+    <p><strong>Tamaño Mínimo de Contraseña:</strong> {{ config.min_password }} caracteres</p>
+</div>
             </div>
         </div>
     </div>
