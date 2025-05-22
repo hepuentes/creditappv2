@@ -95,7 +95,7 @@ def crear():
     else:
         form.cliente_id.choices = [(-1, "No hay clientes con créditos pendientes")]
     
-    # Inicialmente, configurar opciones para ventas
+    # Inicialmente, configurar opciones para ventas (esto se actualizará dinámicamente)
     form.venta_id.choices = [(-1, "Seleccione un cliente primero")]
     
     # Configuración si viene cliente_id o venta_id en la URL
@@ -179,68 +179,94 @@ def crear():
             else:
                 flash(f"No se encontró la venta #{venta_id}", "warning")
     
-    # Si es una petición POST, validar y procesar el formulario
-    if form.validate_on_submit():
-        try:
-            # Verificar si el formulario tiene todos los datos necesarios
-            if not form.venta_id.data or form.venta_id.data == -1:
-                flash("Por favor seleccione una venta para abonar", "danger")
-                return render_template('abonos/crear.html', form=form, clientes=clientes)
-            
-            # Obtener la venta
-            venta = Venta.query.get(form.venta_id.data)
-            if not venta:
-                flash('Venta no encontrada', 'danger')
-                return render_template('abonos/crear.html', form=form, clientes=clientes)
-            
-            # Verificar permisos del vendedor
-            if current_user.is_vendedor() and not current_user.is_admin():
-                if venta.vendedor_id != current_user.id:
-                    flash('No tienes permisos para abonar a esta venta', 'danger')
-                    return redirect(url_for('abonos.index'))
-            
-            # Validar el tipo de venta
-            if venta.tipo != 'credito':
-                flash('Solo se pueden registrar abonos para ventas a crédito', 'danger')
-                return render_template('abonos/crear.html', form=form, clientes=clientes)
-            
-            # Validar que haya saldo pendiente
-            if venta.saldo_pendiente <= 0:
-                flash('Esta venta ya está pagada completamente', 'success')
-                return render_template('abonos/crear.html', form=form, clientes=clientes)
-            
-            # Procesar y validar el monto del abono
+    # VALIDACIÓN PERSONALIZADA EN LUGAR DE form.validate_on_submit()
+    if request.method == 'POST':
+        # Validar manualmente los campos críticos
+        validation_errors = []
+        
+        # Validar cliente_id
+        cliente_id_form = request.form.get('cliente_id')
+        if not cliente_id_form or cliente_id_form == '-1':
+            validation_errors.append("Debe seleccionar un cliente")
+        else:
             try:
-                monto_str = str(form.monto.data).strip()
-                
-                if not monto_str:
-                    flash('Por favor ingrese un monto válido', 'danger')
-                    return render_template('abonos/crear.html', form=form, clientes=clientes)
-                
-                monto_str = monto_str.replace(',', '.')
-                
+                cliente_id_form = int(cliente_id_form)
+                cliente_form = Cliente.query.get(cliente_id_form)
+                if not cliente_form:
+                    validation_errors.append("Cliente no válido")
+            except ValueError:
+                validation_errors.append("Cliente no válido")
+        
+        # Validar venta_id MANUALMENTE (evitar el error "Not a valid choice")
+        venta_id_form = request.form.get('venta_id')
+        if not venta_id_form or venta_id_form == '-1':
+            validation_errors.append("Debe seleccionar una venta")
+        else:
+            try:
+                venta_id_form = int(venta_id_form)
+                venta_form = Venta.query.get(venta_id_form)
+                if not venta_form:
+                    validation_errors.append("Venta no encontrada")
+                elif venta_form.tipo != 'credito':
+                    validation_errors.append("Solo se pueden registrar abonos para ventas a crédito")
+                elif venta_form.saldo_pendiente <= 0:
+                    validation_errors.append("Esta venta ya está pagada completamente")
+                elif current_user.is_vendedor() and not current_user.is_admin():
+                    if venta_form.vendedor_id != current_user.id:
+                        validation_errors.append("No tienes permisos para abonar a esta venta")
+            except ValueError:
+                validation_errors.append("Venta no válida")
+        
+        # Validar monto
+        monto_form = request.form.get('monto', '').strip()
+        if not monto_form:
+            validation_errors.append("Debe ingresar un monto")
+        else:
+            try:
+                monto_form = monto_form.replace(',', '.')
                 try:
-                    monto = Decimal(monto_str)
+                    monto_decimal = Decimal(monto_form)
                 except InvalidOperation:
-                    monto_str_limpio = monto_str.replace('.', '')
+                    monto_str_limpio = monto_form.replace('.', '')
                     try:
-                        monto = Decimal(monto_str_limpio)
+                        monto_decimal = Decimal(monto_str_limpio)
                     except InvalidOperation:
-                        flash('El formato del monto no es válido. Ingrese solo números, opcionalmente con punto decimal', 'danger')
-                        return render_template('abonos/crear.html', form=form, clientes=clientes)
+                        validation_errors.append("Formato del monto no válido")
+                        monto_decimal = None
                 
-                if monto <= 0:
-                    flash('El monto del abono debe ser mayor a cero', 'danger')
-                    return render_template('abonos/crear.html', form=form, clientes=clientes)
-                
-                if monto > venta.saldo_pendiente:
-                    flash(f'El monto ha sido ajustado al saldo pendiente: ${venta.saldo_pendiente:,.0f}', 'warning')
-                    monto = Decimal(str(venta.saldo_pendiente))
-                
+                if monto_decimal is not None:
+                    if monto_decimal <= 0:
+                        validation_errors.append("El monto debe ser mayor a cero")
+                    elif 'venta_form' in locals() and venta_form and monto_decimal > venta_form.saldo_pendiente:
+                        validation_errors.append(f"El monto no puede ser mayor al saldo pendiente (${venta_form.saldo_pendiente:,.0f})")
             except Exception as e:
-                current_app.logger.error(f"Error al procesar monto: {str(e)}")
-                flash(f'Error al procesar el monto: {str(e)}', 'danger')
-                return render_template('abonos/crear.html', form=form, clientes=clientes)
+                validation_errors.append("Error al procesar el monto")
+        
+        # Validar caja_id
+        caja_id_form = request.form.get('caja_id')
+        if not caja_id_form:
+            validation_errors.append("Debe seleccionar una caja")
+        else:
+            try:
+                caja_id_form = int(caja_id_form)
+                caja_form = Caja.query.get(caja_id_form)
+                if not caja_form:
+                    validation_errors.append("Caja no válida")
+            except ValueError:
+                validation_errors.append("Caja no válida")
+        
+        # Si hay errores de validación, mostrarlos
+        if validation_errors:
+            for error in validation_errors:
+                flash(error, 'danger')
+            current_app.logger.warning(f"Errores de validación personalizados: {validation_errors}")
+            return render_template('abonos/crear.html', form=form, clientes=clientes)
+        
+        # Si llegamos aquí, la validación pasó - procesar el abono
+        try:
+            # Usar las variables ya validadas
+            venta = venta_form
+            monto = monto_decimal
             
             # Crear el abono
             abono = Abono(
@@ -248,8 +274,8 @@ def crear():
                 monto=monto,
                 fecha=datetime.utcnow(),
                 cobrador_id=current_user.id,
-                caja_id=form.caja_id.data,
-                notas=form.notas.data if form.notas.data else ''
+                caja_id=caja_id_form,
+                notas=request.form.get('notas', '').strip()
             )
             
             current_app.logger.info(f"Intentando crear abono: venta_id={abono.venta_id}, "
@@ -269,7 +295,7 @@ def crear():
             # Registrar movimiento en caja
             try:
                 movimiento = MovimientoCaja(
-                    caja_id=form.caja_id.data,
+                    caja_id=caja_id_form,
                     tipo='entrada',
                     monto=monto,
                     descripcion=f'Abono a venta #{venta.id}',
@@ -277,7 +303,7 @@ def crear():
                 )
                 db.session.add(movimiento)
                 
-                caja = Caja.query.get(form.caja_id.data)
+                caja = Caja.query.get(caja_id_form)
                 if caja:
                     caja.saldo_actual += monto
             except Exception as e:
@@ -304,14 +330,6 @@ def crear():
             db.session.rollback()
             current_app.logger.error(f"Error general al registrar abono: {e}")
             flash(f'Error al registrar el abono: {str(e)}', 'danger')
-    
-    elif request.method == 'POST':
-        error_msg = []
-        for fieldName, errorMessages in form.errors.items():
-            error_msg.append(f"{fieldName}: {', '.join(errorMessages)}")
-        
-        current_app.logger.warning(f"Errores de validación: {form.errors}")
-        flash(f"Error en el formulario: {' | '.join(error_msg)}", 'danger')
     
     return render_template('abonos/crear.html', form=form, clientes=clientes)
 
