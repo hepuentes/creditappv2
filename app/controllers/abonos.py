@@ -321,7 +321,7 @@ def crear():
             # Commit de todos los cambios
             db.session.commit()
             
-            monto_formateado = f"${float(monto):,.2f}"
+            monto_formateado = f"${float(monto):,.0f}"
             flash(f'Abono de {monto_formateado} registrado exitosamente', 'success')
             
             return redirect(url_for('abonos.index'))
