@@ -15,7 +15,13 @@
                         <i class="fas fa-users"></i>
                     </div>
                     <h1 class="card-value">{{ total_clientes }}</h1>
-                    <div class="card-label">Clientes</div>
+                    <div class="card-label">
+                        {% if current_user.is_cobrador() %}
+                        Clientes con Créditos
+                        {% else %}
+                        Clientes
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="card-footer p-2">
                     <a href="{{ url_for('clientes.index') }}" class="btn btn-sm btn-primary w-100">Ver Clientes</a>
@@ -23,7 +29,8 @@
             </div>
         </div>
 
-        <!-- Productos -->
+        <!-- Productos (solo vendedores y admin) -->
+        {% if current_user.is_vendedor() or current_user.is_admin() %}
         <div class="col-md-4 col-xl-3">
             <div class="card card-dashboard bg-light">
                 <div class="card-body">
@@ -48,8 +55,10 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
-        <!-- Ventas del Mes -->
+        <!-- Ventas del Mes (solo vendedores y admin) -->
+        {% if current_user.is_vendedor() or current_user.is_admin() %}
         <div class="col-md-4 col-xl-3">
             <div class="card card-dashboard bg-light">
                 <div class="card-body">
@@ -57,7 +66,13 @@
                         <i class="fas fa-shopping-cart"></i>
                     </div>
                     <h1 class="card-value">{{ ventas_mes }}</h1>
-                    <div class="card-label">Ventas del Mes</div>
+                    <div class="card-label">
+                        {% if current_user.is_vendedor() %}
+                        Mis Ventas del Mes
+                        {% else %}
+                        Ventas del Mes
+                        {% endif %}
+                    </div>
                     <div class="mt-1">
                         <small>{{ total_ventas_mes }}</small>
                     </div>
@@ -67,8 +82,9 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
-        <!-- Créditos Activos -->
+        <!-- Créditos Activos (todos los roles) -->
         <div class="col-md-4 col-xl-3">
             <div class="card card-dashboard bg-light">
                 <div class="card-body">
@@ -87,7 +103,8 @@
             </div>
         </div>
 
-        <!-- Abonos del Mes -->
+        <!-- Abonos del Mes (cobradores y admin) -->
+        {% if current_user.is_cobrador() or current_user.is_admin() %}
         <div class="col-md-4 col-xl-3">
             <div class="card card-dashboard bg-light mt-4">
                 <div class="card-body">
@@ -95,7 +112,13 @@
                         <i class="fas fa-money-bill-wave"></i>
                     </div>
                     <h1 class="card-value">{{ abonos_mes }}</h1>
-                    <div class="card-label">Abonos del Mes</div>
+                    <div class="card-label">
+                        {% if current_user.is_cobrador() %}
+                        Mis Abonos del Mes
+                        {% else %}
+                        Abonos del Mes
+                        {% endif %}
+                    </div>
                     <div class="mt-1">
                         <small>{{ total_abonos_mes }}</small>
                     </div>
@@ -105,8 +128,9 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
-        <!-- Saldo en Cajas -->
+        <!-- Saldo en Cajas (solo admin) -->
         {% if current_user.is_admin() %}
         <div class="col-md-4 col-xl-3">
             <div class="card card-dashboard bg-light mt-4">
@@ -124,7 +148,8 @@
         </div>
         {% endif %}
 
-        <!-- Comisión Acumulada -->
+        <!-- Comisión Acumulada (vendedores y cobradores) -->
+        {% if current_user.is_vendedor() or current_user.is_cobrador() %}
         <div class="col-md-4 col-xl-3">
             <div class="card card-dashboard bg-light mt-4">
                 <div class="card-body">
@@ -132,13 +157,14 @@
                         <i class="fas fa-percentage"></i>
                     </div>
                     <h1 class="card-value">{{ total_comision }}</h1>
-                    <div class="card-label">Comisión Acumulada</div>
+                    <div class="card-label">Mis Comisiones</div>
                 </div>
                 <div class="card-footer p-2">
-                    <a href="{{ url_for('reportes.comisiones') }}" class="btn btn-sm btn-danger w-100">Ver Comisiones</a>
+                    <a href="{{ url_for('reportes.comisiones') }}" class="btn btn-sm btn-danger w-100">Ver Mis Comisiones</a>
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 
     {% if current_user.is_admin() %}
