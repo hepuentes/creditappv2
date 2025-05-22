@@ -94,3 +94,39 @@ def eliminar(id):
 def detalle(id):
     usuario = Usuario.query.get_or_404(id)
     return render_template('usuarios/detalle.html', usuario=usuario)
+
+@usuarios_bp.route('/mi-perfil')
+@login_required
+def mi_perfil():
+    return render_template('usuarios/mi_perfil.html', usuario=current_user)
+
+@usuarios_bp.route('/mi-perfil/editar', methods=['GET', 'POST'])
+@login_required
+def editar_mi_perfil():
+    form = UsuarioForm(obj=current_user)
+    
+    # Remover el campo de rol para que no se pueda cambiar
+    del form.rol
+    del form.activo
+    
+    if form.validate_on_submit():
+        # Verificar si el email ya existe en otro usuario
+        if form.email.data != current_user.email:
+            usuario_existente = Usuario.query.filter_by(email=form.email.data).first()
+            if usuario_existente:
+                flash('Ya existe otro usuario con ese email.', 'danger')
+                return render_template('usuarios/editar_mi_perfil.html', form=form)
+        
+        # Actualizar datos
+        current_user.nombre = form.nombre.data
+        current_user.email = form.email.data
+        
+        # Cambiar contraseña solo si se proporcionó una nueva
+        if form.password.data:
+            current_user.set_password(form.password.data)
+        
+        db.session.commit()
+        flash('Perfil actualizado exitosamente', 'success')
+        return redirect(url_for('usuarios.mi_perfil'))
+    
+    return render_template('usuarios/editar_mi_perfil.html', form=form)
