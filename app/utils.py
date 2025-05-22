@@ -48,12 +48,23 @@ def format_currency(amount):
 
 
 def calcular_comision(monto, usuario_id, venta_id=None, abono_id=None):
-    """Calcula la comisión sobre un monto para un usuario"""
+    """Calcula la comisión sobre un monto para un usuario según su rol"""
+    from app.models import Usuario
+    
     config = Configuracion.query.first()
-    if not config:
+    usuario = Usuario.query.get(usuario_id)
+    
+    if not config or not usuario:
         return 0
 
-    porcentaje = config.porcentaje_comision / 100
+    # Determinar porcentaje según el rol del usuario
+    if usuario.rol == 'vendedor':
+        porcentaje = (config.porcentaje_comision_vendedor or 5) / 100
+    elif usuario.rol == 'cobrador':
+        porcentaje = (config.porcentaje_comision_cobrador or 3) / 100
+    else:
+        porcentaje = (config.porcentaje_comision_vendedor or 5) / 100  # Por defecto
+
     monto_comision = monto * porcentaje
     periodo = config.periodo_comision
 
@@ -61,7 +72,7 @@ def calcular_comision(monto, usuario_id, venta_id=None, abono_id=None):
     comision = Comision(
         usuario_id=usuario_id,
         monto_base=monto,
-        porcentaje=config.porcentaje_comision,
+        porcentaje=config.porcentaje_comision_vendedor if usuario.rol == 'vendedor' else config.porcentaje_comision_cobrador,
         monto_comision=monto_comision,
         periodo=periodo,
         venta_id=venta_id,
