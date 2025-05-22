@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, redirect, url_for, request, make_response, flash, jsonify, current_appfrom flask_login import login_required, current_user
+from flask import Blueprint, render_template, redirect, url_for, request, make_response, flash, jsonify, current_app
+from flask_login import login_required, current_user
 from app import db
 from app.models import Comision, Usuario, Venta, Abono, MovimientoCaja
 from app.forms import ReporteComisionesForm
