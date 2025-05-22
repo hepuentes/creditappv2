@@ -78,10 +78,28 @@
                 </li>
                 {% endif %}
                 {% if current_user.is_vendedor() and not current_user.is_admin() %}
-                <li {% if 'reportes/comisiones' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('reportes.comisiones') }}"><i class="fas fa-percentage"></i> Mis Comisiones</a>
-                </li>
-                {% endif %}
+<li>
+    <a href="#reportesVendedorSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
+        <i class="fas fa-chart-line"></i> Mis Reportes
+    </a>
+    <ul class="collapse list-unstyled" id="reportesVendedorSubmenu">
+        <li><a href="{{ url_for('reportes.comisiones') }}"><i class="fas fa-percentage"></i> Mis Comisiones</a></li>
+        <li><a href="{{ url_for('reportes.ventas') }}"><i class="fas fa-shopping-cart"></i> Mis Ventas</a></li>
+    </ul>
+</li>
+{% endif %}
+
+{% if current_user.is_cobrador() and not current_user.is_admin() %}
+<li>
+    <a href="#reportesCobradorSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
+        <i class="fas fa-chart-bar"></i> Mis Reportes
+    </a>
+    <ul class="collapse list-unstyled" id="reportesCobradorSubmenu">
+        <li><a href="{{ url_for('reportes.abonos') }}"><i class="fas fa-money-bill-wave"></i> Mis Abonos</a></li>
+        <li><a href="{{ url_for('reportes.creditos') }}"><i class="fas fa-credit-card"></i> Créditos</a></li>
+    </ul>
+</li>
+{% endif %}
             </ul>
         </nav>
         <div id="content" class="flex-grow-1">
