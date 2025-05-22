@@ -59,13 +59,13 @@
 {% endif %}
                 {% if current_user.is_admin() %}
                 <li>
-                    <a href="#reportesSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
-                        <i class="fas fa-chart-bar"></i> Reportes
-                    </a>
-                    <ul class="collapse list-unstyled" id="reportesSubmenu">
-                        <li><a href="{{ url_for('reportes.comisiones') }}"><i class="fas fa-percentage"></i> Comisiones</a></li>
-                    </ul>
-                </li>
+    <a href="#reportesSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
+        <i class="fas fa-chart-bar"></i> Reportes
+    </a>
+    <ul class="collapse list-unstyled" id="reportesSubmenu">
+        <li><a href="{{ url_for('reportes.comisiones') }}"><i class="fas fa-percentage"></i> Comisiones</a></li>
+    </ul>
+</li>
                 <li {% if 'usuarios' in request.endpoint %}class="active"{% endif %}>
                     <a href="{{ url_for('usuarios.index') }}"><i class="fas fa-user-cog"></i> Usuarios</a>
                 </li>
