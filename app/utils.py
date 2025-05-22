@@ -89,12 +89,10 @@ def get_comisiones_periodo(usuario_id=None, fecha_inicio=None, fecha_fin=None):
     """Obtiene las comisiones para un período determinado"""
     try:
         if not fecha_inicio:
-            # Si no se especifica fecha, tomamos el mes actual o quincena según configuración
             try:
                 config = Configuracion.query.first()
                 periodo = config.periodo_comision if config else 'mensual'
             except Exception:
-                # Si hay error al consultar la configuración, usar valor por defecto
                 periodo = 'mensual'
 
             today = datetime.now()
@@ -115,6 +113,7 @@ def get_comisiones_periodo(usuario_id=None, fecha_inicio=None, fecha_fin=None):
                     else:
                         fecha_fin = datetime(today.year, today.month + 1, 1) - timedelta(days=1)
 
+        # Crear nueva sesión para evitar problemas de transacciones abortadas
         query = Comision.query.filter(
             Comision.fecha_generacion >= fecha_inicio,
             Comision.fecha_generacion <= fecha_fin
@@ -123,10 +122,29 @@ def get_comisiones_periodo(usuario_id=None, fecha_inicio=None, fecha_fin=None):
         if usuario_id:
             query = query.filter_by(usuario_id=usuario_id)
 
-        return query.all()
+        # Ejecutar la consulta con manejo de errores mejorado
+        try:
+            result = query.all()
+            return result
+        except Exception as db_error:
+            # Si hay error de transacción, hacer rollback y reintentar
+            db.session.rollback()
+            print(f"Error en consulta de comisiones, reintentando: {db_error}")
+            
+            # Reintentar con nueva consulta
+            query = Comision.query.filter(
+                Comision.fecha_generacion >= fecha_inicio,
+                Comision.fecha_generacion <= fecha_fin
+            )
+            if usuario_id:
+                query = query.filter_by(usuario_id=usuario_id)
+            
+            return query.all()
+            
     except Exception as e:
         print(f"Error en get_comisiones_periodo: {e}")
-        # Devolver una lista vacía en caso de error
+        # Hacer rollback en caso de error
+        db.session.rollback()
         return []
 
 
