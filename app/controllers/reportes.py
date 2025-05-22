@@ -10,9 +10,12 @@ import io
 import pandas as pd
 from io import BytesIO
 
+
+reportes_bp = Blueprint('reportes', __name__, url_prefix='/reportes')
+
 @reportes_bp.route('/comisiones', methods=['GET', 'POST'])
 @login_required
-@vendedor_cobrador_comisiones_required  # Cambiado para incluir cobradores
+@vendedor_cobrador_required  
 def comisiones():
     form = ReporteComisionesForm()
     comisiones_por_usuario = {}
