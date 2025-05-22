@@ -44,6 +44,14 @@
     </div>
 
     {% if egresos is defined %}
+    <!-- Información de Debug -->
+<div class="alert alert-info">
+    <strong>Información:</strong> 
+    Buscando movimientos tipo "salida" desde {{ fecha_inicio.strftime('%d/%m/%Y') }} hasta {{ fecha_fin.strftime('%d/%m/%Y') }}.
+    {% if not egresos %}
+    <br><strong>Sugerencia:</strong> Verifica que las fechas incluyan el día cuando hiciste los movimientos de caja.
+    {% endif %}
+</div>
     <!-- Resumen -->
     <div class="row mb-4">
         <div class="col-md-6">
