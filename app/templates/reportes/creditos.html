@@ -103,7 +103,7 @@
                     <tbody>
                         {% if creditos %}
                             {% for credito in creditos|sort(attribute='fecha', reverse=True) %}
-                            {% set dias_transcurridos = (moment().date() - credito.fecha.date()).days %}
+                            {% set dias_transcurridos = ((fecha_fin or moment().date()) - credito.fecha.date()).days %}
                             <tr {% if credito.saldo_pendiente <= 0 %}class="table-success"{% elif dias_transcurridos > 30 %}class="table-danger"{% elif dias_transcurridos > 15 %}class="table-warning"{% endif %}>
                                 <td>{{ credito.id }}</td>
                                 <td>{{ credito.fecha.strftime('%d/%m/%Y') }}</td>
@@ -118,7 +118,7 @@
                                     ${{ "{:,}".format(credito.saldo_pendiente) }}
                                 </td>
                                 <td>
-                                    {% set dias = (moment().date() - credito.fecha.date()).days %}
+                                    {% set dias = ((fecha_fin or moment().date()) - credito.fecha.date()).days %}
                                     {{ dias }} días
                                     {% if dias > 30 %}
                                     <span class="badge bg-danger">Vencido</span>
