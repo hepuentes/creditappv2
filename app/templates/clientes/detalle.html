@@ -73,24 +73,26 @@
                     <h5 class="mb-0">Acciones</h5>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        {% if current_user.is_vendedor() or current_user.is_admin() %}
-                        <div class="col-6 mb-3">
-                            <a href="{{ url_for('ventas.crear', cliente_id=cliente.id) }}" class="btn btn-primary w-100">
-                                <i class="fas fa-cart-plus"></i> Nueva Venta
-                            </a>
-                        </div>
-                        {% endif %}
+    <div class="row">
+        <!-- Solo vendedores y admin pueden crear ventas -->
+        {% if current_user.is_vendedor() or current_user.is_admin() %}
+        <div class="col-6 mb-3">
+            <a href="{{ url_for('ventas.crear', cliente_id=cliente.id) }}" class="btn btn-primary w-100">
+                <i class="fas fa-cart-plus"></i> Nueva Venta
+            </a>
+        </div>
+        {% endif %}
 
-                        {% if current_user.is_cobrador() or current_user.is_admin() %}
-                        <div class="col-6 mb-3">
-                            <a href="{{ url_for('abonos.crear', cliente_id=cliente.id) }}" class="btn btn-success w-100" {% if cliente.saldo_pendiente() <= 0 %}disabled{% endif %}>
-                                <i class="fas fa-money-bill-wave"></i> Registrar Abono
-                            </a>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
+        <!-- Solo cobradores y admin pueden registrar abonos -->
+        {% if (current_user.is_cobrador() or current_user.is_admin()) and cliente.saldo_pendiente() > 0 %}
+        <div class="col-6 mb-3">
+            <a href="{{ url_for('abonos.crear', cliente_id=cliente.id) }}" class="btn btn-success w-100">
+                <i class="fas fa-money-bill-wave"></i> Registrar Abono
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
             </div>
 
             <!-- Resumen Financiero -->
