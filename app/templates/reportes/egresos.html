@@ -68,6 +68,7 @@
     <div class="card">
         <div class="card-header">
             <h5 class="mb-0">Egresos Detallados ({{ fecha_inicio.strftime('%d/%m/%Y') }} - {{ fecha_fin.strftime('%d/%m/%Y') }})</h5>
+<small class="text-muted">Total encontrados: {{ egresos|length }} registros</small>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
