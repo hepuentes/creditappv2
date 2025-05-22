@@ -1,12 +1,14 @@
-from flask import Blueprint, render_template, redirect, url_for, request, make_response, flash
+from flask import Blueprint, render_template, redirect, url_for, request, make_response, flash, jsonify
 from flask_login import login_required, current_user
 from app import db
-from app.models import Comision, Usuario
+from app.models import Comision, Usuario, Venta, Abono, MovimientoCaja
 from app.forms import ReporteComisionesForm
-from app.decorators import admin_required, vendedor_extended_required
+from app.decorators import admin_required, vendedor_extended_required, vendedor_cobrador_required
 from datetime import datetime, timedelta
 import csv
-from io import StringIO
+import io
+import pandas as pd
+from io import BytesIO
 
 reportes_bp = Blueprint('reportes', __name__, url_prefix='/reportes')
 
@@ -51,37 +53,28 @@ def comisiones():
             fecha_fin = datetime.strptime(form.fecha_fin.data, '%Y-%m-%d')
             usuario_id = form.usuario_id.data
             
-            # Obtener página actual de la paginación
-            page = request.args.get('page', 1, type=int)
-            per_page = 25  # Número de registros por página
-
             # Para vendedores, siempre usar su ID
             if current_user.is_vendedor() and not current_user.is_admin():
                 usuario_id = current_user.id
             
-            # Consulta inicial sin considerar la paginación
-            if usuario_id == 0 and current_user.is_admin():
-                base_query = db.session.query(Comision, Usuario)\
-                    .join(Usuario, Comision.usuario_id == Usuario.id)\
-                    .filter(
-                        Comision.fecha_generacion >= fecha_inicio,
-                        Comision.fecha_generacion <= fecha_fin
-                    )
-            else:
-                # Para vendedor o cuando se selecciona usuario específico
-                base_query = db.session.query(Comision, Usuario)\
-                    .join(Usuario, Comision.usuario_id == Usuario.id)\
-                    .filter(
-                        Comision.fecha_generacion >= fecha_inicio,
-                        Comision.fecha_generacion <= fecha_fin,
-                        Comision.usuario_id == usuario_id
-                    )
+            # Consulta base
+            base_query = db.session.query(Comision, Usuario)\
+                .join(Usuario, Comision.usuario_id == Usuario.id)\
+                .filter(
+                    Comision.fecha_generacion >= fecha_inicio,
+                    Comision.fecha_generacion <= fecha_fin
+                )
             
-            # Consulta total para calcular totales generales
-            total_query = base_query
+            # CORREGIR: Aplicar filtro de usuario correctamente
+            if usuario_id and usuario_id != 0:  # Si no es "Todos"
+                base_query = base_query.filter(Comision.usuario_id == usuario_id)
             
+            # Obtener página actual de la paginación
+            page = request.args.get('page', 1, type=int)
+            per_page = 25
+
             # Aplicar paginación
-            pagination = base_query.paginate(page=page, per_page=per_page)
+            pagination = base_query.paginate(page=page, per_page=per_page, error_out=False)
             comisiones_paginadas = pagination.items
             
             # Si no hay resultados, informar al usuario
@@ -89,7 +82,7 @@ def comisiones():
                 flash('No se encontraron comisiones registradas para este período.', 'info')
             
             # Calcular totales de todas las comisiones (no solo de la página actual)
-            all_comisiones = total_query.all()
+            all_comisiones = base_query.all()
             
             # Agrupar por usuario
             for comision, usuario in comisiones_paginadas:
@@ -105,15 +98,14 @@ def comisiones():
                 comisiones_por_usuario[usuario.id]['total_base'] += comision.monto_base
                 comisiones_por_usuario[usuario.id]['total_comision'] += comision.monto_comision
             
-            # Calcular totales generales (de todas las comisiones, no solo de la página actual)
+            # Calcular totales generales
             for comision, usuario in all_comisiones:
                 total_base += comision.monto_base
                 total_comision += comision.monto_comision
 
-            # Si se solicita exportar CSV
+            # Si se solicita exportar Excel
             if 'export' in request.form:
-                # Exportar todas las comisiones, no solo la página actual
-                return exportar_csv_comisiones([c for c, _ in all_comisiones], fecha_inicio, fecha_fin)
+                return exportar_excel_comisiones([c for c, _ in all_comisiones], fecha_inicio, fecha_fin)
                 
         except Exception as e:
             current_app.logger.error(f"Error al generar reporte de comisiones: {str(e)}")
@@ -128,13 +120,6 @@ def comisiones():
                           fecha_fin=fecha_fin,
                           pagination=pagination)
 
-    # Establecer valores por defecto para las fechas si es GET
-    if request.method == 'GET':
-        form.fecha_inicio.data = primer_dia_mes.strftime('%Y-%m-%d')
-        form.fecha_fin.data = ultimo_dia_mes.strftime('%Y-%m-%d')
-
-    return render_template('reportes/comisiones.html', form=form)
-
 @reportes_bp.route('/comisiones/<int:id>/marcar-pagado', methods=['POST'])
 @login_required
 @admin_required
@@ -143,17 +128,106 @@ def marcar_pagado(id):
     comision.pagado = True
     db.session.commit()
     flash('Comisión marcada como pagada exitosamente', 'success')
-    return redirect(url_for('reportes.comisiones'))
+    # No redirigir para evitar resetear filtros
+    return jsonify({'success': True})
 
-def exportar_csv_comisiones(comisiones, fecha_inicio, fecha_fin):
-    """Exporta las comisiones a un archivo CSV"""
-    output = StringIO()
-    writer = csv.writer(output, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+@reportes_bp.route('/comisiones/marcar-todas-pagadas', methods=['POST'])
+@login_required
+@admin_required
+def marcar_todas_pagadas():
+    data = request.get_json()
+    comision_ids = data.get('comision_ids', [])
+    
+    if comision_ids:
+        comisiones = Comision.query.filter(Comision.id.in_(comision_ids)).all()
+        for comision in comisiones:
+            comision.pagado = True
+        db.session.commit()
+        flash(f'{len(comisiones)} comisiones marcadas como pagadas exitosamente', 'success')
+        return jsonify({'success': True, 'count': len(comisiones)})
+    
+    return jsonify({'success': False, 'error': 'No se seleccionaron comisiones'})
 
-    # Encabezados
-    writer.writerow(['ID', 'Fecha', 'Usuario', 'Monto Base', 'Porcentaje', 'Monto Comisión', 'Periodo', 'Origen', 'Pagado'])
+# NUEVOS REPORTES
+@reportes_bp.route('/ventas', methods=['GET', 'POST'])
+@login_required
+@vendedor_cobrador_required
+def ventas():
+    if request.method == 'POST':
+        fecha_inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d')
+        fecha_fin = datetime.strptime(request.form['fecha_fin'], '%Y-%m-%d')
+        
+        query = Venta.query.filter(
+            Venta.fecha >= fecha_inicio,
+            Venta.fecha <= fecha_fin
+        )
+        
+        # Si es vendedor, filtrar solo sus ventas
+        if current_user.is_vendedor() and not current_user.is_admin():
+            query = query.filter(Venta.vendedor_id == current_user.id)
+        
+        ventas = query.all()
+        
+        if 'export' in request.form:
+            return exportar_excel_ventas(ventas, fecha_inicio, fecha_fin)
+        
+        return render_template('reportes/ventas.html', ventas=ventas, 
+                             fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+    
+    return render_template('reportes/ventas.html')
 
-    # Datos
+@reportes_bp.route('/abonos', methods=['GET', 'POST'])
+@login_required
+@vendedor_cobrador_required
+def abonos():
+    if request.method == 'POST':
+        fecha_inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d')
+        fecha_fin = datetime.strptime(request.form['fecha_fin'], '%Y-%m-%d')
+        
+        query = Abono.query.filter(
+            Abono.fecha >= fecha_inicio,
+            Abono.fecha <= fecha_fin  
+        )
+        
+        # Si es vendedor, filtrar solo abonos de sus ventas
+        if current_user.is_vendedor() and not current_user.is_admin():
+            query = query.join(Venta).filter(Venta.vendedor_id == current_user.id)
+        
+        abonos = query.all()
+        
+        if 'export' in request.form:
+            return exportar_excel_abonos(abonos, fecha_inicio, fecha_fin)
+        
+        return render_template('reportes/abonos.html', abonos=abonos,
+                             fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+    
+    return render_template('reportes/abonos.html')
+
+@reportes_bp.route('/egresos', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def egresos():
+    if request.method == 'POST':
+        fecha_inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d')
+        fecha_fin = datetime.strptime(request.form['fecha_fin'], '%Y-%m-%d')
+        
+        egresos = MovimientoCaja.query.filter(
+            MovimientoCaja.tipo == 'salida',
+            MovimientoCaja.fecha >= fecha_inicio,
+            MovimientoCaja.fecha <= fecha_fin
+        ).all()
+        
+        if 'export' in request.form:
+            return exportar_excel_egresos(egresos, fecha_inicio, fecha_fin)
+        
+        return render_template('reportes/egresos.html', egresos=egresos,
+                             fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+    
+    return render_template('reportes/egresos.html')
+
+def exportar_excel_comisiones(comisiones, fecha_inicio, fecha_fin):
+    """Exporta las comisiones a un archivo Excel con formato correcto"""
+    data = []
     for comision in comisiones:
         origen = "N/A"
         if hasattr(comision, 'venta_id') and comision.venta_id and comision.venta:
@@ -161,22 +235,114 @@ def exportar_csv_comisiones(comisiones, fecha_inicio, fecha_fin):
         elif hasattr(comision, 'abono_id') and comision.abono_id and comision.abono:
             origen = f"Abono #{comision.abono_id} - Venta #{comision.abono.venta_id}"
             
-        writer.writerow([
-            comision.id,
-            comision.fecha_generacion.strftime('%d/%m/%Y %H:%M'),
-            comision.usuario.nombre,
-            comision.monto_base,
-            f"{comision.porcentaje}%",
-            comision.monto_comision,
-            comision.periodo,
-            origen,
-            'Sí' if comision.pagado else 'No'
-        ])
-
-    # Crear respuesta
+        data.append({
+            'ID': comision.id,
+            'Fecha': comision.fecha_generacion.strftime('%d/%m/%Y %H:%M'),
+            'Usuario': comision.usuario.nombre,
+            'Monto Base': int(comision.monto_base),
+            'Porcentaje': f"{comision.porcentaje}%",
+            'Monto Comision': int(comision.monto_comision),
+            'Periodo': comision.periodo,
+            'Origen': origen,
+            'Pagado': 'Si' if comision.pagado else 'No'
+        })
+    
+    df = pd.DataFrame(data)
+    
+    # Crear el archivo Excel en memoria
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Comisiones', index=False)
+    
     output.seek(0)
+    
+    # Crear respuesta
     response = make_response(output.getvalue())
-    response.headers['Content-Disposition'] = f'attachment; filename=comisiones_{fecha_inicio.strftime("%Y%m%d")}-{fecha_fin.strftime("%Y%m%d")}.csv'
-    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = f'attachment; filename=comisiones_{fecha_inicio.strftime("%Y%m%d")}-{fecha_fin.strftime("%Y%m%d")}.xlsx'
+    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    
+    return response
 
+def exportar_excel_ventas(ventas, fecha_inicio, fecha_fin):
+    """Exporta las ventas a Excel"""
+    data = []
+    for venta in ventas:
+        data.append({
+            'ID': venta.id,
+            'Fecha': venta.fecha.strftime('%d/%m/%Y %H:%M'),
+            'Cliente': venta.cliente.nombre,
+            'Vendedor': venta.vendedor.nombre,
+            'Tipo': venta.tipo.title(),
+            'Total': int(venta.total),
+            'Saldo Pendiente': int(venta.saldo_pendiente) if venta.saldo_pendiente else 0,
+            'Estado': venta.estado.title()
+        })
+    
+    df = pd.DataFrame(data)
+    
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Ventas', index=False)
+    
+    output.seek(0)
+    
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = f'attachment; filename=ventas_{fecha_inicio.strftime("%Y%m%d")}-{fecha_fin.strftime("%Y%m%d")}.xlsx'
+    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    
+    return response
+
+def exportar_excel_abonos(abonos, fecha_inicio, fecha_fin):
+    """Exporta los abonos a Excel"""
+    data = []
+    for abono in abonos:
+        data.append({
+            'ID': abono.id,
+            'Fecha': abono.fecha.strftime('%d/%m/%Y %H:%M'),
+            'Cliente': abono.venta.cliente.nombre if abono.venta else 'N/A',
+            'Factura': f"#{abono.venta_id}" if abono.venta_id else 'N/A',
+            'Monto': int(abono.monto),
+            'Cobrador': abono.cobrador.nombre,
+            'Caja': abono.caja.nombre if abono.caja else 'N/A',
+            'Notas': abono.notas or 'Sin notas'
+        })
+    
+    df = pd.DataFrame(data)
+    
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Abonos', index=False)
+    
+    output.seek(0)
+    
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = f'attachment; filename=abonos_{fecha_inicio.strftime("%Y%m%d")}-{fecha_fin.strftime("%Y%m%d")}.xlsx'
+    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    
+    return response
+
+def exportar_excel_egresos(egresos, fecha_inicio, fecha_fin):
+    """Exporta los egresos a Excel"""
+    data = []
+    for egreso in egresos:
+        data.append({
+            'ID': egreso.id,
+            'Fecha': egreso.fecha.strftime('%d/%m/%Y %H:%M'),
+            'Caja': egreso.caja.nombre,
+            'Monto': int(egreso.monto),
+            'Descripcion': egreso.descripcion or 'Sin descripcion'
+        })
+    
+    df = pd.DataFrame(data)
+    
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Egresos', index=False)
+    
+    output.seek(0)
+    
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = f'attachment; filename=egresos_{fecha_inicio.strftime("%Y%m%d")}-{fecha_fin.strftime("%Y%m%d")}.xlsx'
+    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    
     return response
