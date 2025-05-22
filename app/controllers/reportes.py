@@ -544,38 +544,3 @@ def exportar_excel_creditos(creditos, fecha_inicio, fecha_fin):
     response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     
     return response
-
-@reportes_bp.route('/debug-movimientos')
-@login_required
-@admin_required
-def debug_movimientos():
-    """Función temporal para debuggear movimientos de caja"""
-    # Obtener todos los movimientos de los últimos 7 días
-    hace_una_semana = datetime.now() - timedelta(days=7)
-    
-    movimientos = MovimientoCaja.query.filter(
-        MovimientoCaja.fecha >= hace_una_semana
-    ).order_by(MovimientoCaja.fecha.desc()).all()
-    
-    debug_info = []
-    for mov in movimientos:
-        debug_info.append({
-            'id': mov.id,
-            'fecha': mov.fecha.strftime('%Y-%m-%d %H:%M:%S'),
-            'tipo': mov.tipo,
-            'monto': mov.monto,
-            'caja': mov.caja.nombre if mov.caja else 'N/A',
-            'descripcion': mov.descripcion or 'Sin descripción'
-        })
-    
-    return f"""
-    <h2>Debug Movimientos de Caja (Últimos 7 días)</h2>
-    <p>Total movimientos: {len(debug_info)}</p>
-    <table border="1" style="border-collapse: collapse; width: 100%;">
-        <tr>
-            <th>ID</th><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Caja</th><th>Descripción</th>
-        </tr>
-        {''.join([f"<tr><td>{m['id']}</td><td>{m['fecha']}</td><td>{m['tipo']}</td><td>${m['monto']}</td><td>{m['caja']}</td><td>{m['descripcion']}</td></tr>" for m in debug_info])}
-    </table>
-    <br><a href="/reportes/egresos">Volver a Egresos</a>
-    """
