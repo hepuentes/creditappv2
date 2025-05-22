@@ -89,16 +89,16 @@ class VentaForm(FlaskForm):
 
 # --- Formulario de Abonos ---
 class AbonoForm(FlaskForm):
-    cliente_id = SelectField('Cliente', coerce=int, validators=[DataRequired()])
+    cliente_id = SelectField('Cliente', coerce=int, validators=[Optional()])  # Cambiado a Optional
     tipo_credito = SelectField('Tipo de Crédito', 
                               choices=[('venta', 'Venta a Crédito'), ('credito', 'Crédito Directo')], 
                               default='venta',
                               validators=[Optional()])
-    venta_id = SelectField('Venta/Crédito', coerce=int, validators=[DataRequired()])
+    venta_id = SelectField('Venta/Crédito', coerce=int, validators=[Optional()])  # Cambiado a Optional
     credito_id = HiddenField('ID Crédito')
     credito_venta_id = HiddenField('ID Crédito Venta')
-    monto = StringField('Monto', validators=[DataRequired()])
-    caja_id = SelectField('Caja', coerce=int, validators=[DataRequired()])
+    monto = StringField('Monto', validators=[Optional()])  # Validación manual en controlador
+    caja_id = SelectField('Caja', coerce=int, validators=[Optional()])  # Validación manual en controlador
     notas = TextAreaField('Notas', validators=[Optional(), Length(max=500)])
     submit = SubmitField('Registrar Abono')
     
