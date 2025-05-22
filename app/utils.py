@@ -1,5 +1,4 @@
 import os
-import qrcode
 from datetime import datetime, timedelta
 from io import BytesIO
 from PIL import Image
