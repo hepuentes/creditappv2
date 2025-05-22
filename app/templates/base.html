@@ -89,15 +89,27 @@
                     </button>
                     <div class="ms-auto d-flex align-items-center">
                         <div class="dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-user-circle me-1"></i> {{ current_user.nombre }}
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="#">Mi Perfil</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">Cerrar Sesión</a></li>
-                            </ul>
-                        </div>
+    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fas fa-user-circle me-1"></i> 
+        <div class="d-inline-block">
+            <div>{{ current_user.nombre }}</div>
+            <small class="text-muted">
+                {% if current_user.rol == 'administrador' %}
+                    Administrador
+                {% elif current_user.rol == 'vendedor' %}
+                    Vendedor
+                {% elif current_user.rol == 'cobrador' %}
+                    Cobrador
+                {% endif %}
+            </small>
+        </div>
+    </a>
+    <ul class="dropdown-menu dropdown-menu-end">
+        <li><a class="dropdown-item" href="{{ url_for('usuarios.mi_perfil') }}"><i class="fas fa-user me-2"></i>Mi Perfil</a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Cerrar Sesión</a></li>
+    </ul>
+</div>
                     </div>
                 </div>
             </nav>
