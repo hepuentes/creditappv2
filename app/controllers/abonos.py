@@ -59,12 +59,6 @@ def index():
                           busqueda=busqueda,
                           desde=desde_str,
                           hasta=hasta_str)
-   # Si se solicita una venta específica y el usuario es vendedor, verificar que sea suya
-    if venta_id and current_user.is_vendedor() and not current_user.is_admin():
-        venta = Venta.query.get(venta_id)
-        if venta and venta.vendedor_id != current_user.id:
-            flash('No tienes permisos para abonar a esta venta', 'danger')
-            return redirect(url_for('abonos.index'))
 
 @abonos_bp.route('/crear', methods=['GET', 'POST'])
 @login_required
@@ -95,7 +89,6 @@ def crear():
     
     clientes = clientes_query.all()
 
-    
     # Configurar opciones para el select de clientes
     if clientes:
         form.cliente_id.choices = [(c.id, f"{c.nombre} - {c.cedula}") for c in clientes]
@@ -106,26 +99,29 @@ def crear():
     form.venta_id.choices = [(-1, "Seleccione un cliente primero")]
     
     # Configuración si viene cliente_id o venta_id en la URL
-    client_selected = False  # Flag para saber si se seleccionó un cliente
+    client_selected = False
     
     # Si tiene cliente_id, cargar sus ventas pendientes
     if cliente_id:
         current_app.logger.info(f"Preseleccionando cliente_id={cliente_id}")
         
-        # Cargar cliente
         cliente = Cliente.query.get(cliente_id)
         if cliente:
-            # Intentar seleccionar este cliente en el dropdown
             if any(c[0] == cliente_id for c in form.cliente_id.choices):
                 form.cliente_id.data = cliente_id
                 client_selected = True
                 
-                # Cargar las ventas de este cliente
-                ventas_pendientes = Venta.query.filter(
+                # Cargar las ventas de este cliente (filtrar por vendedor si es necesario)
+                ventas_query = Venta.query.filter(
                     Venta.cliente_id == cliente_id,
                     Venta.tipo == 'credito', 
                     Venta.saldo_pendiente > 0
-                ).all()
+                )
+                
+                if current_user.is_vendedor() and not current_user.is_admin():
+                    ventas_query = ventas_query.filter(Venta.vendedor_id == current_user.id)
+                
+                ventas_pendientes = ventas_query.all()
                 
                 if ventas_pendientes:
                     form.venta_id.choices = [
@@ -135,16 +131,20 @@ def crear():
                 else:
                     form.venta_id.choices = [(-1, "Este cliente no tiene ventas pendientes")]
             else:
-                flash(f"El cliente con ID {cliente_id} no tiene ventas a crédito pendientes", "warning")
+                flash(f"El cliente con ID {cliente_id} no tiene ventas a crédito pendientes o no pertenece a sus ventas", "warning")
     
     # Si tiene venta_id, preseleccionar la venta
     if venta_id:
         current_app.logger.info(f"Preseleccionando venta_id={venta_id}")
         
-        # Cargar venta
         venta = Venta.query.get(venta_id)
         if venta and venta.tipo == 'credito' and venta.saldo_pendiente > 0:
-            # Si no se ha seleccionado un cliente aún, seleccionar el de esta venta
+            # Verificar si el vendedor puede acceder a esta venta
+            if current_user.is_vendedor() and not current_user.is_admin():
+                if venta.vendedor_id != current_user.id:
+                    flash("No tienes permisos para abonar a esta venta", "danger")
+                    return redirect(url_for('abonos.index'))
+            
             if not client_selected:
                 cliente_id = venta.cliente_id
                 
@@ -153,11 +153,16 @@ def crear():
                     client_selected = True
                 
                 # Cargar las ventas de este cliente
-                ventas_pendientes = Venta.query.filter(
+                ventas_query = Venta.query.filter(
                     Venta.cliente_id == cliente_id,
                     Venta.tipo == 'credito', 
                     Venta.saldo_pendiente > 0
-                ).all()
+                )
+                
+                if current_user.is_vendedor() and not current_user.is_admin():
+                    ventas_query = ventas_query.filter(Venta.vendedor_id == current_user.id)
+                
+                ventas_pendientes = ventas_query.all()
                 
                 if ventas_pendientes:
                     form.venta_id.choices = [
@@ -165,7 +170,7 @@ def crear():
                         for v in ventas_pendientes
                     ]
             
-            # Seleccionar la venta en el dropdown (sólo si es una opción válida)
+            # Seleccionar la venta en el dropdown
             if any(v[0] == venta_id for v in form.venta_id.choices):
                 form.venta_id.data = venta_id
         else:
@@ -188,6 +193,12 @@ def crear():
                 flash('Venta no encontrada', 'danger')
                 return render_template('abonos/crear.html', form=form, clientes=clientes)
             
+            # Verificar permisos del vendedor
+            if current_user.is_vendedor() and not current_user.is_admin():
+                if venta.vendedor_id != current_user.id:
+                    flash('No tienes permisos para abonar a esta venta', 'danger')
+                    return redirect(url_for('abonos.index'))
+            
             # Validar el tipo de venta
             if venta.tipo != 'credito':
                 flash('Solo se pueden registrar abonos para ventas a crédito', 'danger')
@@ -200,25 +211,17 @@ def crear():
             
             # Procesar y validar el monto del abono
             try:
-                # Obtener valor del formulario como string
                 monto_str = str(form.monto.data).strip()
                 
-                # Verificar si está vacío
                 if not monto_str:
                     flash('Por favor ingrese un monto válido', 'danger')
                     return render_template('abonos/crear.html', form=form, clientes=clientes)
                 
-                # Limpiar formato para manejar diferentes tipos de entrada
-                # Primero reemplazar comas por puntos si hay ambiguedad
                 monto_str = monto_str.replace(',', '.')
                 
-                # Luego asegurar un formato válido para Decimal
                 try:
                     monto = Decimal(monto_str)
                 except InvalidOperation:
-                    # Si falla, intentar un enfoque diferente para valores grandes
-                    # Posiblemente el usuario ingresó un número como "5.000.000"
-                    # Eliminar todos los puntos y convertir
                     monto_str_limpio = monto_str.replace('.', '')
                     try:
                         monto = Decimal(monto_str_limpio)
@@ -226,12 +229,10 @@ def crear():
                         flash('El formato del monto no es válido. Ingrese solo números, opcionalmente con punto decimal', 'danger')
                         return render_template('abonos/crear.html', form=form, clientes=clientes)
                 
-                # Validar valor positivo
                 if monto <= 0:
                     flash('El monto del abono debe ser mayor a cero', 'danger')
                     return render_template('abonos/crear.html', form=form, clientes=clientes)
                 
-                # Validar contra saldo pendiente con mensaje claro
                 if monto > venta.saldo_pendiente:
                     flash(f'El monto ha sido ajustado al saldo pendiente: ${venta.saldo_pendiente:,.0f}', 'warning')
                     monto = Decimal(str(venta.saldo_pendiente))
@@ -241,7 +242,7 @@ def crear():
                 flash(f'Error al procesar el monto: {str(e)}', 'danger')
                 return render_template('abonos/crear.html', form=form, clientes=clientes)
             
-            # Crear el abono con los campos obligatorios (usar monto ya validado)
+            # Crear el abono
             abono = Abono(
                 venta_id=venta.id,
                 monto=monto,
@@ -251,22 +252,19 @@ def crear():
                 notas=form.notas.data if form.notas.data else ''
             )
             
-            # Logging para debugging
             current_app.logger.info(f"Intentando crear abono: venta_id={abono.venta_id}, "
                                    f"monto={monto}, cobrador_id={abono.cobrador_id}, "
                                    f"caja_id={abono.caja_id}")
             
-            # Guardar el abono en la base de datos
             db.session.add(abono)
-            db.session.flush()  # Para obtener el ID del abono sin confirmar aún
+            db.session.flush()
             
             # Actualizar el saldo pendiente de la venta
             venta.saldo_pendiente -= monto
             
-            # Si el saldo es cero o negativo, marcar la venta como pagada y ajustar saldo a cero
             if venta.saldo_pendiente <= 0:
                 venta.estado = 'pagado'
-                venta.saldo_pendiente = 0  # Evitar saldos negativos
+                venta.saldo_pendiente = 0
             
             # Registrar movimiento en caja
             try:
@@ -279,7 +277,6 @@ def crear():
                 )
                 db.session.add(movimiento)
                 
-                # Actualizar saldo de la caja
                 caja = Caja.query.get(form.caja_id.data)
                 if caja:
                     caja.saldo_actual += monto
@@ -293,17 +290,14 @@ def crear():
             try:
                 calcular_comision(float(monto), current_user.id, None, abono.id)
             except Exception as e:
-                # No es crítico, sólo log
                 current_app.logger.error(f"Error al calcular comisión: {e}")
             
             # Commit de todos los cambios
             db.session.commit()
             
-            # Mensaje de éxito con formato apropiado
             monto_formateado = f"${float(monto):,.2f}"
             flash(f'Abono de {monto_formateado} registrado exitosamente', 'success')
             
-            # Redireccionar a la lista de abonos
             return redirect(url_for('abonos.index'))
             
         except Exception as e:
@@ -311,7 +305,6 @@ def crear():
             current_app.logger.error(f"Error general al registrar abono: {e}")
             flash(f'Error al registrar el abono: {str(e)}', 'danger')
     
-    # Si hay errores de validación, mostrarlos
     elif request.method == 'POST':
         error_msg = []
         for fieldName, errorMessages in form.errors.items():
@@ -320,7 +313,6 @@ def crear():
         current_app.logger.warning(f"Errores de validación: {form.errors}")
         flash(f"Error en el formulario: {' | '.join(error_msg)}", 'danger')
     
-    # Renderizar el formulario
     return render_template('abonos/crear.html', form=form, clientes=clientes)
 
 @abonos_bp.route('/cargar-ventas/<int:cliente_id>')
@@ -346,13 +338,12 @@ def cargar_ventas(cliente_id):
         if ventas:
             for v in ventas:
                 ventas_json.append({
-                    'id': int(v.id),  # Aseguramos que sea entero
+                    'id': int(v.id),
                     'texto': f"Venta #{v.id} - {v.fecha.strftime('%d/%m/%Y')} - Saldo: ${v.saldo_pendiente:,.0f}"
                 })
         else:
-            # Incluir una opción informativa si no hay ventas
             ventas_json.append({
-                'id': -1,  # ID inválido para detectar en el front
+                'id': -1,
                 'texto': "Este cliente no tiene ventas a crédito pendientes"
             })
         
@@ -363,15 +354,30 @@ def cargar_ventas(cliente_id):
 
 @abonos_bp.route('/<int:id>')
 @login_required
-@cobrador_required
+@vendedor_cobrador_required  # Cambiado de @cobrador_required
 def detalle(id):
     abono = Abono.query.get_or_404(id)
+    
+    # Si es vendedor, verificar que el abono pertenezca a una venta suya
+    if current_user.is_vendedor() and not current_user.is_admin():
+        if abono.venta and abono.venta.vendedor_id != current_user.id:
+            flash('No tienes permisos para ver este abono', 'danger')
+            return redirect(url_for('dashboard.index'))
+    
     return render_template('abonos/detalle.html', abono=abono)
 
 @abonos_bp.route('/<int:id>/pdf')
 @login_required
+@vendedor_cobrador_required  # Cambiado para permitir vendedores
 def pdf(id):
     abono = Abono.query.get_or_404(id)
+    
+    # Si es vendedor, verificar que el abono pertenezca a una venta suya
+    if current_user.is_vendedor() and not current_user.is_admin():
+        if abono.venta and abono.venta.vendedor_id != current_user.id:
+            flash('No tienes permisos para ver este PDF', 'danger')
+            return redirect(url_for('dashboard.index'))
+    
     try:
         pdf_bytes = generar_pdf_abono(abono)
         response = make_response(pdf_bytes)
@@ -385,12 +391,19 @@ def pdf(id):
 
 @abonos_bp.route('/<int:id>/share')
 @login_required
+@vendedor_cobrador_required  # Cambiado para permitir vendedores
 def compartir(id):
     from app.utils import get_abono_pdf_public_url
     
     abono = Abono.query.get_or_404(id)
+    
+    # Si es vendedor, verificar que el abono pertenezca a una venta suya
+    if current_user.is_vendedor() and not current_user.is_admin():
+        if abono.venta and abono.venta.vendedor_id != current_user.id:
+            flash('No tienes permisos para compartir este abono', 'danger')
+            return redirect(url_for('dashboard.index'))
+    
     public_url = get_abono_pdf_public_url(abono.id)
     
-    # Devolver la URL formateada para WhatsApp
     whatsapp_url = f"https://wa.me/?text=Consulte%20y%20descargue%20su%20comprobante%20de%20abono%20aquí:%20{public_url}"
     return redirect(whatsapp_url)
