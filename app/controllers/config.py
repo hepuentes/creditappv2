@@ -29,7 +29,9 @@ def editar():
         # Asegurarnos de que el IVA sea un entero y pueda ser 0
         config.iva = int(form.iva.data) if form.iva.data is not None else 0
         
-        config.porcentaje_comision = form.porcentaje_comision.data
+        # Comisiones separadas por rol
+        config.porcentaje_comision_vendedor = form.porcentaje_comision_vendedor.data
+        config.porcentaje_comision_cobrador = form.porcentaje_comision_cobrador.data
         config.periodo_comision = form.periodo_comision.data
         config.min_password = form.min_password.data
         
