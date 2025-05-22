@@ -470,3 +470,60 @@ def exportar_excel_egresos(egresos, fecha_inicio, fecha_fin):
     response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     
     return response
+
+@reportes_bp.route('/creditos', methods=['GET', 'POST'])
+@login_required
+@vendedor_cobrador_required
+def creditos():
+    if request.method == 'POST':
+        fecha_inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d')
+        fecha_fin = datetime.strptime(request.form['fecha_fin'], '%Y-%m-%d')
+        
+        query = Venta.query.filter(
+            Venta.tipo == 'credito',
+            Venta.fecha >= fecha_inicio,
+            Venta.fecha <= fecha_fin
+        )
+        
+        # Si es vendedor, filtrar solo sus ventas
+        if current_user.is_vendedor() and not current_user.is_admin():
+            query = query.filter(Venta.vendedor_id == current_user.id)
+        
+        creditos = query.all()
+        
+        if 'export' in request.form:
+            return exportar_excel_creditos(creditos, fecha_inicio, fecha_fin)
+        
+        return render_template('reportes/creditos.html', creditos=creditos,
+                             fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+    
+    return render_template('reportes/creditos.html')
+
+def exportar_excel_creditos(creditos, fecha_inicio, fecha_fin):
+    """Exporta los créditos a Excel"""
+    data = []
+    for credito in creditos:
+        data.append({
+            'ID': credito.id,
+            'Fecha': credito.fecha.strftime('%d/%m/%Y %H:%M'),
+            'Cliente': credito.cliente.nombre,
+            'Vendedor': credito.vendedor.nombre,
+            'Total': int(credito.total),
+            'Saldo Pendiente': int(credito.saldo_pendiente) if credito.saldo_pendiente else 0,
+            'Estado': credito.estado.title(),
+            'Días Transcurridos': (datetime.now() - credito.fecha).days
+        })
+    
+    df = pd.DataFrame(data)
+    
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Créditos', index=False)
+    
+    output.seek(0)
+    
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = f'attachment; filename=creditos_{fecha_inicio.strftime("%Y%m%d")}-{fecha_fin.strftime("%Y%m%d")}.xlsx'
+    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    
+    return response
