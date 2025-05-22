@@ -10,11 +10,9 @@ import io
 import pandas as pd
 from io import BytesIO
 
-reportes_bp = Blueprint('reportes', __name__, url_prefix='/reportes')
-
 @reportes_bp.route('/comisiones', methods=['GET', 'POST'])
 @login_required
-@vendedor_extended_required
+@vendedor_cobrador_comisiones_required  # Cambiado para incluir cobradores
 def comisiones():
     form = ReporteComisionesForm()
     comisiones_por_usuario = {}
@@ -24,8 +22,8 @@ def comisiones():
     fecha_fin = None
     pagination = None
 
-    # Si el usuario es vendedor, solo mostrar y seleccionar sus propias comisiones
-    if current_user.is_vendedor() and not current_user.is_admin():
+    # Si el usuario es vendedor o cobrador, solo mostrar sus propias comisiones
+    if (current_user.is_vendedor() or current_user.is_cobrador()) and not current_user.is_admin():
         form.usuario_id.choices = [(current_user.id, current_user.nombre)]
         form.usuario_id.data = current_user.id
     else:
@@ -53,63 +51,70 @@ def comisiones():
             fecha_fin = datetime.strptime(form.fecha_fin.data, '%Y-%m-%d')
             usuario_id = form.usuario_id.data
             
-            # Para vendedores, siempre usar su ID
-            if current_user.is_vendedor() and not current_user.is_admin():
+            # Para vendedores y cobradores, siempre usar su ID
+            if (current_user.is_vendedor() or current_user.is_cobrador()) and not current_user.is_admin():
                 usuario_id = current_user.id
             
-            # Consulta base
-            base_query = db.session.query(Comision, Usuario)\
-                .join(Usuario, Comision.usuario_id == Usuario.id)\
-                .filter(
-                    Comision.fecha_generacion >= fecha_inicio,
-                    Comision.fecha_generacion <= fecha_fin
-                )
-            
-            # CORREGIR: Aplicar filtro de usuario correctamente
-            if usuario_id and usuario_id != 0:  # Si no es "Todos"
-                base_query = base_query.filter(Comision.usuario_id == usuario_id)
-            
-            # Obtener página actual de la paginación
-            page = request.args.get('page', 1, type=int)
-            per_page = 25
+            # Usar la función corregida con manejo de errores
+            try:
+                # Crear consulta manualmente para mejor control de errores
+                base_query = db.session.query(Comision, Usuario)\
+                    .join(Usuario, Comision.usuario_id == Usuario.id)\
+                    .filter(
+                        Comision.fecha_generacion >= fecha_inicio,
+                        Comision.fecha_generacion <= fecha_fin
+                    )
+                
+                if usuario_id and usuario_id != 0:
+                    base_query = base_query.filter(Comision.usuario_id == usuario_id)
+                
+                # Ejecutar consulta con manejo de errores
+                try:
+                    all_comisiones = base_query.all()
+                except Exception as db_error:
+                    # Rollback y reintentar
+                    db.session.rollback()
+                    current_app.logger.error(f"Error en consulta comisiones: {db_error}")
+                    all_comisiones = base_query.all()
+                
+                # Procesar resultados
+                comisiones_paginadas = all_comisiones[:25]  # Limitar para evitar problemas
+                
+                if not comisiones_paginadas and (current_user.is_vendedor() or current_user.is_cobrador()):
+                    flash('No se encontraron comisiones registradas para este período.', 'info')
+                
+                # Agrupar por usuario
+                for comision, usuario in comisiones_paginadas:
+                    if usuario.id not in comisiones_por_usuario:
+                        comisiones_por_usuario[usuario.id] = {
+                            'usuario': usuario,
+                            'comisiones': [],
+                            'total_base': 0,
+                            'total_comision': 0
+                        }
 
-            # Aplicar paginación
-            pagination = base_query.paginate(page=page, per_page=per_page, error_out=False)
-            comisiones_paginadas = pagination.items
-            
-            # Si no hay resultados, informar al usuario
-            if not comisiones_paginadas and current_user.is_vendedor():
-                flash('No se encontraron comisiones registradas para este período.', 'info')
-            
-            # Calcular totales de todas las comisiones (no solo de la página actual)
-            all_comisiones = base_query.all()
-            
-            # Agrupar por usuario
-            for comision, usuario in comisiones_paginadas:
-                if usuario.id not in comisiones_por_usuario:
-                    comisiones_por_usuario[usuario.id] = {
-                        'usuario': usuario,
-                        'comisiones': [],
-                        'total_base': 0,
-                        'total_comision': 0
-                    }
+                    comisiones_por_usuario[usuario.id]['comisiones'].append(comision)
+                    comisiones_por_usuario[usuario.id]['total_base'] += comision.monto_base
+                    comisiones_por_usuario[usuario.id]['total_comision'] += comision.monto_comision
+                
+                # Calcular totales generales
+                for comision, usuario in all_comisiones:
+                    total_base += comision.monto_base
+                    total_comision += comision.monto_comision
 
-                comisiones_por_usuario[usuario.id]['comisiones'].append(comision)
-                comisiones_por_usuario[usuario.id]['total_base'] += comision.monto_base
-                comisiones_por_usuario[usuario.id]['total_comision'] += comision.monto_comision
-            
-            # Calcular totales generales
-            for comision, usuario in all_comisiones:
-                total_base += comision.monto_base
-                total_comision += comision.monto_comision
-
-            # Si se solicita exportar Excel
-            if 'export' in request.form:
-                return exportar_excel_comisiones([c for c, _ in all_comisiones], fecha_inicio, fecha_fin)
+                # Si se solicita exportar Excel
+                if 'export' in request.form:
+                    return exportar_excel_comisiones([c for c, _ in all_comisiones], fecha_inicio, fecha_fin)
+                    
+            except Exception as query_error:
+                current_app.logger.error(f"Error en procesamiento de comisiones: {query_error}")
+                flash("Error al procesar las comisiones. Intente nuevamente.", "danger")
+                db.session.rollback()
                 
         except Exception as e:
             current_app.logger.error(f"Error al generar reporte de comisiones: {str(e)}")
             flash(f"Error al generar el reporte: {str(e)}", "danger")
+            db.session.rollback()
 
     return render_template('reportes/comisiones.html',
                           form=form,
@@ -119,6 +124,77 @@ def comisiones():
                           fecha_inicio=fecha_inicio,
                           fecha_fin=fecha_fin,
                           pagination=pagination)
+
+
+@reportes_bp.route('/comisiones/liquidar-masiva', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def liquidar_masiva():
+    if request.method == 'POST':
+        # Obtener fechas del formulario
+        fecha_inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d')
+        fecha_fin = datetime.strptime(request.form['fecha_fin'], '%Y-%m-%d')
+        usuario_id = request.form.get('usuario_id')
+        
+        try:
+            # Construir consulta con mejor manejo de errores
+            query = Comision.query.filter(
+                Comision.fecha_generacion >= fecha_inicio,
+                Comision.fecha_generacion <= fecha_fin,
+                Comision.pagado == False
+            )
+            
+            if usuario_id and usuario_id != '0':
+                query = query.filter(Comision.usuario_id == usuario_id)
+            
+            # Ejecutar consulta con manejo de errores
+            try:
+                comisiones = query.all()
+            except Exception as db_error:
+                db.session.rollback()
+                current_app.logger.error(f"Error en consulta liquidación masiva: {db_error}")
+                comisiones = query.all()
+            
+            if 'liquidar' in request.form:
+                # Marcar todas como pagadas
+                for comision in comisiones:
+                    comision.pagado = True
+                
+                db.session.commit()
+                total_liquidado = sum(c.monto_comision for c in comisiones)
+                flash(f'Liquidadas {len(comisiones)} comisiones por un total de ${total_liquidado:,.0f}', 'success')
+                return redirect(url_for('reportes.liquidar_masiva'))
+            
+            elif 'exportar' in request.form:
+                # Exportar a Excel
+                return exportar_excel_liquidacion(comisiones, fecha_inicio, fecha_fin)
+            
+            # Agrupar por usuario para mostrar resumen
+            resumen_usuarios = {}
+            for comision in comisiones:
+                if comision.usuario_id not in resumen_usuarios:
+                    resumen_usuarios[comision.usuario_id] = {
+                        'usuario': comision.usuario,
+                        'total_comision': 0,
+                        'cantidad': 0
+                    }
+                resumen_usuarios[comision.usuario_id]['total_comision'] += comision.monto_comision
+                resumen_usuarios[comision.usuario_id]['cantidad'] += 1
+            
+            return render_template('reportes/liquidar_masiva.html', 
+                                 resumen_usuarios=resumen_usuarios,
+                                 fecha_inicio=fecha_inicio,
+                                 fecha_fin=fecha_fin,
+                                 total_general=sum(c.monto_comision for c in comisiones))
+        
+        except Exception as e:
+            current_app.logger.error(f"Error en liquidación masiva: {e}")
+            flash(f"Error en liquidación masiva: {str(e)}", "danger")
+            db.session.rollback()
+    
+    # GET: mostrar formulario
+    usuarios = Usuario.query.filter(Usuario.rol.in_(['vendedor', 'cobrador', 'administrador'])).all()
+    return render_template('reportes/liquidar_masiva.html', usuarios=usuarios)
 
 @reportes_bp.route('/comisiones/<int:id>/marcar-pagado', methods=['POST'])
 @login_required
@@ -148,63 +224,6 @@ def marcar_todas_pagadas():
     
     return jsonify({'success': False, 'error': 'No se seleccionaron comisiones'})
 
-@reportes_bp.route('/comisiones/liquidar-masiva', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def liquidar_masiva():
-    if request.method == 'POST':
-        # Obtener fechas del formulario
-        fecha_inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d')
-        fecha_fin = datetime.strptime(request.form['fecha_fin'], '%Y-%m-%d')
-        usuario_id = request.form.get('usuario_id')
-        
-        # Construir consulta
-        query = Comision.query.filter(
-            Comision.fecha_generacion >= fecha_inicio,
-            Comision.fecha_generacion <= fecha_fin,
-            Comision.pagado == False
-        )
-        
-        if usuario_id and usuario_id != '0':
-            query = query.filter(Comision.usuario_id == usuario_id)
-        
-        comisiones = query.all()
-        
-        if 'liquidar' in request.form:
-            # Marcar todas como pagadas
-            for comision in comisiones:
-                comision.pagado = True
-            
-            db.session.commit()
-            total_liquidado = sum(c.monto_comision for c in comisiones)
-            flash(f'Liquidadas {len(comisiones)} comisiones por un total de ${total_liquidado:,.0f}', 'success')
-            return redirect(url_for('reportes.liquidar_masiva'))
-        
-        elif 'exportar' in request.form:
-            # Exportar a Excel
-            return exportar_excel_liquidacion(comisiones, fecha_inicio, fecha_fin)
-        
-        # Agrupar por usuario para mostrar resumen
-        resumen_usuarios = {}
-        for comision in comisiones:
-            if comision.usuario_id not in resumen_usuarios:
-                resumen_usuarios[comision.usuario_id] = {
-                    'usuario': comision.usuario,
-                    'total_comision': 0,
-                    'cantidad': 0
-                }
-            resumen_usuarios[comision.usuario_id]['total_comision'] += comision.monto_comision
-            resumen_usuarios[comision.usuario_id]['cantidad'] += 1
-        
-        return render_template('reportes/liquidar_masiva.html', 
-                             resumen_usuarios=resumen_usuarios,
-                             fecha_inicio=fecha_inicio,
-                             fecha_fin=fecha_fin,
-                             total_general=sum(c.monto_comision for c in comisiones))
-    
-    # GET: mostrar formulario
-    usuarios = Usuario.query.filter(Usuario.rol.in_(['vendedor', 'cobrador', 'administrador'])).all()
-    return render_template('reportes/liquidar_masiva.html', usuarios=usuarios)
 
 def exportar_excel_liquidacion(comisiones, fecha_inicio, fecha_fin):
     """Exporta liquidación de comisiones a Excel"""
