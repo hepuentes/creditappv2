@@ -120,41 +120,63 @@
                         </div>
 
                         <hr class="my-4">
-                        <h6 class="text-primary mb-3">Configuración de Comisiones</h6>
+<h6 class="text-primary mb-3">Configuración de Comisiones</h6>
 
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                {{ form.porcentaje_comision.label(class="form-label") }}
-                                <div class="input-group">
-                                    {% if form.porcentaje_comision.errors %}
-                                        {{ form.porcentaje_comision(class="form-control is-invalid") }}
-                                        <span class="input-group-text">%</span>
-                                        <div class="invalid-feedback">
-                                            {% for error in form.porcentaje_comision.errors %}
-                                                {{ error }}
-                                            {% endfor %}
-                                        </div>
-                                    {% else %}
-                                        {{ form.porcentaje_comision(class="form-control") }}
-                                        <span class="input-group-text">%</span>
-                                    {% endif %}
-                                </div>
-                            </div>
+<div class="row mb-3">
+    <div class="col-md-6">
+        {{ form.porcentaje_comision_vendedor.label(class="form-label") }}
+        <div class="input-group">
+            {% if form.porcentaje_comision_vendedor.errors %}
+                {{ form.porcentaje_comision_vendedor(class="form-control is-invalid") }}
+                <span class="input-group-text">%</span>
+                <div class="invalid-feedback">
+                    {% for error in form.porcentaje_comision_vendedor.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% else %}
+                {{ form.porcentaje_comision_vendedor(class="form-control") }}
+                <span class="input-group-text">%</span>
+            {% endif %}
+        </div>
+        <div class="form-text">Comisión por ventas realizadas</div>
+    </div>
 
-                            <div class="col-md-6">
-                                {{ form.periodo_comision.label(class="form-label") }}
-                                {% if form.periodo_comision.errors %}
-                                    {{ form.periodo_comision(class="form-select is-invalid") }}
-                                    <div class="invalid-feedback">
-                                        {% for error in form.periodo_comision.errors %}
-                                            {{ error }}
-                                        {% endfor %}
-                                    </div>
-                                {% else %}
-                                    {{ form.periodo_comision(class="form-select") }}
-                                {% endif %}
-                            </div>
-                        </div>
+    <div class="col-md-6">
+        {{ form.porcentaje_comision_cobrador.label(class="form-label") }}
+        <div class="input-group">
+            {% if form.porcentaje_comision_cobrador.errors %}
+                {{ form.porcentaje_comision_cobrador(class="form-control is-invalid") }}
+                <span class="input-group-text">%</span>
+                <div class="invalid-feedback">
+                    {% for error in form.porcentaje_comision_cobrador.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% else %}
+                {{ form.porcentaje_comision_cobrador(class="form-control") }}
+                <span class="input-group-text">%</span>
+            {% endif %}
+        </div>
+        <div class="form-text">Comisión por abonos recibidos</div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        {{ form.periodo_comision.label(class="form-label") }}
+        {% if form.periodo_comision.errors %}
+            {{ form.periodo_comision(class="form-select is-invalid") }}
+            <div class="invalid-feedback">
+                {% for error in form.periodo_comision.errors %}
+                    {{ error }}
+                {% endfor %}
+            </div>
+        {% else %}
+            {{ form.periodo_comision(class="form-select") }}
+        {% endif %}
+    </div>
+</div>
 
                         <hr class="my-4">
                         <h6 class="text-primary mb-3">Configuración de Seguridad</h6>
