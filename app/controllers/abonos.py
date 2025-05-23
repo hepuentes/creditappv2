@@ -413,8 +413,6 @@ def pdf(id):
 @vendedor_cobrador_required
 def compartir(id):
     try:
-        from app.utils import get_abono_pdf_data_url
-        
         abono = Abono.query.get_or_404(id)
         
         # Verificar permisos si es vendedor
@@ -423,32 +421,30 @@ def compartir(id):
                 flash('No tienes permisos para compartir este abono', 'danger')
                 return redirect(url_for('abonos.index'))
         
-        # Generar data URL del PDF
-        data_url = get_abono_pdf_data_url(abono.id)
+        # Generar PDF
+        pdf_bytes = generar_pdf_abono(abono)
         
-        if not data_url:
-            flash('Error al generar enlace de descarga', 'danger')
-            return redirect(url_for('abonos.detalle', id=id))
+        # Codificar el PDF en base64
+        import base64
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        data_url = f"data:application/pdf;base64,{pdf_base64}"
         
         # Crear mensaje con información del abono
         cliente_nombre = abono.venta.cliente.nombre if abono.venta and abono.venta.cliente else "Cliente"
         mensaje = f"Comprobante de Abono #{abono.id}"
         
-        # Construir el mensaje básico de WhatsApp
-        short_url = shorten_url(data_url)
-        texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Abre el PDF: {short_url}"
+        # Redirigir a una página especial de compartir con los datos
+        from flask import session
+        session['pdf_data'] = {
+            'data_url': data_url,
+            'filename': f"abono_{abono.id}.pdf",
+            'title': mensaje,
+            'text': f"Comprobante de abono #{abono.id} para {cliente_nombre}"
+        }
         
-        # Codificar el texto para URL
-        import urllib.parse
-        texto_codificado = urllib.parse.quote(texto_whatsapp)
-        
-        # Generar el enlace de WhatsApp
-        whatsapp_url = f"https://wa.me/?text={texto_codificado}"
-        
-        current_app.logger.info(f"Compartiendo abono {id} por WhatsApp con data URL")
-        return redirect(whatsapp_url)
+        return redirect(url_for('public.share_page'))
         
     except Exception as e:
         current_app.logger.error(f"Error al compartir abono {id}: {e}")
-        flash('Error al generar enlace para compartir', 'danger')
+        flash('Error al generar documento para compartir', 'danger')
         return redirect(url_for('abonos.detalle', id=id))
