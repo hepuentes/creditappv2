@@ -343,3 +343,21 @@ def get_abono_pdf_data_url(abono_id):
     except Exception as e:
         print(f"Error generando data URL para abono {abono_id}: {e}")
         return None
+
+def shorten_url(long_url):
+    """Acorta una URL larga usando TinyURL (servicio gratuito sin API key)"""
+    import requests
+    
+    try:
+        # Usar TinyURL sin necesidad de API key
+        api_url = f"https://tinyurl.com/api-create.php?url={long_url}"
+        response = requests.get(api_url)
+        
+        if response.status_code == 200:
+            return response.text
+        else:
+            print(f"Error acortando URL: {response.status_code}")
+            return long_url
+    except Exception as e:
+        print(f"Error acortando URL: {e}")
+        return long_url
