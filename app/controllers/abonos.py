@@ -429,15 +429,20 @@ def compartir(id):
             flash('Error al generar enlace de descarga', 'danger')
             return redirect(url_for('abonos.detalle', id=id))
         
-        # Crear mensaje con información del abono
-        cliente_nombre = abono.venta.cliente.nombre if abono.venta and abono.venta.cliente else "Cliente"
-        mensaje = f"Comprobante de Abono #{abono.id} - {cliente_nombre}"
+        # Simplificar radicalmente el mensaje de WhatsApp - solo texto y URL
+        mensaje = f"Comprobante de abono #{abono.id}"
         
-        # Versión mejorada del enlace de WhatsApp - URL codificada correctamente
-        encoded_url = public_url.replace('&', '%26')
-        whatsapp_url = f"https://wa.me/?text=Hola!%20Aqu%C3%AD%20est%C3%A1%20tu%20{mensaje}.%0A%0APuedes%20descargar%20el%20PDF%20desde%20este%20enlace:%0A{encoded_url}"
+        # Construir el mensaje básico de WhatsApp
+        texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Descarga el PDF: {public_url}"
         
-        current_app.logger.info(f"Compartiendo abono {id} por WhatsApp: {public_url}")
+        # Codificar el texto para URL
+        import urllib.parse
+        texto_codificado = urllib.parse.quote(texto_whatsapp)
+        
+        # Generar el enlace de WhatsApp de la forma más simple posible
+        whatsapp_url = f"https://wa.me/?text={texto_codificado}"
+        
+        current_app.logger.info(f"Compartiendo abono {id} por WhatsApp con mensaje: {texto_whatsapp}")
         return redirect(whatsapp_url)
         
     except Exception as e:
