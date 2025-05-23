@@ -313,7 +313,7 @@ def compartir(id):
         
         # Construir el mensaje básico de WhatsApp
         short_url = shorten_url(data_url)
-texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Abre el PDF: {short_url}"
+        texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Abre el PDF: {short_url}"
         
         # Codificar el texto para URL
         import urllib.parse
