@@ -290,8 +290,6 @@ def eliminar(id):
 @login_required
 def compartir(id):
     try:
-        from app.utils import get_venta_pdf_data_url
-        
         venta = Venta.query.get_or_404(id)
         
         # Verificar permisos si es vendedor
@@ -300,32 +298,30 @@ def compartir(id):
                 flash('No tienes permisos para compartir esta venta', 'danger')
                 return redirect(url_for('ventas.index'))
         
-        # Generar data URL del PDF
-        data_url = get_venta_pdf_data_url(venta.id)
+        # Generar PDF
+        pdf_bytes = generar_pdf_venta(venta)
         
-        if not data_url:
-            flash('Error al generar enlace de descarga', 'danger')
-            return redirect(url_for('ventas.detalle', id=id))
+        # Codificar el PDF en base64
+        import base64
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        data_url = f"data:application/pdf;base64,{pdf_base64}"
         
         # Crear mensaje con información de la venta
         cliente_nombre = venta.cliente.nombre if venta.cliente else "Cliente"
         mensaje = f"Factura de venta #{venta.id}"
         
-        # Construir el mensaje básico de WhatsApp
-        short_url = shorten_url(data_url)
-        texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Abre el PDF: {short_url}"
+        # Redirigir a una página especial de compartir con los datos
+        from flask import session
+        session['pdf_data'] = {
+            'data_url': data_url,
+            'filename': f"factura_{venta.id}.pdf",
+            'title': mensaje,
+            'text': f"Factura de venta #{venta.id} para {cliente_nombre}"
+        }
         
-        # Codificar el texto para URL
-        import urllib.parse
-        texto_codificado = urllib.parse.quote(texto_whatsapp)
-        
-        # Generar el enlace de WhatsApp
-        whatsapp_url = f"https://wa.me/?text={texto_codificado}"
-        
-        current_app.logger.info(f"Compartiendo venta {id} por WhatsApp con data URL")
-        return redirect(whatsapp_url)
+        return redirect(url_for('public.share_page'))
         
     except Exception as e:
         current_app.logger.error(f"Error al compartir venta {id}: {e}")
-        flash('Error al generar enlace para compartir', 'danger')
+        flash('Error al generar documento para compartir', 'danger')
         return redirect(url_for('ventas.detalle', id=id))
