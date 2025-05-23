@@ -118,21 +118,6 @@
                 </li>
                 {% endif %}
             </ul>
-
-            <ul class="list-unstyled components mt-auto">
-                <li>
-                    <a href="{{ url_for('usuarios.mi_perfil') }}">
-                        <i class="fas fa-user"></i>
-                        Mi Perfil
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ url_for('auth.logout') }}">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Cerrar Sesión
-                    </a>
-                </li>
-            </ul>
         </nav>
 
         <!-- Page Content -->
@@ -140,14 +125,53 @@
             <!-- Navbar -->
             <nav class="navbar navbar-expand-lg navbar-light bg-light">
                 <div class="container-fluid">
+                    <!-- Botón hamburguesa para móviles -->
                     <button type="button" id="sidebarCollapseContent" class="btn btn-primary d-md-none">
                         <i class="fas fa-bars"></i>
                     </button>
                     
+                    <!-- Botón toggle para desktop -->
+                    <button type="button" id="sidebarCollapseDesktop" class="btn btn-outline-primary d-none d-md-block">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    
+                    <!-- Perfil de usuario mejorado -->
                     <div class="ms-auto">
-                        <span class="navbar-text">
-                            Bienvenido, {{ current_user.nombre }}
-                        </span>
+                        <div class="dropdown user-profile-dropdown">
+                            <a href="#" class="dropdown-toggle user-profile-link" id="dropdownUser" data-bs-toggle="dropdown" aria-expanded="false">
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar-circle">
+                                        <span class="initials">{{ current_user.nombre[0]|upper }}</span>
+                                    </div>
+                                    <div class="user-info ms-2 d-none d-md-block">
+                                        <div class="user-name">{{ current_user.nombre }}</div>
+                                        <div class="user-role">
+                                            {% if current_user.rol == 'administrador' %}
+                                                Administrador
+                                            {% elif current_user.rol == 'vendedor' %}
+                                                Vendedor
+                                            {% elif current_user.rol == 'cobrador' %}
+                                                Cobrador
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <i class="fas fa-chevron-down ms-2"></i>
+                                </div>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownUser">
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('usuarios.mi_perfil') }}">
+                                        <i class="fas fa-user me-2"></i> Mi Perfil
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('auth.logout') }}">
+                                        <i class="fas fa-sign-out-alt me-2"></i> Cerrar Sesión
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </nav>
