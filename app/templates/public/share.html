@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Compartir Documento - CreditApp{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-8 text-center mt-5">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4>Compartir Documento</h4>
+                </div>
+                <div class="card-body">
+                    <h5 id="titulo-documento">Listo para compartir</h5>
+                    <p class="mb-4">Utilice uno de los siguientes métodos para compartir:</p>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3">
+                            <button id="btn-share-api" class="btn btn-success btn-lg w-100">
+                                <i class="fas fa-share-alt me-2"></i> Compartir Documento
+                            </button>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <a id="btn-whatsapp" href="#" target="_blank" class="btn btn-success btn-lg w-100">
+                                <i class="fab fa-whatsapp me-2"></i> Enviar por WhatsApp
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <p><i class="fas fa-info-circle"></i> <strong>Alternativas:</strong></p>
+                        <ul class="text-start mb-0">
+                            <li>Si los botones no funcionan, puede descargar el documento y compartirlo manualmente.</li>
+                            <li>El documento no se guarda en el servidor y está disponible solo durante esta sesión.</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a id="btn-download" href="#" download class="btn btn-primary">
+                            <i class="fas fa-download me-2"></i> Descargar Documento
+                        </a>
+                        <a href="#" id="btn-volver" class="btn btn-secondary ms-2">
+                            <i class="fas fa-arrow-left me-2"></i> Volver
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Vista previa PDF (oculta en móviles) -->
+            <div class="card mt-4 d-none d-md-block">
+                <div class="card-header">
+                    <h5 class="mb-0">Vista previa</h5>
+                </div>
+                <div class="card-body p-0">
+                    <iframe id="pdf-preview" style="width:100%; height:500px; border:none;"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Obtener los datos de sesión (Flask los pasa a la plantilla)
+    const pdfData = {{ session.pop('pdf_data', {})|tojson }};
+    
+    if (!pdfData || !pdfData.data_url) {
+        document.querySelector('.card-body').innerHTML = '<div class="alert alert-danger">Error: No se encontró el documento para compartir</div>';
+        return;
+    }
+    
+    // Configurar título
+    if (pdfData.title) {
+        document.getElementById('titulo-documento').textContent = pdfData.title;
+    }
+    
+    // Configurar botón de descarga
+    const downloadBtn = document.getElementById('btn-download');
+    downloadBtn.href = pdfData.data_url;
+    downloadBtn.download = pdfData.filename || 'documento.pdf';
+    
+    // Configurar vista previa
+    const pdfPreview = document.getElementById('pdf-preview');
+    if (pdfPreview) {
+        pdfPreview.src = pdfData.data_url;
+    }
+    
+    // Configurar botón de WhatsApp
+    const whatsappBtn = document.getElementById('btn-whatsapp');
+    const textoPdf = pdfData.text || 'Te comparto este documento de CreditApp';
+    whatsappBtn.href = `https://wa.me/?text=${encodeURIComponent(textoPdf)}`;
+    
+    // Configurar botón de compartir API Web
+    const shareBtn = document.getElementById('btn-share-api');
+    
+    // Verificar si la Web Share API está disponible
+    if (navigator.share) {
+        shareBtn.addEventListener('click', async () => {
+            try {
+                // Convertir data URL a Blob
+                const fetchResponse = await fetch(pdfData.data_url);
+                const blob = await fetchResponse.blob();
+                
+                // Crear archivo para compartir
+                const file = new File([blob], pdfData.filename || 'documento.pdf', { type: 'application/pdf' });
+                
+                // Compartir usando la API
+                await navigator.share({
+                    title: pdfData.title || 'Documento CreditApp',
+                    text: pdfData.text || 'Te comparto este documento de CreditApp',
+                    files: [file]
+                });
+                
+                console.log('Documento compartido exitosamente');
+            } catch (error) {
+                console.error('Error al compartir:', error);
+                alert('No se pudo compartir el documento. Intente con el botón de WhatsApp o descárguelo manualmente.');
+            }
+        });
+    } else {
+        // Web Share API no disponible
+        shareBtn.textContent = 'Compartir no disponible';
+        shareBtn.disabled = true;
+        shareBtn.classList.add('btn-secondary');
+        shareBtn.classList.remove('btn-success');
+    }
+    
+    // Configurar botón volver
+    document.getElementById('btn-volver').addEventListener('click', function(e) {
+        e.preventDefault();
+        window.history.back();
+    });
+});
+</script>
+{% endblock %}
