@@ -288,11 +288,25 @@ def eliminar(id):
 @ventas_bp.route('/<int:id>/share')
 @login_required
 def compartir(id):
-    from app.utils import get_venta_pdf_public_url
+    """Comparte un PDF de venta directamente sin depender de la app"""
+    from app.utils import get_venta_pdf_public_data_url
+    import urllib.parse
     
     venta = Venta.query.get_or_404(id)
-    public_url = get_venta_pdf_public_url(venta.id)
     
-    # Devolver la URL formateada para WhatsApp
-    whatsapp_url = f"https://wa.me/?text=Consulte%20y%20descargue%20su%20factura%20aquí:%20{public_url}"
+    # Generar data URL para el PDF
+    data_url = get_venta_pdf_public_data_url(venta.id)
+    
+    if not data_url:
+        flash("Error al generar el PDF para compartir", "danger")
+        return redirect(url_for('ventas.detalle', id=id))
+        
+    # Por ser una URL de datos muy larga, usamos un servicio de acortamiento
+    # o simplemente podemos hacer referencia al cliente y número de factura
+    mensaje = f"Factura #{venta.id} - {venta.cliente.nombre}"
+    mensaje_encoded = urllib.parse.quote(mensaje)
+    
+    # URL de WhatsApp que abre la conversación con el mensaje predeterminado
+    whatsapp_url = f"https://wa.me/?text={mensaje_encoded}%20-%20Por%20favor%20revise%20su%20PDF%20de%20factura%20que%20fue%20entregado%20personalmente."
+    
     return redirect(whatsapp_url)
