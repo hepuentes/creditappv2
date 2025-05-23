@@ -409,9 +409,11 @@ def pdf(id):
 
 @abonos_bp.route('/<int:id>/share')
 @login_required
-@vendedor_cobrador_required  # Cambiado para permitir vendedores
+@vendedor_cobrador_required
 def compartir(id):
-    from app.utils import get_abono_pdf_public_url
+    """Comparte un PDF de abono directamente sin depender de la app"""
+    from app.utils import get_abono_pdf_public_data_url
+    import urllib.parse
     
     abono = Abono.query.get_or_404(id)
     
@@ -421,7 +423,23 @@ def compartir(id):
             flash('No tienes permisos para compartir este abono', 'danger')
             return redirect(url_for('dashboard.index'))
     
-    public_url = get_abono_pdf_public_url(abono.id)
+    # Generar data URL para el PDF
+    data_url = get_abono_pdf_public_data_url(abono.id)
     
-    whatsapp_url = f"https://wa.me/?text=Consulte%20y%20descargue%20su%20comprobante%20de%20abono%20aquí:%20{public_url}"
+    if not data_url:
+        flash("Error al generar el PDF para compartir", "danger")
+        return redirect(url_for('abonos.detalle', id=id))
+        
+    # Crear mensaje claro con información del abono
+    if abono.venta and abono.venta.cliente:
+        cliente_nombre = abono.venta.cliente.nombre
+    else:
+        cliente_nombre = "Cliente"
+        
+    mensaje = f"Comprobante de Abono #{abono.id} - {cliente_nombre} - ${int(abono.monto):,}"
+    mensaje_encoded = urllib.parse.quote(mensaje)
+    
+    # URL de WhatsApp que abre la conversación con el mensaje predeterminado
+    whatsapp_url = f"https://wa.me/?text={mensaje_encoded}%20-%20Por%20favor%20revise%20su%20comprobante%20de%20abono%20que%20fue%20entregado%20personalmente."
+    
     return redirect(whatsapp_url)
