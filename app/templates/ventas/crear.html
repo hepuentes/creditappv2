@@ -25,6 +25,12 @@
         .productos-seleccionados-section {
             order: 3;
         }
+        .resumen-credito-section {
+            order: 4;
+        }
+        .form-buttons-section {
+            order: 5;
+        }
     }
 </style>
 {% endblock %}
@@ -94,33 +100,7 @@
                         <input type="hidden" name="productos_json" id="productos_json">
                         {{ form.csrf_token }}
                         
-                        <!-- Resumen de crédito - Solo visible cuando hay productos y es venta a crédito -->
-                        <div id="resumen_credito" class="mt-4" style="display: none;">
-                            <h5 class="mb-3">Resumen de la Venta a Crédito</h5>
-                            <div class="card bg-light">
-                                <div class="card-body">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <p><strong>Cliente:</strong> <span id="resumen_cliente_nombre"></span></p>
-                                            <p><strong>Frecuencia de pago:</strong> <span id="resumen_frecuencia_pago"></span></p>
-                                            <p><strong>Valor de cada cuota:</strong> <span id="resumen_valor_cuota"></span></p>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <p><strong>Tipo de venta:</strong> Crédito</p>
-                                            <p><strong>Número de cuotas:</strong> <span id="resumen_numero_cuotas"></span></p>
-                                            <p><strong>Fecha primer pago (aprox):</strong> <span id="resumen_fecha_primer_pago"></span></p>
-                                        </div>
-                                    </div>
-                                    <hr>
-                                    <p class="fw-bold text-center">Total de la venta: <span id="resumen_total_venta_credito" class="text-primary"></span></p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="d-flex justify-content-end mt-4">
-                            <a href="{{ url_for('ventas.index') }}" class="btn btn-secondary me-2">Cancelar</a>
-                            {{ form.submit(class="btn btn-success") }}
-                        </div>
+                        <!-- Moviendo el resumen y los botones fuera de esta sección para reorganizarlos en móvil -->
                     </form>
                 </div>
             </div>
@@ -207,6 +187,43 @@
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Resumen de crédito - Solo visible cuando hay productos y es venta a crédito (orden 4 en móvil) -->
+    <div class="row resumen-credito-section">
+        <div class="col-12">
+            <div id="resumen_credito" class="mt-4" style="display: none;">
+                <h5 class="mb-3">Resumen de la Venta a Crédito</h5>
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Cliente:</strong> <span id="resumen_cliente_nombre"></span></p>
+                                <p><strong>Frecuencia de pago:</strong> <span id="resumen_frecuencia_pago"></span></p>
+                                <p><strong>Valor de cada cuota:</strong> <span id="resumen_valor_cuota"></span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Tipo de venta:</strong> Crédito</p>
+                                <p><strong>Número de cuotas:</strong> <span id="resumen_numero_cuotas"></span></p>
+                                <p><strong>Fecha primer pago (aprox):</strong> <span id="resumen_fecha_primer_pago"></span></p>
+                            </div>
+                        </div>
+                        <hr>
+                        <p class="fw-bold text-center">Total de la venta: <span id="resumen_total_venta_credito" class="text-primary"></span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Botones de acción (orden 5 en móvil) -->
+    <div class="row form-buttons-section">
+        <div class="col-12">
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('ventas.index') }}" class="btn btn-secondary me-2">Cancelar</a>
+                <button type="submit" form="ventaForm" class="btn btn-success">{{ form.submit.label.text }}</button>
             </div>
         </div>
     </div>
