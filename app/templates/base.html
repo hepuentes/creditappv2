@@ -1,187 +1,123 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}CreditApp{% endblock %}</title>
+// main.js
+document.addEventListener('DOMContentLoaded', () => {
+  const sidebar = document.getElementById('sidebar');
+  const sidebarToggleBtn = document.getElementById('sidebarCollapseContent');
+  
+  // Función para cerrar sidebar
+  function closeSidebar() {
+    if (sidebar) {
+      sidebar.classList.remove('show');
+      document.body.classList.remove('sidebar-open');
+    }
+  }
+  
+  // Función para abrir sidebar
+  function openSidebar() {
+    if (sidebar) {
+      sidebar.classList.add('show');
+      document.body.classList.add('sidebar-open');
+    }
+  }
+  
+  // Función para toggle sidebar
+  function toggleSidebar() {
+    if (sidebar) {
+      if (sidebar.classList.contains('show')) {
+        closeSidebar();
+      } else {
+        openSidebar();
+      }
+    }
+  }
+  
+  // Event listener para el botón hamburguesa
+  if (sidebarToggleBtn) {
+    sidebarToggleBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSidebar();
+    });
+  }
+  
+  // Cerrar sidebar al hacer clic fuera en móvil
+  document.addEventListener('click', function(e) {
+    if (window.innerWidth < 768 && sidebar && sidebar.classList.contains('show')) {
+      // Si el clic no es en el sidebar ni en el botón toggle
+      if (!sidebar.contains(e.target) && !e.target.closest('#sidebarCollapseContent')) {
+        closeSidebar();
+      }
+    }
+  });
+  
+  // Cerrar sidebar al hacer clic en enlaces del menú en móvil
+  const sidebarLinks = document.querySelectorAll('#sidebar a');
+  sidebarLinks.forEach(link => {
+    link.addEventListener('click', function() {
+      if (window.innerWidth < 768) {
+        // Pequeño delay para permitir la navegación
+        setTimeout(() => {
+          closeSidebar();
+        }, 100);
+      }
+    });
+  });
+  
+  // Manejar cambios de tamaño de ventana
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 768) {
+      // En pantallas grandes, asegurar que sidebar esté visible
+      closeSidebar(); // Remover clases de móvil
+    } else {
+      // En móvil, asegurar que sidebar esté oculto por defecto
+      if (!sidebar.classList.contains('show')) {
+        closeSidebar();
+      }
+    }
+  });
+  
+  // Inicializar estado correcto al cargar
+  if (window.innerWidth < 768) {
+    closeSidebar();
+  }
+  
+  // Auto-close alerts después de 5 segundos
+  setTimeout(function() {
+    const alerts = document.querySelectorAll('.alert');
+    alerts.forEach(alert => {
+      if (bootstrap && bootstrap.Alert) {
+        const bsAlert = new bootstrap.Alert(alert);
+        bsAlert.close();
+      } else {
+        alert.classList.add('fade');
+        setTimeout(() => {
+          alert.remove();
+        }, 300);
+      }
+    });
+  }, 5000);
+  
+  // Inicializar tooltips
+  const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+  if (tooltipTriggerList.length > 0 && bootstrap && bootstrap.Tooltip) {
+    [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+  }
 
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-
-    {% block extra_css %}{% endblock %}
-</head>
-<body>
-    <div class="wrapper d-flex align-items-stretch">
-        <!-- Sidebar -->
-        <nav id="sidebar" class="sidebar">
-            <div class="sidebar-header d-flex justify-content-between align-items-center px-3 py-2">
-                <h3>CreditApp</h3>
-                <!-- Este botón solo estará visible en el sidebar, no duplicado en navbar -->
-                <button type="button" id="sidebarCollapse" class="btn btn-primary d-md-none">
-                    <i class="fas fa-bars"></i>
-                </button>
-            </div>
-            <ul class="list-unstyled components mb-0">
-                <li {% if request.endpoint == 'dashboard.index' %}class="active"{% endif %}>
-                    <a href="{{ url_for('dashboard.index') }}"><i class="fas fa-home"></i> Dashboard</a>
-                </li>
-                
-                <!-- Clientes - Solo para vendedores, cobradores y admin -->
-                {% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}
-                <li {% if 'clientes' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('clientes.index') }}"><i class="fas fa-users"></i> Clientes</a>
-                </li>
-                {% endif %}
-                
-                <!-- Inventario - Solo para vendedores y admin -->
-                {% if current_user.is_vendedor() or current_user.is_admin() %}
-                <li {% if 'productos' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('productos.index') }}"><i class="fas fa-box"></i> Inventario</a>
-                </li>
-                {% endif %}
-                
-                <!-- Ventas - Solo para vendedores y admin -->
-                {% if current_user.is_vendedor() or current_user.is_admin() %}
-                <li {% if 'ventas' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('ventas.index') }}"><i class="fas fa-shopping-cart"></i> Ventas</a>
-                </li>
-                {% endif %}
-                
-                <!-- Créditos - Para vendedores, cobradores y admin -->
-                {% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}
-                <li {% if 'creditos' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('creditos.index') }}"><i class="fas fa-credit-card"></i> Créditos</a>
-                </li>
-                {% endif %}
-                
-                <!-- Abonos - Para vendedores, cobradores y admin -->
-                {% if current_user.is_vendedor() or current_user.is_cobrador() or current_user.is_admin() %}
-                <li {% if 'abonos' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('abonos.index') }}"><i class="fas fa-money-bill-wave"></i> Abonos</a>
-                </li>
-                {% endif %}
-                
-                <!-- Cajas - Solo para admin -->
-                {% if current_user.is_admin() %}
-                <li {% if 'cajas' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('cajas.index') }}"><i class="fas fa-cash-register"></i> Cajas</a>
-                </li>
-                {% endif %}
-                
-                <!-- Reportes Admin -->
-                {% if current_user.is_admin() %}
-                <li>
-                    <a href="#reportesSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
-                        <i class="fas fa-chart-bar"></i> Reportes
-                    </a>
-                    <ul class="collapse list-unstyled" id="reportesSubmenu">
-                        <li><a href="{{ url_for('reportes.comisiones') }}"><i class="fas fa-percentage"></i> Comisiones</a></li>
-                        <li><a href="{{ url_for('reportes.ventas') }}"><i class="fas fa-shopping-cart"></i> Ventas</a></li>
-                        <li><a href="{{ url_for('reportes.abonos') }}"><i class="fas fa-money-bill-wave"></i> Abonos</a></li>
-                        <li><a href="{{ url_for('reportes.creditos') }}"><i class="fas fa-credit-card"></i> Créditos</a></li>
-                        <li><a href="{{ url_for('reportes.egresos') }}"><i class="fas fa-arrow-down"></i> Egresos</a></li>
-                    </ul>
-                </li>
-                <li {% if 'usuarios' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('usuarios.index') }}"><i class="fas fa-user-cog"></i> Usuarios</a>
-                </li>
-                <li {% if 'config' in request.endpoint %}class="active"{% endif %}>
-                    <a href="{{ url_for('config.editar') }}"><i class="fas fa-cogs"></i> Configuración</a>
-                </li>
-                {% endif %}
-                
-                <!-- Reportes para Vendedores -->
-                {% if current_user.is_vendedor() and not current_user.is_admin() %}
-                <li>
-                    <a href="#reportesVendedorSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
-                        <i class="fas fa-chart-line"></i> Mis Reportes
-                    </a>
-                    <ul class="collapse list-unstyled" id="reportesVendedorSubmenu">
-                        <li><a href="{{ url_for('reportes.comisiones') }}"><i class="fas fa-percentage"></i> Mis Comisiones</a></li>
-                        <li><a href="{{ url_for('reportes.ventas') }}"><i class="fas fa-shopping-cart"></i> Mis Ventas</a></li>
-                    </ul>
-                </li>
-                {% endif %}
-
-                <!-- Reportes para Cobradores -->
-                {% if current_user.is_cobrador() and not current_user.is_admin() %}
-                <li>
-                    <a href="#reportesCobradorSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
-                        <i class="fas fa-chart-bar"></i> Mis Reportes
-                    </a>
-                    <ul class="collapse list-unstyled" id="reportesCobradorSubmenu">
-                        <li><a href="{{ url_for('reportes.comisiones') }}"><i class="fas fa-percentage"></i> Mis Comisiones</a></li>
-                        <li><a href="{{ url_for('reportes.abonos') }}"><i class="fas fa-money-bill-wave"></i> Mis Abonos</a></li>
-                    </ul>
-                </li>
-                {% endif %}
-            </ul>
-        </nav>
-        
-        <div id="content" class="flex-grow-1">
-            <nav class="navbar navbar-expand-lg navbar-light bg-light">
-                <div class="container-fluid">
-                    <!-- Este botón solo estará visible en el content, no duplicado en sidebar -->
-                    <button type="button" id="sidebarCollapse" class="btn btn-primary d-md-none">
-                        <i class="fas fa-bars"></i>
-                    </button>
-                    <div class="ms-auto d-flex align-items-center">
-                        <div class="dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-user-circle me-1"></i> 
-                                <div class="d-inline-block">
-                                    <div>{{ current_user.nombre }}</div>
-                                    <small class="text-muted">
-                                        {% if current_user.rol == 'administrador' %}
-                                            Administrador
-                                        {% elif current_user.rol == 'vendedor' %}
-                                            Vendedor
-                                        {% elif current_user.rol == 'cobrador' %}
-                                            Cobrador
-                                        {% endif %}
-                                    </small>
-                                </div>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="{{ url_for('usuarios.mi_perfil') }}"><i class="fas fa-user me-2"></i>Mi Perfil</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Cerrar Sesión</a></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </nav>
-            <div class="container-fluid mt-3">
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for cat, msg in messages %}
-                            <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">
-                                {{ msg }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
-            </div>
-            <div class="container-fluid mt-4">
-                {% block content %}{% endblock %}
-            </div>
-            <footer class="footer mt-auto py-3 bg-light mt-5">
-                <div class="container text-center">
-                    <span class="text-muted">© 2025 CreditApp. Todos los derechos reservados.</span>
-                </div>
-            </footer>
-        </div>
-    </div>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    {% block extra_js %}{% endblock %}
-</body>
-</html>
+  // Función para actualizar total de venta
+  window.actualizarTotal = function() {
+    const subtotales = document.querySelectorAll('#tabla-productos .subtotal');
+    let suma = 0;
+    
+    subtotales.forEach(subtotal => {
+      suma += parseFloat(subtotal.textContent.replace(/[^\d.-]/g, '')) || 0;
+    });
+    
+    const totalVenta = document.getElementById('total-venta');
+    if (totalVenta) {
+      totalVenta.textContent = new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0
+      }).format(suma);
+    }
+  };
+});
