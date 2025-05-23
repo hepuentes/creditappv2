@@ -5,6 +5,8 @@ from PIL import Image
 from flask import current_app, url_for
 from app import db
 from app.models import Configuracion, Comision, Venta, Abono, MovimientoCaja
+import logging
+import base64
 
 def format_currency(amount):
     """Formatea un monto como moneda (sin decimales)"""
@@ -262,7 +264,7 @@ def get_venta_pdf_descarga_url(venta_id):
         
         return public_url
     except Exception as e:
-        print(f"Error generando URL para venta {venta_id}: {e}")
+        current_app.logger.error(f"Error generando URL para venta {venta_id}: {e}")
         return None
 
 def get_abono_pdf_descarga_url(abono_id):
@@ -284,13 +286,17 @@ def get_abono_pdf_descarga_url(abono_id):
         
         return public_url
     except Exception as e:
-        print(f"Error generando URL para abono {abono_id}: {e}")
+        current_app.logger.error(f"Error generando URL para abono {abono_id}: {e}")
         return None
+
 def pdf_to_data_url(pdf_bytes):
     """Convierte un PDF en bytes a una URL de datos (data URL)"""
-    import base64
-    
     try:
+        # Verificar que pdf_bytes sea efectivamente bytes
+        if not isinstance(pdf_bytes, bytes):
+            current_app.logger.error(f"Error: pdf_bytes no es de tipo bytes, es {type(pdf_bytes)}")
+            return None
+            
         # Codificar los bytes del PDF en base64
         pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
         
@@ -299,7 +305,7 @@ def pdf_to_data_url(pdf_bytes):
         
         return data_url
     except Exception as e:
-        print(f"Error creando data URL: {e}")
+        current_app.logger.error(f"Error creando data URL: {e}")
         return None
 
 def get_venta_pdf_data_url(venta_id):
@@ -311,16 +317,20 @@ def get_venta_pdf_data_url(venta_id):
         # Obtener la venta
         venta = Venta.query.get(venta_id)
         if not venta:
+            current_app.logger.error(f"Venta {venta_id} no encontrada")
             return None
             
         # Generar PDF
         pdf_bytes = generar_pdf_venta(venta)
-        
+        if not pdf_bytes:
+            current_app.logger.error(f"Error: generar_pdf_venta devolvió valor nulo")
+            return None
+            
         # Convertir a data URL
         return pdf_to_data_url(pdf_bytes)
         
     except Exception as e:
-        print(f"Error generando data URL para venta {venta_id}: {e}")
+        current_app.logger.error(f"Error generando data URL para venta {venta_id}: {e}")
         return None
 
 def get_abono_pdf_data_url(abono_id):
@@ -332,16 +342,20 @@ def get_abono_pdf_data_url(abono_id):
         # Obtener el abono
         abono = Abono.query.get(abono_id)
         if not abono:
+            current_app.logger.error(f"Abono {abono_id} no encontrado")
             return None
             
         # Generar PDF
         pdf_bytes = generar_pdf_abono(abono)
-        
+        if not pdf_bytes:
+            current_app.logger.error(f"Error: generar_pdf_abono devolvió valor nulo")
+            return None
+            
         # Convertir a data URL
         return pdf_to_data_url(pdf_bytes)
         
     except Exception as e:
-        print(f"Error generando data URL para abono {abono_id}: {e}")
+        current_app.logger.error(f"Error generando data URL para abono {abono_id}: {e}")
         return None
 
 def shorten_url(long_url):
