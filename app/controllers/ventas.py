@@ -298,28 +298,8 @@ def compartir(id):
                 flash('No tienes permisos para compartir esta venta', 'danger')
                 return redirect(url_for('ventas.index'))
         
-        # Generar PDF
-        pdf_bytes = generar_pdf_venta(venta)
-        
-        # Codificar el PDF en base64
-        import base64
-        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
-        data_url = f"data:application/pdf;base64,{pdf_base64}"
-        
-        # Crear mensaje con información de la venta
-        cliente_nombre = venta.cliente.nombre if venta.cliente else "Cliente"
-        mensaje = f"Factura de venta #{venta.id}"
-        
-        # Redirigir a una página especial de compartir con los datos
-        from flask import session
-        session['pdf_data'] = {
-            'data_url': data_url,
-            'filename': f"factura_{venta.id}.pdf",
-            'title': mensaje,
-            'text': f"Factura de venta #{venta.id} para {cliente_nombre}"
-        }
-        
-        return redirect(url_for('public.share_page'))
+        # Redirigir directamente a la página de compartir sin usar sesión
+        return redirect(url_for('public.share_page', tipo='venta', id=id))
         
     except Exception as e:
         current_app.logger.error(f"Error al compartir venta {id}: {e}")
