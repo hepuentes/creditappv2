@@ -433,8 +433,9 @@ def compartir(id):
         cliente_nombre = abono.venta.cliente.nombre if abono.venta and abono.venta.cliente else "Cliente"
         mensaje = f"Comprobante de Abono #{abono.id} - {cliente_nombre}"
         
-        # Crear enlace de WhatsApp
-        whatsapp_url = f"https://wa.me/?text=Hola!%20Aquí%20está%20tu%20{mensaje}.%20Descárgalo%20desde%20este%20enlace:%20{public_url}"
+        # Versión mejorada del enlace de WhatsApp - URL codificada correctamente
+        encoded_url = public_url.replace('&', '%26')
+        whatsapp_url = f"https://wa.me/?text=Hola!%20Aqu%C3%AD%20est%C3%A1%20tu%20{mensaje}.%0A%0APuedes%20descargar%20el%20PDF%20desde%20este%20enlace:%0A{encoded_url}"
         
         current_app.logger.info(f"Compartiendo abono {id} por WhatsApp: {public_url}")
         return redirect(whatsapp_url)
