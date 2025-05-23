@@ -243,19 +243,50 @@ def registrar_movimiento_caja(
 
 # Funciones para compartir PDFs públicamente
 
-def get_venta_pdf_public_url(venta_id):
-    """Genera una URL pública para el PDF de venta"""
-    from flask import url_for
-    from app.controllers.public import generar_token
+def get_venta_pdf_public_data_url(venta_id):
+    """Genera una URL de datos para el PDF de venta (no depende de la aplicación)"""
+    from app.models import Venta
+    from app.pdf.venta import generar_pdf_venta
+    import base64
+    
+    try:
+        venta = Venta.query.get(venta_id)
+        if not venta:
+            return None
+            
+        # Generar el PDF
+        pdf_bytes = generar_pdf_venta(venta)
+        
+        # Convertir a base64
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        
+        # Generar data URL
+        data_url = f"data:application/pdf;base64,{pdf_base64}"
+        return data_url
+    except Exception as e:
+        print(f"Error al generar data URL para venta {venta_id}: {e}")
+        return None
 
-    token = generar_token(venta_id, 'venta')
-    return url_for('public.venta_pdf', id=venta_id, token=token, _external=True)
-
-
-def get_abono_pdf_public_url(abono_id):
-    """Genera una URL pública para el PDF de abono"""
-    from flask import url_for
-    from app.controllers.public import generar_token
-
-    token = generar_token(abono_id, 'abono')
-    return url_for('public.abono_pdf', id=abono_id, token=token, _external=True)
+def get_abono_pdf_public_data_url(abono_id):
+    """Genera una URL de datos para el PDF de abono (no depende de la aplicación)"""
+    from app.models import Abono
+    from app.pdf.abono import generar_pdf_abono
+    import base64
+    
+    try:
+        abono = Abono.query.get(abono_id)
+        if not abono:
+            return None
+            
+        # Generar el PDF
+        pdf_bytes = generar_pdf_abono(abono)
+        
+        # Convertir a base64
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        
+        # Generar data URL
+        data_url = f"data:application/pdf;base64,{pdf_base64}"
+        return data_url
+    except Exception as e:
+        print(f"Error al generar data URL para abono {abono_id}: {e}")
+        return None
