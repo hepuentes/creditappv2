@@ -28,6 +28,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // NUEVA FUNCIONALIDAD: Cerrar sidebar al hacer clic en un enlace del menú en móvil
+  const sidebarLinks = document.querySelectorAll('#sidebar a');
+  if (sidebarLinks.length > 0 && sidebar) {
+    sidebarLinks.forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth < 768) {
+          sidebar.classList.add('active');
+          document.body.classList.remove('sidebar-open');
+        }
+      });
+    });
+  }
+
   // Ajustar cuando cambia el tamaño de la ventana
   window.addEventListener('resize', () => {
     if (window.innerWidth >= 768) {
