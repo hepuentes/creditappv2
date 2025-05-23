@@ -27,10 +27,11 @@ def venta_pdf_descarga(id, token):
         # Generar el PDF
         pdf_bytes = generar_pdf_venta(venta)
         
-        # Crear respuesta
+        # Crear respuesta con headers mejorados para forzar descarga
         response = make_response(pdf_bytes)
         response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename=factura_{venta.id}.pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename="factura_{venta.id}.pdf"'
+        response.headers['Content-Length'] = len(pdf_bytes)
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
@@ -58,10 +59,11 @@ def abono_pdf_descarga(id, token):
         # Generar el PDF
         pdf_bytes = generar_pdf_abono(abono)
         
-        # Crear respuesta
+        # Crear respuesta con headers mejorados para forzar descarga
         response = make_response(pdf_bytes)
         response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename=abono_{abono.id}.pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename="abono_{abono.id}.pdf"'
+        response.headers['Content-Length'] = len(pdf_bytes)
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
