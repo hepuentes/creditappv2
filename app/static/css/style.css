@@ -17,8 +17,8 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    position: relative; /* Para el overlay en móvil */
-    overflow-x: hidden; /* Evitar scroll horizontal si algo se desborda temporalmente */
+    position: relative;
+    overflow-x: hidden;
 }
 
 .wrapper {
@@ -33,18 +33,14 @@ body {
     max-width: var(--sidebar-width);
     background: #343a40;
     color: #fff;
-    transition: margin-left 0.3s ease-in-out;
+    transition: all 0.3s ease;
     height: 100vh;
-    position: fixed; /* Fijo para que no se desplace con el contenido */
+    position: fixed;
     top: 0;
     left: 0;
-    z-index: 1040; /* Debe estar por encima del contenido pero puede estar debajo de modales de Bootstrap (1050+) */
+    z-index: 1050;
     overflow-y: auto;
     box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-}
-
-.sidebar.active { /* Cuando el sidebar está oculto/colapsado */
-    margin-left: calc(-1 * var(--sidebar-width));
 }
 
 .sidebar .sidebar-header {
@@ -53,23 +49,13 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    border-bottom: 1px solid #495057;
 }
 
 .sidebar .sidebar-header h3 {
     color: #fff;
     margin-bottom: 0;
     font-size: 1.5rem;
-}
-
-/* Estilo para el botón de colapso DENTRO del sidebar-header (visible en desktop o si se decide usar) */
-.sidebar .sidebar-header .btn#sidebarCollapse {
-    background-color: var(--primary-color); /* Color primario de Bootstrap */
-    color: white;
-    border: none;
-    padding: 0.375rem 0.75rem;
-}
-.sidebar .sidebar-header .btn#sidebarCollapse:hover {
-    background-color: #0056b3;
 }
 
 /* Enlaces del Sidebar */
@@ -83,25 +69,30 @@ body {
     display: block;
     color: #adb5bd;
     text-decoration: none;
-    transition: background 0.2s ease-in-out, color 0.2s ease-in-out;
+    transition: all 0.3s ease;
+    border-left: 3px solid transparent;
 }
 
 .sidebar ul li a:hover {
     color: #fff;
     background: var(--primary-color);
+    border-left-color: #fff;
 }
 
 .sidebar ul li.active > a {
     color: #fff;
     background: var(--primary-color);
+    border-left-color: #fff;
 }
 
 .sidebar ul li a i {
     margin-right: 12px;
+    width: 20px;
+    text-align: center;
 }
 
 .sidebar ul ul a {
-    padding-left: 35px !important;
+    padding-left: 45px !important;
     background: #2c3136;
     font-size: 0.9em;
 }
@@ -112,20 +103,15 @@ body {
     margin-left: var(--sidebar-width);
     padding: 0;
     min-height: 100vh;
-    transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out;
+    transition: all 0.3s ease;
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    position: relative; /* Para que el z-index del navbar funcione bien */
+    position: relative;
 }
 
-#content.active { /* Cuando el sidebar está oculto, el contenido ocupa todo */
-    width: 100%;
-    margin-left: 0;
-}
-
-/* Navbar Principal (dentro de #content) */
-#content > .navbar { /* Selecciona el navbar que es hijo directo de #content */
+/* Navbar Principal */
+#content > .navbar {
     padding: 10px 20px;
     background-color: #fff;
     border-bottom: 1px solid #dee2e6;
@@ -133,64 +119,56 @@ body {
     min-height: 60px;
     display: flex;
     align-items: center;
-    position: sticky; /* Opcional: hacerlo pegajoso arriba */
+    position: sticky;
     top: 0;
-    z-index: 1030; /* Por encima del contenido, debajo del sidebar si se superpone */
+    z-index: 1030;
 }
 
-/* Botón Hamburguesa en el Navbar Principal de #content (este es el que se usará en móviles) */
-#content > .navbar #sidebarCollapseContent { /* Usamos un ID DIFERENTE para este botón */
+/* Botón hamburguesa en navbar (solo visible en móvil) */
+#content > .navbar #sidebarCollapseContent {
     background: var(--primary-color);
     border: none;
     color: white;
     padding: 8px 12px;
     border-radius: 4px;
     cursor: pointer;
-    display: none; /* Oculto en desktop por defecto */
-    z-index: 1035; /* Para estar sobre el navbar */
+    display: none;
+    transition: all 0.3s ease;
 }
+
 #content > .navbar #sidebarCollapseContent:hover {
     background: #0056b3;
 }
+
 #content > .navbar #sidebarCollapseContent i {
     font-size: 1.2rem;
 }
 
-
-/* --- ESTILOS RESPONSIVE --- */
+/* RESPONSIVE STYLES */
 @media (max-width: 767.98px) {
+    /* En móvil, sidebar oculto por defecto */
     .sidebar {
-        /* En móvil, cuando está inactivo (oculto), se mueve completamente a la izquierda */
         margin-left: calc(-1 * var(--sidebar-width));
-        box-shadow: 2px 0 5px rgba(0,0,0,0.1); /* Sombra para cuando se deslice */
+        transition: margin-left 0.3s ease;
     }
 
-    .sidebar.active {
-        /* Cuando está activo (visible) en móvil */
-        margin-left: 0; /* Lo trae a la vista */
+    /* Cuando sidebar está activo (visible) en móvil */
+    .sidebar.show {
+        margin-left: 0;
     }
 
+    /* Content ocupa todo el ancho en móvil */
     #content {
-        width: 100% !important; /* Ocupa todo el ancho */
-        margin-left: 0 !important; /* Sin margen izquierdo */
-        padding-top: 0; /* El navbar dentro de content manejará su propio espacio */
+        width: 100% !important;
+        margin-left: 0 !important;
     }
 
-    /* Botón de hamburguesa DENTRO DEL SIDEBAR HEADER se oculta en móvil si queremos usar el del navbar */
-    .sidebar .sidebar-header #sidebarCollapse {
-        display: none !important; 
-    }
-
-    /* Botón de hamburguesa EN EL NAVBAR DE #CONTENT es el que se muestra en móvil */
+    /* Mostrar botón hamburguesa en móvil */
     #content > .navbar #sidebarCollapseContent {
-        display: block !important; /* Mostrar este botón en móvil */
-        /* Ya no necesita position:fixed si el navbar es sticky o si el JS lo maneja bien */
-        /* position: fixed; */
-        /* top: 10px; */
-        /* left: 10px; */
+        display: block !important;
     }
 
-    /* Fondo semitransparente (Overlay) cuando el sidebar está abierto y activo en móvil */
+    /* Overlay cuando sidebar está abierto en móvil */
     body.sidebar-open::before {
         content: '';
         position: fixed;
@@ -199,19 +177,36 @@ body {
         bottom: 0;
         left: 0;
         background-color: rgba(0, 0, 0, 0.5);
-        z-index: 1039; /* Por debajo del sidebar, pero encima del contenido */
+        z-index: 1040;
+        opacity: 1;
+        transition: opacity 0.3s ease;
     }
 
+    /* Ajustes de padding para móvil */
     .container-fluid {
         padding-left: 15px;
         padding-right: 15px;
-        /* max-width: 100%; ya es el comportamiento por defecto de container-fluid */
+    }
+
+    /* Ocultar botón del sidebar header en móvil */
+    .sidebar .sidebar-header button {
+        display: none !important;
     }
 }
 
-/* ---- Estilos restantes de tu archivo original y las "mejoras" ---- */
+/* Para tablets y pantallas medianas */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    :root {
+        --sidebar-width: 220px;
+    }
+    
+    .sidebar ul li a {
+        padding: 10px 15px;
+        font-size: 0.9em;
+    }
+}
 
-/* Card Styles */
+/* Estilos restantes del CSS original */
 .card {
     margin-bottom: 20px;
     border: none;
@@ -219,9 +214,11 @@ body {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     transition: transform 0.2s ease;
 }
+
 .card:hover {
     transform: translateY(-3px);
 }
+
 .card-header {
     font-weight: 600;
     background-color: #f8f9fa;
@@ -229,21 +226,66 @@ body {
 }
 
 /* Dashboard Cards */
-.card-dashboard { text-align: center; min-height: 160px; display: flex; flex-direction: column; }
-.card-dashboard .card-body { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
-.card-dashboard .card-value { font-size: 2.5rem; font-weight: 700; margin-bottom: 0; }
-.card-dashboard .card-label { font-size: 1rem; color: #6c757d; }
-.card-dashboard .card-icon { font-size: 1.8rem; margin-bottom: 10px; }
+.card-dashboard { 
+    text-align: center; 
+    min-height: 160px; 
+    display: flex; 
+    flex-direction: column; 
+}
+
+.card-dashboard .card-body { 
+    flex-grow: 1; 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+}
+
+.card-dashboard .card-value { 
+    font-size: 2.5rem; 
+    font-weight: 700; 
+    margin-bottom: 0; 
+}
+
+.card-dashboard .card-label { 
+    font-size: 1rem; 
+    color: #6c757d; 
+}
+
+.card-dashboard .card-icon { 
+    font-size: 1.8rem; 
+    margin-bottom: 10px; 
+}
 
 /* Buttons and Forms */
-.btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); }
-.btn-primary:hover { background-color: #0069d9; border-color: #0062cc; }
+.btn-primary { 
+    background-color: var(--primary-color); 
+    border-color: var(--primary-color); 
+}
+
+.btn-primary:hover { 
+    background-color: #0069d9; 
+    border-color: #0062cc; 
+}
 
 /* Tables */
-.table-responsive { box-shadow: 0 2px 10px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
-.table { margin-bottom: 0; }
-.table thead th { background-color: #f8f9fa; border-bottom: 2px solid #dee2e6; }
-.table-hover tbody tr:hover { background-color: rgba(0,123,255,0.05); }
+.table-responsive { 
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+    border-radius: 8px; 
+    overflow: hidden; 
+}
+
+.table { 
+    margin-bottom: 0; 
+}
+
+.table thead th { 
+    background-color: #f8f9fa; 
+    border-bottom: 2px solid #dee2e6; 
+}
+
+.table-hover tbody tr:hover { 
+    background-color: rgba(0,123,255,0.05); 
+}
 
 /* Footer */
 .footer {
@@ -254,35 +296,66 @@ body {
 }
 
 /* Login page styles */
-.login-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; background-color: #f5f5f5; }
-.login-form { max-width: 400px; width: 100%; padding: 30px; border-radius: 10px; background-color: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-.login-form .card-header { text-align: center; font-size: 24px; font-weight: 600; margin-bottom: 20px; border-bottom: none; background-color: transparent; }
-.login-logo { text-align: center; margin-bottom: 25px; }
-.login-logo img { max-width: 150px; }
+.login-container { 
+    min-height: 100vh; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    background-color: #f5f5f5; 
+}
 
-/* Clases de utilidad que estaban en las "mejoras" y tu original */
+.login-form { 
+    max-width: 400px; 
+    width: 100%; 
+    padding: 30px; 
+    border-radius: 10px; 
+    background-color: #fff; 
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
+}
+
+.login-form .card-header { 
+    text-align: center; 
+    font-size: 24px; 
+    font-weight: 600; 
+    margin-bottom: 20px; 
+    border-bottom: none; 
+    background-color: transparent; 
+}
+
+.login-logo { 
+    text-align: center; 
+    margin-bottom: 25px; 
+}
+
+.login-logo img { 
+    max-width: 150px; 
+}
+
+/* Clases de utilidad */
 .form-text {
   font-size: 0.85rem;
 }
+
 .form-control.is-invalid, .form-select.is-invalid {
   background-position: right calc(0.375em + 0.55rem) center;
 }
+
 .numeric-only::-webkit-inner-spin-button, 
 .numeric-only::-webkit-outer-spin-button { 
   -webkit-appearance: none; 
   margin: 0; 
 }
+
 .numeric-only {
   -moz-appearance: textfield;
 }
+
 .btn-group .btn-sm {
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
 }
-/* Mejoras para la distribución de la interfaz */
+
 .container-fluid {
-    padding-right: 20px;
-    padding-left: 20px;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
@@ -293,18 +366,15 @@ body {
     width: 100%;
 }
 
-/* Ajustar anchos de columnas */
 .table th, .table td {
     white-space: normal;
     vertical-align: middle;
 }
 
-/* Eliminar espacios excesivos */
 .card {
     width: 100%;
 }
 
-/* Mejorar distribución de formularios */
 .row {
     width: 100%;
     margin-left: 0;
