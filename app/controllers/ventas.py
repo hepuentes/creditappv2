@@ -289,7 +289,7 @@ def eliminar(id):
 @login_required
 def compartir(id):
     try:
-        from app.utils import get_venta_pdf_descarga_url
+        from app.utils import get_venta_pdf_data_url
         
         venta = Venta.query.get_or_404(id)
         
@@ -299,28 +299,28 @@ def compartir(id):
                 flash('No tienes permisos para compartir esta venta', 'danger')
                 return redirect(url_for('ventas.index'))
         
-        # Generar URL para descarga directa
-        public_url = get_venta_pdf_descarga_url(venta.id)
+        # Generar data URL del PDF
+        data_url = get_venta_pdf_data_url(venta.id)
         
-        if not public_url:
+        if not data_url:
             flash('Error al generar enlace de descarga', 'danger')
             return redirect(url_for('ventas.detalle', id=id))
         
-        # Simplificar radicalmente el mensaje de WhatsApp - solo texto y URL
-        # Evitar cualquier formato complejo que pueda ser malinterpretado
+        # Crear mensaje con información de la venta
+        cliente_nombre = venta.cliente.nombre if venta.cliente else "Cliente"
         mensaje = f"Factura de venta #{venta.id}"
         
         # Construir el mensaje básico de WhatsApp
-        texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Descarga el PDF: {public_url}"
+        texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Abre el PDF: {data_url}"
         
         # Codificar el texto para URL
         import urllib.parse
         texto_codificado = urllib.parse.quote(texto_whatsapp)
         
-        # Generar el enlace de WhatsApp de la forma más simple posible
+        # Generar el enlace de WhatsApp
         whatsapp_url = f"https://wa.me/?text={texto_codificado}"
         
-        current_app.logger.info(f"Compartiendo venta {id} por WhatsApp con mensaje: {texto_whatsapp}")
+        current_app.logger.info(f"Compartiendo venta {id} por WhatsApp con data URL")
         return redirect(whatsapp_url)
         
     except Exception as e:
