@@ -241,68 +241,49 @@ def registrar_movimiento_caja(
         return None
 
 
-# Funciones para compartir PDFs públicamente
-
-def get_venta_pdf_public_data_url(venta_id):
-    """Genera una URL de datos para el PDF de venta (no depende de la aplicación)"""
-    from app.models import Venta
-    from app.pdf.venta import generar_pdf_venta
-    import base64
-    
-    try:
-        venta = Venta.query.get(venta_id)
-        if not venta:
-            return None
-            
-        # Generar el PDF
-        pdf_bytes = generar_pdf_venta(venta)
-        
-        # Convertir a base64
-        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
-        
-        # Generar data URL
-        data_url = f"data:application/pdf;base64,{pdf_base64}"
-        return data_url
-    except Exception as e:
-        print(f"Error al generar data URL para venta {venta_id}: {e}")
-        return None
-
-def get_abono_pdf_public_data_url(abono_id):
-    """Genera una URL de datos para el PDF de abono (no depende de la aplicación)"""
-    from app.models import Abono
-    from app.pdf.abono import generar_pdf_abono
-    import base64
-    
-    try:
-        abono = Abono.query.get(abono_id)
-        if not abono:
-            return None
-            
-        # Generar el PDF
-        pdf_bytes = generar_pdf_abono(abono)
-        
-        # Convertir a base64
-        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
-        
-        # Generar data URL
-        data_url = f"data:application/pdf;base64,{pdf_base64}"
-        return data_url
-    except Exception as e:
-        print(f"Error al generar data URL para abono {abono_id}: {e}")
-        return None
+# FUNCIONES CORREGIDAS PARA COMPARTIR PDFS
 
 def get_venta_pdf_descarga_url(venta_id):
     """Genera una URL para descarga directa del PDF de venta sin autenticación"""
-    from flask import url_for
-    from app.controllers.public import generar_token_simple
+    # Importar aquí para evitar importaciones circulares
+    import hashlib
     
-    token = generar_token_simple(venta_id, 'venta')
-    return url_for('public.venta_pdf_descarga', id=venta_id, token=token, _external=True)
+    try:
+        # Generar token simple
+        secret_key = 'creditmobileapp2025'
+        message = f"venta_{venta_id}_{secret_key}"
+        token = hashlib.sha256(message.encode()).hexdigest()[:20]
+        
+        # Generar URL usando url_for con _external=True
+        public_url = url_for('public.venta_pdf_descarga', id=venta_id, token=token, _external=True)
+        return public_url
+    except Exception as e:
+        print(f"Error generando URL para venta {venta_id}: {e}")
+        return None
 
 def get_abono_pdf_descarga_url(abono_id):
     """Genera una URL para descarga directa del PDF de abono sin autenticación"""
-    from flask import url_for
-    from app.controllers.public import generar_token_simple
+    # Importar aquí para evitar importaciones circulares  
+    import hashlib
     
-    token = generar_token_simple(abono_id, 'abono')
-    return url_for('public.abono_pdf_descarga', id=abono_id, token=token, _external=True)
+    try:
+        # Generar token simple
+        secret_key = 'creditmobileapp2025'
+        message = f"abono_{abono_id}_{secret_key}"
+        token = hashlib.sha256(message.encode()).hexdigest()[:20]
+        
+        # Generar URL usando url_for con _external=True
+        public_url = url_for('public.abono_pdf_descarga', id=abono_id, token=token, _external=True)
+        return public_url
+    except Exception as e:
+        print(f"Error generando URL para abono {abono_id}: {e}")
+        return None
+
+# FUNCIONES DEPRECADAS - Mantenidas para compatibilidad
+def get_venta_pdf_public_data_url(venta_id):
+    """DEPRECADO: Usar get_venta_pdf_descarga_url en su lugar"""
+    return get_venta_pdf_descarga_url(venta_id)
+
+def get_abono_pdf_public_data_url(abono_id):
+    """DEPRECADO: Usar get_abono_pdf_descarga_url en su lugar"""
+    return get_abono_pdf_descarga_url(abono_id)
