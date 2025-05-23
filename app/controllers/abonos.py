@@ -411,35 +411,23 @@ def pdf(id):
 @login_required
 @vendedor_cobrador_required
 def compartir(id):
-    """Comparte un PDF de abono directamente sin depender de la app"""
-    from app.utils import get_abono_pdf_public_data_url
-    import urllib.parse
+    from app.utils import get_abono_pdf_descarga_url
     
     abono = Abono.query.get_or_404(id)
     
-    # Si es vendedor, verificar que el abono pertenezca a una venta suya
+    # Verificar permisos
     if current_user.is_vendedor() and not current_user.is_admin():
         if abono.venta and abono.venta.vendedor_id != current_user.id:
             flash('No tienes permisos para compartir este abono', 'danger')
             return redirect(url_for('dashboard.index'))
     
-    # Generar data URL para el PDF
-    data_url = get_abono_pdf_public_data_url(abono.id)
+    # Generar URL para descarga directa
+    public_url = get_abono_pdf_descarga_url(abono.id)
     
-    if not data_url:
-        flash("Error al generar el PDF para compartir", "danger")
-        return redirect(url_for('abonos.detalle', id=id))
-        
-    # Crear mensaje claro con información del abono
-    if abono.venta and abono.venta.cliente:
-        cliente_nombre = abono.venta.cliente.nombre
-    else:
-        cliente_nombre = "Cliente"
-        
-    mensaje = f"Comprobante de Abono #{abono.id} - {cliente_nombre} - ${int(abono.monto):,}"
-    mensaje_encoded = urllib.parse.quote(mensaje)
+    # Crear mensaje con información del abono
+    cliente_nombre = abono.venta.cliente.nombre if abono.venta and abono.venta.cliente else "Cliente"
+    mensaje = f"Comprobante de Abono #{abono.id} - {cliente_nombre}"
     
-    # URL de WhatsApp que abre la conversación con el mensaje predeterminado
-    whatsapp_url = f"https://wa.me/?text={mensaje_encoded}%20-%20Por%20favor%20revise%20su%20comprobante%20de%20abono%20que%20fue%20entregado%20personalmente."
-    
+    # Crear enlace de WhatsApp
+    whatsapp_url = f"https://wa.me/?text=Hola!%20Aquí%20está%20tu%20{mensaje}.%20Descárgalo%20desde%20este%20enlace:%20{public_url}"
     return redirect(whatsapp_url)
