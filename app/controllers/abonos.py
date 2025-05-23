@@ -412,7 +412,7 @@ def pdf(id):
 @vendedor_cobrador_required
 def compartir(id):
     try:
-        from app.utils import get_abono_pdf_descarga_url
+        from app.utils import get_abono_pdf_data_url
         
         abono = Abono.query.get_or_404(id)
         
@@ -422,27 +422,28 @@ def compartir(id):
                 flash('No tienes permisos para compartir este abono', 'danger')
                 return redirect(url_for('abonos.index'))
         
-        # Generar URL para descarga directa
-        public_url = get_abono_pdf_descarga_url(abono.id)
+        # Generar data URL del PDF
+        data_url = get_abono_pdf_data_url(abono.id)
         
-        if not public_url:
+        if not data_url:
             flash('Error al generar enlace de descarga', 'danger')
             return redirect(url_for('abonos.detalle', id=id))
         
-        # Simplificar radicalmente el mensaje de WhatsApp - solo texto y URL
-        mensaje = f"Comprobante de abono #{abono.id}"
+        # Crear mensaje con información del abono
+        cliente_nombre = abono.venta.cliente.nombre if abono.venta and abono.venta.cliente else "Cliente"
+        mensaje = f"Comprobante de Abono #{abono.id}"
         
         # Construir el mensaje básico de WhatsApp
-        texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Descarga el PDF: {public_url}"
+        texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Abre el PDF: {data_url}"
         
         # Codificar el texto para URL
         import urllib.parse
         texto_codificado = urllib.parse.quote(texto_whatsapp)
         
-        # Generar el enlace de WhatsApp de la forma más simple posible
+        # Generar el enlace de WhatsApp
         whatsapp_url = f"https://wa.me/?text={texto_codificado}"
         
-        current_app.logger.info(f"Compartiendo abono {id} por WhatsApp con mensaje: {texto_whatsapp}")
+        current_app.logger.info(f"Compartiendo abono {id} por WhatsApp con data URL")
         return redirect(whatsapp_url)
         
     except Exception as e:
