@@ -10,6 +10,7 @@ from datetime import datetime
 import traceback
 import json
 import logging
+from app.utils import shorten_url
 
 ventas_bp = Blueprint('ventas', __name__, url_prefix='/ventas')
 
@@ -311,7 +312,8 @@ def compartir(id):
         mensaje = f"Factura de venta #{venta.id}"
         
         # Construir el mensaje básico de WhatsApp
-        texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Abre el PDF: {data_url}"
+        short_url = shorten_url(data_url)
+texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Abre el PDF: {short_url}"
         
         # Codificar el texto para URL
         import urllib.parse
