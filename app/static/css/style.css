@@ -9,6 +9,9 @@
     --light-color: #f8f9fa;
     --dark-color: #343a40;
     --sidebar-width: 250px;
+    --sidebar-width-collapsed: 70px;
+    --header-height: 60px;
+    --transition-speed: 0.3s;
 }
 
 body {
@@ -33,7 +36,7 @@ body {
     max-width: var(--sidebar-width);
     background: #343a40;
     color: #fff;
-    transition: all 0.3s ease;
+    transition: all var(--transition-speed) ease;
     height: 100vh;
     position: fixed;
     top: 0;
@@ -41,6 +44,37 @@ body {
     z-index: 1050;
     overflow-y: auto;
     box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+}
+
+/* Sidebar Collapsed State */
+.sidebar.collapsed {
+    min-width: var(--sidebar-width-collapsed);
+    max-width: var(--sidebar-width-collapsed);
+}
+
+.sidebar.collapsed .sidebar-header h3 {
+    display: none;
+}
+
+.sidebar.collapsed ul li a span {
+    display: none;
+}
+
+.sidebar.collapsed ul li a {
+    text-align: center;
+    padding: 15px 0;
+}
+
+.sidebar.collapsed ul li a i {
+    font-size: 1.5rem;
+    margin-right: 0;
+    display: block;
+    width: 100%;
+    text-align: center;
+}
+
+.sidebar.collapsed ul ul a {
+    padding-left: 0 !important;
 }
 
 .sidebar .sidebar-header {
@@ -56,6 +90,9 @@ body {
     color: #fff;
     margin-bottom: 0;
     font-size: 1.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Enlaces del Sidebar */
@@ -69,8 +106,11 @@ body {
     display: block;
     color: #adb5bd;
     text-decoration: none;
-    transition: all 0.3s ease;
+    transition: all var(--transition-speed) ease;
     border-left: 3px solid transparent;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .sidebar ul li a:hover {
@@ -89,6 +129,7 @@ body {
     margin-right: 12px;
     width: 20px;
     text-align: center;
+    transition: all var(--transition-speed) ease;
 }
 
 .sidebar ul ul a {
@@ -103,11 +144,17 @@ body {
     margin-left: var(--sidebar-width);
     padding: 0;
     min-height: 100vh;
-    transition: all 0.3s ease;
+    transition: all var(--transition-speed) ease;
     flex-grow: 1;
     display: flex;
     flex-direction: column;
     position: relative;
+}
+
+/* Content with collapsed sidebar */
+body.sidebar-collapsed #content {
+    width: calc(100% - var(--sidebar-width-collapsed));
+    margin-left: var(--sidebar-width-collapsed));
 }
 
 /* Navbar Principal */
@@ -116,7 +163,7 @@ body {
     background-color: #fff;
     border-bottom: 1px solid #dee2e6;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    min-height: 60px;
+    min-height: var(--header-height);
     display: flex;
     align-items: center;
     position: sticky;
@@ -124,24 +171,83 @@ body {
     z-index: 1030;
 }
 
-/* Botón hamburguesa en navbar (solo visible en móvil) */
-#content > .navbar #sidebarCollapseContent {
+/* Botón toggle sidebar en desktop y móvil */
+#sidebarCollapseContent, #sidebarCollapseDesktop {
     background: var(--primary-color);
     border: none;
     color: white;
     padding: 8px 12px;
     border-radius: 4px;
     cursor: pointer;
-    display: none;
-    transition: all 0.3s ease;
+    transition: all var(--transition-speed) ease;
 }
 
-#content > .navbar #sidebarCollapseContent:hover {
+#sidebarCollapseContent:hover, #sidebarCollapseDesktop:hover {
     background: #0056b3;
 }
 
-#content > .navbar #sidebarCollapseContent i {
+#sidebarCollapseContent i, #sidebarCollapseDesktop i {
     font-size: 1.2rem;
+}
+
+#sidebarCollapseDesktop {
+    background: transparent;
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+}
+
+#sidebarCollapseDesktop:hover {
+    background: rgba(0, 123, 255, 0.1);
+}
+
+/* Perfil de usuario mejorado */
+.user-profile-dropdown {
+    position: relative;
+}
+
+.user-profile-link {
+    text-decoration: none;
+    color: var(--dark-color);
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    transition: all 0.2s ease;
+}
+
+.user-profile-link:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: var(--dark-color);
+}
+
+.avatar-circle {
+    width: 35px;
+    height: 35px;
+    background-color: var(--primary-color);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-weight: bold;
+}
+
+.initials {
+    font-size: 1.2rem;
+}
+
+.user-info {
+    line-height: 1.2;
+}
+
+.user-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.user-role {
+    font-size: 0.8rem;
+    color: var(--secondary-color);
 }
 
 /* RESPONSIVE STYLES */
@@ -149,7 +255,8 @@ body {
     /* En móvil, sidebar oculto por defecto */
     .sidebar {
         margin-left: calc(-1 * var(--sidebar-width));
-        transition: margin-left 0.3s ease;
+        transition: margin-left var(--transition-speed) ease;
+        z-index: 1060;
     }
 
     /* Cuando sidebar está activo (visible) en móvil */
@@ -177,9 +284,9 @@ body {
         bottom: 0;
         left: 0;
         background-color: rgba(0, 0, 0, 0.5);
-        z-index: 1040;
+        z-index: 1050;
         opacity: 1;
-        transition: opacity 0.3s ease;
+        transition: opacity var(--transition-speed) ease;
     }
 
     /* Ajustes de padding para móvil */
@@ -198,6 +305,7 @@ body {
 @media (min-width: 768px) and (max-width: 991.98px) {
     :root {
         --sidebar-width: 220px;
+        --sidebar-width-collapsed: 60px;
     }
     
     .sidebar ul li a {
@@ -206,31 +314,20 @@ body {
     }
 }
 
-/* Estilos restantes del CSS original */
-.card {
-    margin-bottom: 20px;
-    border: none;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s ease;
+/* Dashboard Cards Responsive */
+.card-dashboard-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+    width: 100%;
 }
 
-.card:hover {
-    transform: translateY(-3px);
-}
-
-.card-header {
-    font-weight: 600;
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
-}
-
-/* Dashboard Cards */
 .card-dashboard { 
     text-align: center; 
     min-height: 160px; 
     display: flex; 
     flex-direction: column; 
+    height: 100%;
 }
 
 .card-dashboard .card-body { 
@@ -254,6 +351,25 @@ body {
 .card-dashboard .card-icon { 
     font-size: 1.8rem; 
     margin-bottom: 10px; 
+}
+
+/* Resto del CSS original */
+.card {
+    margin-bottom: 20px;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+}
+
+.card-header {
+    font-weight: 600;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
 }
 
 /* Buttons and Forms */
@@ -369,10 +485,6 @@ body {
 .table th, .table td {
     white-space: normal;
     vertical-align: middle;
-}
-
-.card {
-    width: 100%;
 }
 
 .row {
