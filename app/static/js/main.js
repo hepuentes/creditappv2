@@ -1,6 +1,7 @@
 // main.js
 document.addEventListener('DOMContentLoaded', () => {
   const sidebar = document.getElementById('sidebar');
+  const content = document.getElementById('content');
   const sidebarToggleBtn = document.getElementById('sidebarCollapseContent');
   const sidebarToggleDesktop = document.getElementById('sidebarCollapseDesktop');
   
@@ -31,16 +32,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Función para toggle sidebar en desktop
+  // Función para toggle sidebar en desktop - CORREGIDO
   function toggleSidebarDesktop() {
-    if (sidebar) {
+    if (sidebar && content) {
       sidebar.classList.toggle('collapsed');
-      document.body.classList.toggle('sidebar-collapsed');
       
-      // Guardar preferencia en localStorage
+      // Aplicar cambios al contenido usando CSS
       if (sidebar.classList.contains('collapsed')) {
+        content.style.width = `calc(100% - ${getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width-collapsed')})`;
+        content.style.marginLeft = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width-collapsed');
         localStorage.setItem('sidebarState', 'collapsed');
       } else {
+        content.style.width = `calc(100% - ${getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')})`;
+        content.style.marginLeft = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width');
         localStorage.setItem('sidebarState', 'expanded');
       }
     }
@@ -90,10 +94,30 @@ document.addEventListener('DOMContentLoaded', () => {
   // Manejar cambios de tamaño de ventana
   window.addEventListener('resize', () => {
     if (window.innerWidth >= 768) {
-      // En pantallas grandes, asegurar que sidebar esté visible
+      // En pantallas grandes, restaurar el estado del sidebar
       closeSidebar(); // Remover clases de móvil
+      
+      // Aplicar estado guardado del sidebar en desktop
+      const savedState = localStorage.getItem('sidebarState');
+      if (savedState === 'collapsed') {
+        sidebar.classList.add('collapsed');
+        if (content) {
+          content.style.width = `calc(100% - ${getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width-collapsed')})`;
+          content.style.marginLeft = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width-collapsed');
+        }
+      } else {
+        sidebar.classList.remove('collapsed');
+        if (content) {
+          content.style.width = `calc(100% - ${getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')})`;
+          content.style.marginLeft = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width');
+        }
+      }
     } else {
-      // En móvil, asegurar que sidebar esté oculto por defecto
+      // En móvil, resetear estilos inline y asegurar que sidebar esté oculto
+      if (content) {
+        content.style.width = '';
+        content.style.marginLeft = '';
+      }
       if (!sidebar.classList.contains('show')) {
         closeSidebar();
       }
@@ -105,13 +129,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedState = localStorage.getItem('sidebarState');
     if (savedState === 'collapsed') {
       sidebar.classList.add('collapsed');
-      document.body.classList.add('sidebar-collapsed');
+      if (content) {
+        content.style.width = `calc(100% - ${getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width-collapsed')})`;
+        content.style.marginLeft = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width-collapsed');
+      }
     }
   }
   
   // Inicializar estado correcto al cargar
   if (window.innerWidth < 768) {
     closeSidebar();
+    if (content) {
+      content.style.width = '';
+      content.style.marginLeft = '';
+    }
   }
   
   // Auto-close alerts después de 5 segundos
