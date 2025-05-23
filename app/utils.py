@@ -247,7 +247,7 @@ def get_venta_pdf_descarga_url(venta_id):
     """Genera una URL para descarga directa del PDF de venta sin autenticación"""
     # Importar aquí para evitar importaciones circulares
     import hashlib
-    from flask import current_app, request
+    from flask import request
     
     try:
         # Generar token simple
@@ -255,28 +255,21 @@ def get_venta_pdf_descarga_url(venta_id):
         message = f"venta_{venta_id}_{secret_key}"
         token = hashlib.sha256(message.encode()).hexdigest()[:20]
         
-        # Obtener base_url de la aplicación o del request
-        if current_app.config.get('SERVER_NAME'):
-            # Si está configurado SERVER_NAME, usar url_for con _external=True
-            from flask import url_for
-            public_url = url_for('public.venta_pdf_descarga', id=venta_id, token=token, _external=True)
-        else:
-            # Si no hay SERVER_NAME, construir la URL manualmente
-            scheme = request.environ.get('wsgi.url_scheme', 'https')
-            host = request.host
-            path = f"/public/venta/{venta_id}/descargar/{token}"
-            public_url = f"{scheme}://{host}{path}"
+        # Construir URL con el host actual
+        host = request.host_url.rstrip('/')
+        path = f"/public/venta/{venta_id}/descargar/{token}"
+        public_url = f"{host}{path}"
         
         return public_url
     except Exception as e:
-        current_app.logger.error(f"Error generando URL para venta {venta_id}: {e}")
+        print(f"Error generando URL para venta {venta_id}: {e}")
         return None
 
 def get_abono_pdf_descarga_url(abono_id):
     """Genera una URL para descarga directa del PDF de abono sin autenticación"""
     # Importar aquí para evitar importaciones circulares  
     import hashlib
-    from flask import current_app, request
+    from flask import request
     
     try:
         # Generar token simple
@@ -284,19 +277,12 @@ def get_abono_pdf_descarga_url(abono_id):
         message = f"abono_{abono_id}_{secret_key}"
         token = hashlib.sha256(message.encode()).hexdigest()[:20]
         
-        # Obtener base_url de la aplicación o del request
-        if current_app.config.get('SERVER_NAME'):
-            # Si está configurado SERVER_NAME, usar url_for con _external=True
-            from flask import url_for
-            public_url = url_for('public.abono_pdf_descarga', id=abono_id, token=token, _external=True)
-        else:
-            # Si no hay SERVER_NAME, construir la URL manualmente
-            scheme = request.environ.get('wsgi.url_scheme', 'https')
-            host = request.host
-            path = f"/public/abono/{abono_id}/descargar/{token}"
-            public_url = f"{scheme}://{host}{path}"
+        # Construir URL con el host actual
+        host = request.host_url.rstrip('/')
+        path = f"/public/abono/{abono_id}/descargar/{token}"
+        public_url = f"{host}{path}"
         
         return public_url
     except Exception as e:
-        current_app.logger.error(f"Error generando URL para abono {abono_id}: {e}")
+        print(f"Error generando URL para abono {abono_id}: {e}")
         return None
