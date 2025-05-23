@@ -213,8 +213,8 @@ def crear():
             db.session.commit()
             flash(f'Venta #{nueva_venta.id} creada exitosamente!', 'success')
             
-            # Redireccionar a la lista de ventas
-            return redirect(url_for('ventas.index'))
+            # Redireccionar al detalle de la venta en lugar de la lista
+            return redirect(url_for('ventas.detalle', id=nueva_venta.id))
             
         except json.JSONDecodeError as e:
             current_app.logger.error(f"Error al decodificar JSON: {e}")
