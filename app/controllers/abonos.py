@@ -9,6 +9,7 @@ from app.pdf.abono import generar_pdf_abono
 from datetime import datetime
 import logging
 from decimal import Decimal, InvalidOperation
+from app.utils import shorten_url
 
 abonos_bp = Blueprint('abonos', __name__, url_prefix='/abonos')
 
@@ -434,7 +435,8 @@ def compartir(id):
         mensaje = f"Comprobante de Abono #{abono.id}"
         
         # Construir el mensaje básico de WhatsApp
-        texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Abre el PDF: {data_url}"
+        short_url = shorten_url(data_url)
+texto_whatsapp = f"Hola! Aquí está tu {mensaje}. Abre el PDF: {short_url}"
         
         # Codificar el texto para URL
         import urllib.parse
