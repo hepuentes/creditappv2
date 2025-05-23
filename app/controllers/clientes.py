@@ -80,7 +80,9 @@ def crear():
         db.session.add(cliente)
         db.session.commit()
         flash('Cliente creado exitosamente', 'success')
-        return redirect(url_for('clientes.index'))
+        
+        # Redirigir al detalle del cliente recién creado en lugar de la lista
+        return redirect(url_for('clientes.detalle', id=cliente.id))
     return render_template('clientes/crear.html', form=form, titulo='Nuevo Cliente')
 
 @clientes_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
