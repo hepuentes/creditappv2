@@ -1,4 +1,4 @@
-from flask import Blueprint, make_response, abort
+from flask import Blueprint, make_response, abort, current_app
 from app.models import Venta, Abono
 from app.pdf.venta import generar_pdf_venta
 from app.pdf.abono import generar_pdf_abono
@@ -7,61 +7,58 @@ import time
 
 public_bp = Blueprint('public', __name__, url_prefix='/public')
 
-# Función simple para generar un token basado en el ID y un tiempo de expiración
-def generar_token(id, tipo, secret_key='creditmobileapp2025'):
-    # Token que expira en 7 días
-    expiry = int(time.time()) + (7 * 24 * 60 * 60)
-    message = f"{tipo}_{id}_{expiry}_{secret_key}"
-    return f"{hashlib.sha256(message.encode()).hexdigest()}_{expiry}"
+# Función simplificada para generar token
+def generar_token_simple(id, tipo, secret_key='creditmobileapp2025'):
+    # Token más simple que solo incluye un hash del ID y tipo
+    message = f"{tipo}_{id}_{secret_key}"
+    return hashlib.sha256(message.encode()).hexdigest()[:20]  # Versión corta del hash
 
-# Función para verificar el token
-def verificar_token(token, id, tipo, secret_key='creditmobileapp2025'):
+# Ruta pública mejorada para venta PDF - Sin verificación de tiempo
+@public_bp.route('/venta/<int:id>/descargar/<token>')
+def venta_pdf_descarga(id, token):
     try:
-        hash_value, expiry = token.split('_')
-        expiry = int(expiry)
-        
-        # Verificar expiración
-        if expiry < int(time.time()):
-            return False
-        
-        # Recrear el hash para comparar
-        message = f"{tipo}_{id}_{expiry}_{secret_key}"
-        expected_hash = hashlib.sha256(message.encode()).hexdigest()
-        
-        return hash_value == expected_hash
-    except Exception:
-        return False
-
-@public_bp.route('/venta/<int:id>/pdf/<token>')
-def venta_pdf(id, token):
-    try:
-        # Verificar token
-        if not verificar_token(token, id, 'venta'):
+        # Verificación simple del token
+        expected_token = generar_token_simple(id, 'venta')
+        if token != expected_token:
             abort(403)  # Acceso prohibido
         
+        # Buscar la venta directamente sin autenticación
+        from app.models import Venta
         venta = Venta.query.get_or_404(id)
+        
+        # Generar el PDF
         pdf_bytes = generar_pdf_venta(venta)
         
+        # Preparar la respuesta con el PDF para descarga directa
         response = make_response(pdf_bytes)
         response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename=venta_{venta.id}.pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=factura_{venta.id}.pdf'
         return response
     except Exception as e:
-        abort(500, description=str(e))
+        current_app.logger.error(f"Error generando PDF de venta: {e}")
+        abort(500, description="Error al generar el PDF")
 
-@public_bp.route('/abono/<int:id>/pdf/<token>')
-def abono_pdf(id, token):
+# Ruta pública mejorada para abono PDF - Sin verificación de tiempo
+@public_bp.route('/abono/<int:id>/descargar/<token>')
+def abono_pdf_descarga(id, token):
     try:
-        # Verificar token
-        if not verificar_token(token, id, 'abono'):
+        # Verificación simple del token
+        expected_token = generar_token_simple(id, 'abono')
+        if token != expected_token:
             abort(403)  # Acceso prohibido
         
+        # Buscar el abono directamente sin autenticación
+        from app.models import Abono
         abono = Abono.query.get_or_404(id)
+        
+        # Generar el PDF
         pdf_bytes = generar_pdf_abono(abono)
         
+        # Preparar la respuesta con el PDF para descarga directa
         response = make_response(pdf_bytes)
         response.headers['Content-Type'] = 'application/pdf'
         response.headers['Content-Disposition'] = f'attachment; filename=abono_{abono.id}.pdf'
         return response
     except Exception as e:
-        abort(500, description=str(e))
+        current_app.logger.error(f"Error generando PDF de abono: {e}")
+        abort(500, description="Error al generar el PDF")
