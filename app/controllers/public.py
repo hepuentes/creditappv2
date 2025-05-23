@@ -27,11 +27,13 @@ def venta_pdf_descarga(id, token):
         # Generar el PDF
         pdf_bytes = generar_pdf_venta(venta)
         
-        # Crear respuesta con headers mejorados para forzar descarga
+        # Crear respuesta con headers optimizados para dispositivos móviles
         response = make_response(pdf_bytes)
         response.headers['Content-Type'] = 'application/pdf'
+        # Forzar descarga con nombre de archivo
         response.headers['Content-Disposition'] = f'attachment; filename="factura_{venta.id}.pdf"'
-        response.headers['Content-Length'] = len(pdf_bytes)
+        response.headers['Content-Length'] = str(len(pdf_bytes))
+        # Headers para evitar caché
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
@@ -59,11 +61,13 @@ def abono_pdf_descarga(id, token):
         # Generar el PDF
         pdf_bytes = generar_pdf_abono(abono)
         
-        # Crear respuesta con headers mejorados para forzar descarga
+        # Crear respuesta con headers optimizados para dispositivos móviles
         response = make_response(pdf_bytes)
         response.headers['Content-Type'] = 'application/pdf'
+        # Forzar descarga con nombre de archivo
         response.headers['Content-Disposition'] = f'attachment; filename="abono_{abono.id}.pdf"'
-        response.headers['Content-Length'] = len(pdf_bytes)
+        response.headers['Content-Length'] = str(len(pdf_bytes))
+        # Headers para evitar caché
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
@@ -74,8 +78,3 @@ def abono_pdf_descarga(id, token):
     except Exception as e:
         current_app.logger.error(f"Error generando PDF de abono {id}: {str(e)}")
         abort(500, description="Error al generar el PDF del abono")
-
-@public_bp.route('/health')
-def health_check():
-    """Endpoint para verificar que las rutas públicas funcionan"""
-    return {"status": "ok", "message": "Rutas públicas funcionando"}
