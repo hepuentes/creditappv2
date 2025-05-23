@@ -1,4 +1,4 @@
-from flask import Blueprint, make_response, abort, current_app
+from flask import Blueprint, make_response, abort, current_app, render_template, session
 from app.models import Venta, Abono
 from app.pdf.venta import generar_pdf_venta
 from app.pdf.abono import generar_pdf_abono
@@ -74,12 +74,11 @@ def abono_pdf_descarga(id, token):
         
         current_app.logger.info(f"PDF de abono {id} generado exitosamente")
         return response
-
+    except Exception as e:
+        current_app.logger.error(f"Error generando PDF de abono {id}: {str(e)}")
+        abort(500, description="Error al generar el PDF del abono")
 
 @public_bp.route('/share')
 def share_page():
     """Página especial para compartir PDFs usando Web Share API"""
     return render_template('public/share.html')
-    except Exception as e:
-        current_app.logger.error(f"Error generando PDF de abono {id}: {str(e)}")
-        abort(500, description="Error al generar el PDF del abono")
