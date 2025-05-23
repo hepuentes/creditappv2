@@ -346,18 +346,20 @@ def get_abono_pdf_data_url(abono_id):
 
 def shorten_url(long_url):
     """Acorta una URL larga usando TinyURL (servicio gratuito sin API key)"""
-    import requests
-    
     try:
+        import requests
         # Usar TinyURL sin necesidad de API key
         api_url = f"https://tinyurl.com/api-create.php?url={long_url}"
-        response = requests.get(api_url)
+        response = requests.get(api_url, timeout=5)  # Añadir timeout de 5 segundos
         
         if response.status_code == 200:
             return response.text
         else:
-            print(f"Error acortando URL: {response.status_code}")
-            return long_url
+            current_app.logger.warning(f"Error acortando URL: {response.status_code}")
+            return long_url  # Devolver URL original si hay error
+    except ImportError:
+        current_app.logger.warning("No se pudo importar la biblioteca 'requests'. Usando URL original.")
+        return long_url  # Devolver URL original si no está disponible requests
     except Exception as e:
-        print(f"Error acortando URL: {e}")
-        return long_url
+        current_app.logger.error(f"Error en servicio de acortamiento de URL: {e}")
+        return long_url  # Devolver URL original en caso de cualquier error
