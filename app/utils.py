@@ -286,3 +286,60 @@ def get_abono_pdf_descarga_url(abono_id):
     except Exception as e:
         print(f"Error generando URL para abono {abono_id}: {e}")
         return None
+def pdf_to_data_url(pdf_bytes):
+    """Convierte un PDF en bytes a una URL de datos (data URL)"""
+    import base64
+    
+    try:
+        # Codificar los bytes del PDF en base64
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        
+        # Crear la data URL con el formato correcto
+        data_url = f"data:application/pdf;base64,{pdf_base64}"
+        
+        return data_url
+    except Exception as e:
+        print(f"Error creando data URL: {e}")
+        return None
+
+def get_venta_pdf_data_url(venta_id):
+    """Genera el PDF de una venta y lo convierte a data URL"""
+    from app.models import Venta
+    from app.pdf.venta import generar_pdf_venta
+    
+    try:
+        # Obtener la venta
+        venta = Venta.query.get(venta_id)
+        if not venta:
+            return None
+            
+        # Generar PDF
+        pdf_bytes = generar_pdf_venta(venta)
+        
+        # Convertir a data URL
+        return pdf_to_data_url(pdf_bytes)
+        
+    except Exception as e:
+        print(f"Error generando data URL para venta {venta_id}: {e}")
+        return None
+
+def get_abono_pdf_data_url(abono_id):
+    """Genera el PDF de un abono y lo convierte a data URL"""
+    from app.models import Abono
+    from app.pdf.abono import generar_pdf_abono
+    
+    try:
+        # Obtener el abono
+        abono = Abono.query.get(abono_id)
+        if not abono:
+            return None
+            
+        # Generar PDF
+        pdf_bytes = generar_pdf_abono(abono)
+        
+        # Convertir a data URL
+        return pdf_to_data_url(pdf_bytes)
+        
+    except Exception as e:
+        print(f"Error generando data URL para abono {abono_id}: {e}")
+        return None
