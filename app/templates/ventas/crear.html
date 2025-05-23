@@ -13,6 +13,19 @@
     .cantidad-item-venta {
         width: 70px;
     }
+    
+    /* Responsive order for mobile */
+    @media (max-width: 767.98px) {
+        .datos-venta-column {
+            order: 1;
+        }
+        .productos-disponibles-column {
+            order: 2;
+        }
+        .productos-seleccionados-section {
+            order: 3;
+        }
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -25,10 +38,12 @@
             </a>
         </div>
     </div>
-    <div class="row">
-        <!-- Primera columna - Datos de la venta y productos seleccionados -->
-        <div class="col-md-7">
-            <div class="card mb-4">
+    
+    <!-- Usar flexbox con order para reordenar en móvil -->
+    <div class="row d-flex">
+        <!-- Columna 1: Datos de la venta (orden 1 en móvil) -->
+        <div class="col-md-7 mb-4 datos-venta-column">
+            <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">Datos de la Venta</h5>
                 </div>
@@ -78,32 +93,7 @@
                         <!-- Campo oculto para los productos JSON -->
                         <input type="hidden" name="productos_json" id="productos_json">
                         {{ form.csrf_token }}
-                        <!-- Lista de productos seleccionados -->
-                        <div class="table-responsive mt-4">
-                            <h5>Productos Seleccionados</h5>
-                            <table class="table table-striped" id="tabla-productos">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Código</th>
-                                        <th>Producto</th>
-                                        <th>Cantidad</th>
-                                        <th>Precio Unit.</th>
-                                        <th>Subtotal</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <!-- Productos seleccionados se añaden aquí con JavaScript -->
-                                </tbody>
-                                <tfoot>
-                                    <tr>
-                                        <th colspan="4" class="text-end">Total:</th>
-                                        <th id="total-venta">$0</th>
-                                        <th></th>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
+                        
                         <!-- Resumen de crédito - Solo visible cuando hay productos y es venta a crédito -->
                         <div id="resumen_credito" class="mt-4" style="display: none;">
                             <h5 class="mb-3">Resumen de la Venta a Crédito</h5>
@@ -126,6 +116,7 @@
                                 </div>
                             </div>
                         </div>
+                        
                         <div class="d-flex justify-content-end mt-4">
                             <a href="{{ url_for('ventas.index') }}" class="btn btn-secondary me-2">Cancelar</a>
                             {{ form.submit(class="btn btn-success") }}
@@ -134,8 +125,9 @@
                 </div>
             </div>
         </div>
-        <!-- Segunda columna - Productos disponibles para seleccionar -->
-        <div class="col-md-5">
+        
+        <!-- Columna 2: Productos disponibles (orden 2 en móvil) -->
+        <div class="col-md-5 mb-4 productos-disponibles-column">
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">Productos Disponibles</h5>
@@ -148,35 +140,72 @@
                 </div>
                 <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
                     <div class="row m-2" id="productos-disponibles-container">
-    {% if productos %}
-        {% for prod in productos %}
-            <div class="col-12 mb-2 producto-item-disponible" 
-                data-id="{{ prod.id }}" 
-                data-nombre="{{ prod.nombre }}" 
-                data-precio="{{ prod.precio_venta }}" 
-                data-stock="{{ prod.stock }}" 
-                data-codigo="{{ prod.codigo }}"
-                onclick="seleccionarProducto(this)">
-                <div class="card p-2">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h6 class="card-title mb-0">{{ prod.nombre }}</h6>
-                            <small class="text-muted">Código: {{ prod.codigo }}</small>
-                        </div>
-                        <div class="text-end">
-                            <span class="badge bg-primary">${{ "{:,.0f}".format(prod.precio_venta) }}</span><br>
-                            <small class="text-muted">Stock: {{ prod.stock }}</small>
-                        </div>
+                        {% if productos %}
+                            {% for prod in productos %}
+                                <div class="col-12 mb-2 producto-item-disponible" 
+                                    data-id="{{ prod.id }}" 
+                                    data-nombre="{{ prod.nombre }}" 
+                                    data-precio="{{ prod.precio_venta }}" 
+                                    data-stock="{{ prod.stock }}" 
+                                    data-codigo="{{ prod.codigo }}"
+                                    onclick="seleccionarProducto(this)">
+                                    <div class="card p-2">
+                                        <div class="d-flex justify-content-between">
+                                            <div>
+                                                <h6 class="card-title mb-0">{{ prod.nombre }}</h6>
+                                                <small class="text-muted">Código: {{ prod.codigo }}</small>
+                                            </div>
+                                            <div class="text-end">
+                                                <span class="badge bg-primary">${{ "{:,.0f}".format(prod.precio_venta) }}</span><br>
+                                                <small class="text-muted">Stock: {{ prod.stock }}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="col-12">
+                                <p class="text-center p-3">No hay productos disponibles.</p>
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
-        {% endfor %}
-    {% else %}
-        <div class="col-12">
-            <p class="text-center p-3">No hay productos disponibles.</p>
         </div>
-    {% endif %}
-</div>
+    </div>
+    
+    <!-- Sección de productos seleccionados (orden 3 en móvil) -->
+    <div class="row productos-seleccionados-section">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Productos Seleccionados</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="tabla-productos">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Producto</th>
+                                    <th>Cantidad</th>
+                                    <th>Precio Unit.</th>
+                                    <th>Subtotal</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Productos seleccionados se añaden aquí con JavaScript -->
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="4" class="text-end">Total:</th>
+                                    <th id="total-venta">$0</th>
+                                    <th></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -185,6 +214,7 @@
 {% endblock %}
 {% block extra_js %}
 <script>
+// [El mismo JavaScript que tienes actualmente]
 document.addEventListener('DOMContentLoaded', function() {
     console.log("Inicializando JavaScript para creación de ventas");
     // Variables y elementos DOM
@@ -205,7 +235,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectFrecuenciaPago = document.getElementById('frecuencia_pago');
     const inputNumeroCuotas = document.getElementById('numero_cuotas');
     const clienteSelect = document.querySelector('select[name="cliente"]');
-    const cajaContainer = document.querySelector('.caja-container'); // Nuevo elemento añadido
+    const cajaContainer = document.querySelector('.caja-container');
 
     // Validación de elementos críticos
     if (!productosDisponiblesContainer) {
