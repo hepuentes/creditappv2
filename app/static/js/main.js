@@ -1,57 +1,85 @@
 // main.js
 document.addEventListener('DOMContentLoaded', () => {
-  // Identificar y manejar todos los botones hamburguesa
-  const sidebarCollapseBtns = document.querySelectorAll('#sidebarCollapse');
   const sidebar = document.getElementById('sidebar');
+  const sidebarToggleBtn = document.getElementById('sidebarCollapseContent');
   
-  if (sidebarCollapseBtns.length > 0 && sidebar) {
-    sidebarCollapseBtns.forEach(btn => {
-      btn.addEventListener('click', function() {
-        // Toggle sidebar visibility
-        sidebar.classList.toggle('active');
-        
-        // Cambiar la apariencia del botón según el estado del sidebar
-        if (window.innerWidth < 768) {
-          document.body.classList.toggle('sidebar-open');
-        }
-      });
-    });
-  }
-  
-  // Cerrar sidebar al hacer clic fuera de él en dispositivos móviles
-  document.addEventListener('click', function(e) {
-    if (sidebar && window.innerWidth < 768 && 
-        !sidebar.contains(e.target) && 
-        !e.target.closest('#sidebarCollapse')) {
-      sidebar.classList.add('active');
+  // Función para cerrar sidebar
+  function closeSidebar() {
+    if (sidebar) {
+      sidebar.classList.remove('show');
       document.body.classList.remove('sidebar-open');
     }
-  });
-
-  // NUEVA FUNCIONALIDAD: Cerrar sidebar al hacer clic en un enlace del menú en móvil
-  const sidebarLinks = document.querySelectorAll('#sidebar a');
-  if (sidebarLinks.length > 0 && sidebar) {
-    sidebarLinks.forEach(link => {
-      link.addEventListener('click', function() {
-        if (window.innerWidth < 768) {
-          sidebar.classList.add('active');
-          document.body.classList.remove('sidebar-open');
-        }
-      });
+  }
+  
+  // Función para abrir sidebar
+  function openSidebar() {
+    if (sidebar) {
+      sidebar.classList.add('show');
+      document.body.classList.add('sidebar-open');
+    }
+  }
+  
+  // Función para toggle sidebar
+  function toggleSidebar() {
+    if (sidebar) {
+      if (sidebar.classList.contains('show')) {
+        closeSidebar();
+      } else {
+        openSidebar();
+      }
+    }
+  }
+  
+  // Event listener para el botón hamburguesa
+  if (sidebarToggleBtn) {
+    sidebarToggleBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSidebar();
     });
   }
-
-  // Ajustar cuando cambia el tamaño de la ventana
-  window.addEventListener('resize', () => {
-    if (window.innerWidth >= 768) {
-      // En pantallas grandes, mostrar sidebar por defecto
-      if (sidebar) {
-        sidebar.classList.remove('active');
-        document.body.classList.remove('sidebar-open');
+  
+  // Cerrar sidebar al hacer clic fuera en móvil
+  document.addEventListener('click', function(e) {
+    if (window.innerWidth < 768 && sidebar && sidebar.classList.contains('show')) {
+      // Si el clic no es en el sidebar ni en el botón toggle
+      if (!sidebar.contains(e.target) && !e.target.closest('#sidebarCollapseContent')) {
+        closeSidebar();
       }
     }
   });
-
+  
+  // Cerrar sidebar al hacer clic en enlaces del menú en móvil
+  const sidebarLinks = document.querySelectorAll('#sidebar a');
+  sidebarLinks.forEach(link => {
+    link.addEventListener('click', function() {
+      if (window.innerWidth < 768) {
+        // Pequeño delay para permitir la navegación
+        setTimeout(() => {
+          closeSidebar();
+        }, 100);
+      }
+    });
+  });
+  
+  // Manejar cambios de tamaño de ventana
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 768) {
+      // En pantallas grandes, asegurar que sidebar esté visible
+      closeSidebar(); // Remover clases de móvil
+    } else {
+      // En móvil, asegurar que sidebar esté oculto por defecto
+      if (!sidebar.classList.contains('show')) {
+        closeSidebar();
+      }
+    }
+  });
+  
+  // Inicializar estado correcto al cargar
+  if (window.innerWidth < 768) {
+    closeSidebar();
+  }
+  
   // Auto-close alerts después de 5 segundos
   setTimeout(function() {
     const alerts = document.querySelectorAll('.alert');
