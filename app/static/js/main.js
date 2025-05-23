@@ -2,8 +2,9 @@
 document.addEventListener('DOMContentLoaded', () => {
   const sidebar = document.getElementById('sidebar');
   const sidebarToggleBtn = document.getElementById('sidebarCollapseContent');
+  const sidebarToggleDesktop = document.getElementById('sidebarCollapseDesktop');
   
-  // Función para cerrar sidebar
+  // Función para cerrar sidebar en móvil
   function closeSidebar() {
     if (sidebar) {
       sidebar.classList.remove('show');
@@ -11,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Función para abrir sidebar
+  // Función para abrir sidebar en móvil
   function openSidebar() {
     if (sidebar) {
       sidebar.classList.add('show');
@@ -19,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Función para toggle sidebar
+  // Función para toggle sidebar en móvil
   function toggleSidebar() {
     if (sidebar) {
       if (sidebar.classList.contains('show')) {
@@ -30,12 +31,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Event listener para el botón hamburguesa
+  // Función para toggle sidebar en desktop
+  function toggleSidebarDesktop() {
+    if (sidebar) {
+      sidebar.classList.toggle('collapsed');
+      document.body.classList.toggle('sidebar-collapsed');
+      
+      // Guardar preferencia en localStorage
+      if (sidebar.classList.contains('collapsed')) {
+        localStorage.setItem('sidebarState', 'collapsed');
+      } else {
+        localStorage.setItem('sidebarState', 'expanded');
+      }
+    }
+  }
+  
+  // Event listener para el botón hamburguesa en móvil
   if (sidebarToggleBtn) {
     sidebarToggleBtn.addEventListener('click', function(e) {
       e.preventDefault();
       e.stopPropagation();
       toggleSidebar();
+    });
+  }
+  
+  // Event listener para el botón toggle en desktop
+  if (sidebarToggleDesktop) {
+    sidebarToggleDesktop.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSidebarDesktop();
     });
   }
   
@@ -74,6 +99,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   });
+  
+  // Recuperar estado del sidebar desde localStorage (solo en desktop)
+  if (window.innerWidth >= 768) {
+    const savedState = localStorage.getItem('sidebarState');
+    if (savedState === 'collapsed') {
+      sidebar.classList.add('collapsed');
+      document.body.classList.add('sidebar-collapsed');
+    }
+  }
   
   // Inicializar estado correcto al cargar
   if (window.innerWidth < 768) {
