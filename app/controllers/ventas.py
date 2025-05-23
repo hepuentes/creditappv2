@@ -288,16 +288,35 @@ def eliminar(id):
 @ventas_bp.route('/<int:id>/share')
 @login_required
 def compartir(id):
-    from app.utils import get_venta_pdf_descarga_url
-    
-    venta = Venta.query.get_or_404(id)
-    
-    # Generar URL para descarga directa
-    public_url = get_venta_pdf_descarga_url(venta.id)
-    
-    # Incluir el nombre del cliente en el mensaje
-    mensaje = f"Factura de Venta #{venta.id} - {venta.cliente.nombre}"
-    
-    # Crear enlace de WhatsApp
-    whatsapp_url = f"https://wa.me/?text=Hola!%20Aquí%20está%20tu%20{mensaje}.%20Descárgala%20desde%20este%20enlace:%20{public_url}"
-    return redirect(whatsapp_url)
+    try:
+        from app.utils import get_venta_pdf_descarga_url
+        
+        venta = Venta.query.get_or_404(id)
+        
+        # Verificar permisos si es vendedor
+        if current_user.is_vendedor() and not current_user.is_admin():
+            if venta.vendedor_id != current_user.id:
+                flash('No tienes permisos para compartir esta venta', 'danger')
+                return redirect(url_for('ventas.index'))
+        
+        # Generar URL para descarga directa
+        public_url = get_venta_pdf_descarga_url(venta.id)
+        
+        if not public_url:
+            flash('Error al generar enlace de descarga', 'danger')
+            return redirect(url_for('ventas.detalle', id=id))
+        
+        # Crear mensaje con información de la venta
+        cliente_nombre = venta.cliente.nombre if venta.cliente else "Cliente"
+        mensaje = f"Factura de Venta #{venta.id} - {cliente_nombre}"
+        
+        # Crear enlace de WhatsApp
+        whatsapp_url = f"https://wa.me/?text=Hola!%20Aquí%20está%20tu%20{mensaje}.%20Descárgala%20desde%20este%20enlace:%20{public_url}"
+        
+        current_app.logger.info(f"Compartiendo venta {id} por WhatsApp: {public_url}")
+        return redirect(whatsapp_url)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error al compartir venta {id}: {e}")
+        flash('Error al generar enlace para compartir', 'danger')
+        return redirect(url_for('ventas.detalle', id=id))
