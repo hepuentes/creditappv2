@@ -290,3 +290,19 @@ def get_abono_pdf_public_data_url(abono_id):
     except Exception as e:
         print(f"Error al generar data URL para abono {abono_id}: {e}")
         return None
+
+def get_venta_pdf_descarga_url(venta_id):
+    """Genera una URL para descarga directa del PDF de venta sin autenticación"""
+    from flask import url_for
+    from app.controllers.public import generar_token_simple
+    
+    token = generar_token_simple(venta_id, 'venta')
+    return url_for('public.venta_pdf_descarga', id=venta_id, token=token, _external=True)
+
+def get_abono_pdf_descarga_url(abono_id):
+    """Genera una URL para descarga directa del PDF de abono sin autenticación"""
+    from flask import url_for
+    from app.controllers.public import generar_token_simple
+    
+    token = generar_token_simple(abono_id, 'abono')
+    return url_for('public.abono_pdf_descarga', id=abono_id, token=token, _external=True)
