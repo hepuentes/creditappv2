@@ -81,4 +81,8 @@ def abono_pdf_descarga(id, token):
 @public_bp.route('/share')
 def share_page():
     """Página especial para compartir PDFs usando Web Share API"""
-    return render_template('public/share.html')
+    try:
+        return render_template('public/share.html')
+    except Exception as e:
+        current_app.logger.error(f"Error en página de compartir: {str(e)}")
+        abort(500, description="Error al cargar la página de compartir")
