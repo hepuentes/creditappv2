@@ -411,23 +411,35 @@ def pdf(id):
 @login_required
 @vendedor_cobrador_required
 def compartir(id):
-    from app.utils import get_abono_pdf_descarga_url
-    
-    abono = Abono.query.get_or_404(id)
-    
-    # Verificar permisos
-    if current_user.is_vendedor() and not current_user.is_admin():
-        if abono.venta and abono.venta.vendedor_id != current_user.id:
-            flash('No tienes permisos para compartir este abono', 'danger')
-            return redirect(url_for('dashboard.index'))
-    
-    # Generar URL para descarga directa
-    public_url = get_abono_pdf_descarga_url(abono.id)
-    
-    # Crear mensaje con información del abono
-    cliente_nombre = abono.venta.cliente.nombre if abono.venta and abono.venta.cliente else "Cliente"
-    mensaje = f"Comprobante de Abono #{abono.id} - {cliente_nombre}"
-    
-    # Crear enlace de WhatsApp
-    whatsapp_url = f"https://wa.me/?text=Hola!%20Aquí%20está%20tu%20{mensaje}.%20Descárgalo%20desde%20este%20enlace:%20{public_url}"
-    return redirect(whatsapp_url)
+    try:
+        from app.utils import get_abono_pdf_descarga_url
+        
+        abono = Abono.query.get_or_404(id)
+        
+        # Verificar permisos si es vendedor
+        if current_user.is_vendedor() and not current_user.is_admin():
+            if abono.venta and abono.venta.vendedor_id != current_user.id:
+                flash('No tienes permisos para compartir este abono', 'danger')
+                return redirect(url_for('abonos.index'))
+        
+        # Generar URL para descarga directa
+        public_url = get_abono_pdf_descarga_url(abono.id)
+        
+        if not public_url:
+            flash('Error al generar enlace de descarga', 'danger')
+            return redirect(url_for('abonos.detalle', id=id))
+        
+        # Crear mensaje con información del abono
+        cliente_nombre = abono.venta.cliente.nombre if abono.venta and abono.venta.cliente else "Cliente"
+        mensaje = f"Comprobante de Abono #{abono.id} - {cliente_nombre}"
+        
+        # Crear enlace de WhatsApp
+        whatsapp_url = f"https://wa.me/?text=Hola!%20Aquí%20está%20tu%20{mensaje}.%20Descárgalo%20desde%20este%20enlace:%20{public_url}"
+        
+        current_app.logger.info(f"Compartiendo abono {id} por WhatsApp: {public_url}")
+        return redirect(whatsapp_url)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error al compartir abono {id}: {e}")
+        flash('Error al generar enlace para compartir', 'danger')
+        return redirect(url_for('abonos.detalle', id=id))
