@@ -631,87 +631,104 @@
         }
         
         async function sincronizarCambiosPendientes() {
-            if (!authToken) {
-                alert('Primero debes autenticarte');
-                return;
-            }
-            
-            if (!isReallyOnline()) {
-                log('⚠️ Sin conexión a internet. No se pueden sincronizar los cambios.');
-                const resultDiv = document.getElementById('pendingChangesResult');
-                resultDiv.innerHTML = `<div class="alert alert-warning">Sin conexión a internet. No se pueden sincronizar los cambios.</div>`;
-                return;
-            }
-            
-            if (!('indexedDB' in window) || !window.db || !window.db.getPendingChanges) {
-                log('⚠️ La base de datos local no está disponible');
-                return;
-            }
-            
-            try {
-                log('Sincronizando cambios pendientes...');
-                
-                // Obtener cambios pendientes
-                const pendingChanges = await window.db.getPendingChanges();
-                
-                if (pendingChanges.length === 0) {
-                    log('ℹ️ No hay cambios pendientes para sincronizar');
-                    const resultDiv = document.getElementById('pendingChangesResult');
-                    resultDiv.innerHTML = `<div class="alert alert-info">No hay cambios pendientes para sincronizar.</div>`;
-                    return;
-                }
-                
-                const response = await fetch(`${baseURL}/sync/push`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        changes: pendingChanges,
-                        device_timestamp: new Date().toISOString()
-                    })
-                });
-                
-                let data;
-                try {
-                    data = await response.json();
-                } catch (error) {
-                    log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
-                    throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
-                }
-                
-                const resultDiv = document.getElementById('pendingChangesResult');
-                
-                if (data.success) {
-                    // Eliminar cambios sincronizados
-                    const syncedChanges = pendingChanges.map(change => change.uuid);
-                    await window.db.deletePendingChanges(syncedChanges);
-                    
-                    // Actualizar contador
-                    await updatePendingChangesCount();
-                    
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-success">
-                            <strong>Cambios sincronizados correctamente</strong><br>
-                            <p>Se han sincronizado ${pendingChanges.length} cambios.</p>
-                            <details>
-                                <summary>Ver respuesta</summary>
-                                <pre>${JSON.stringify(data, null, 2)}</pre>
-                            </details>
-                        </div>
-                    `;
-                    log(`✓ Sincronizados ${pendingChanges.length} cambios correctamente`);
-                } else {
-                    resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || 'Error desconocido'}</div>`;
-                    log(`✗ Error al sincronizar cambios: ${data.error || 'Error desconocido'}`);
-                }
-            } catch (error) {
-                const resultDiv = document.getElementById('pendingChangesResult');
-                resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
-                log(`✗ Error de conexión: ${error.message}`);
-            }
+    if (!authToken) {
+        alert('Primero debes autenticarte');
+        return;
+    }
+    
+    if (!isReallyOnline()) {
+        log('⚠️ Sin conexión a internet. No se pueden sincronizar los cambios.');
+        const resultDiv = document.getElementById('pendingChangesResult');
+        resultDiv.innerHTML = `<div class="alert alert-warning">Sin conexión a internet. No se pueden sincronizar los cambios.</div>`;
+        return;
+    }
+    
+    if (!('indexedDB' in window) || !window.db || !window.db.getPendingChanges) {
+        log('⚠️ La base de datos local no está disponible');
+        return;
+    }
+    
+    try {
+        log('Sincronizando cambios pendientes...');
+        
+        // Obtener cambios pendientes
+        const pendingChanges = await window.db.getPendingChanges();
+        
+        // Asegurarnos que pendingChanges es un array
+        if (!pendingChanges || !Array.isArray(pendingChanges)) {
+            log('⚠️ No hay cambios pendientes válidos para sincronizar');
+            const resultDiv = document.getElementById('pendingChangesResult');
+            resultDiv.innerHTML = `<div class="alert alert-warning">No hay cambios pendientes válidos para sincronizar.</div>`;
+            return;
         }
+        
+        if (pendingChanges.length === 0) {
+            log('ℹ️ No hay cambios pendientes para sincronizar');
+            const resultDiv = document.getElementById('pendingChangesResult');
+            resultDiv.innerHTML = `<div class="alert alert-info">No hay cambios pendientes para sincronizar.</div>`;
+            return;
+        }
+        
+        const response = await fetch(`${baseURL}/sync/push`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                changes: pendingChanges,
+                device_timestamp: new Date().toISOString()
+            })
+        });
+        
+        let data;
+        try {
+            data = await response.json();
+        } catch (error) {
+            log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
+            throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
+        }
+        
+        const resultDiv = document.getElementById('pendingChangesResult');
+        
+        if (data.success) {
+            // Obtener array de UUIDs para eliminar
+            const syncedChanges = pendingChanges.map(change => change.uuid);
+            
+            // Solo intentar eliminar si tenemos UUIDs válidos
+            if (syncedChanges && syncedChanges.length > 0) {
+                try {
+                    await window.db.deletePendingChanges(syncedChanges);
+                    log(`✓ Eliminados ${syncedChanges.length} cambios sincronizados`);
+                } catch (deleteError) {
+                    log(`⚠️ Error al eliminar cambios sincronizados: ${deleteError.message}`);
+                }
+            }
+            
+            // Actualizar contador
+            await updatePendingChangesCount();
+            
+            resultDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <strong>Cambios sincronizados correctamente</strong><br>
+                    <p>Se han sincronizado ${pendingChanges.length} cambios.</p>
+                    <details>
+                        <summary>Ver respuesta</summary>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </details>
+                </div>
+            `;
+            log(`✓ Sincronizados ${pendingChanges.length} cambios correctamente`);
+        } else {
+            resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || 'Error desconocido'}</div>`;
+            log(`✗ Error al sincronizar cambios: ${data.error || 'Error desconocido'}`);
+        }
+    } catch (error) {
+        const resultDiv = document.getElementById('pendingChangesResult');
+        resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        log(`✗ Error de conexión: ${error.message}`);
+    }
+}
 
         // Inicializar cuando el documento esté listo
         document.addEventListener('DOMContentLoaded', async function() {
