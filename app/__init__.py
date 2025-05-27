@@ -1,7 +1,6 @@
 import os
 import traceback
 from flask import Flask, send_from_directory
-from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
@@ -80,6 +79,20 @@ def create_app():
     app.register_blueprint(reportes_bp)
     app.register_blueprint(public_bp)
     
+    # NUEVO: Registrar blueprint de API
+    from app.api import api as api_bp
+    app.register_blueprint(api_bp)
+    
+    # Configurar CORS para API
+    @app.after_request
+    def after_request(response):
+        # Permitir CORS para endpoints de API
+        if request.path.startswith('/api/'):
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        return response
+    
     # Crear todas las tablas
     with app.app_context():
         db.create_all()
@@ -107,7 +120,8 @@ def create_app():
                 logo='logo.png',
                 iva=19,
                 moneda='$',
-                porcentaje_comision=5,
+                porcentaje_comision_vendedor=5,
+                porcentaje_comision_cobrador=3,
                 periodo_comision='mensual',
                 min_password=6
             )
