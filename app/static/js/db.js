@@ -99,7 +99,7 @@ async function getPendingChanges() {
     
     const result = await store.getAll();
     
-    // Asegurar que siempre devolvemos un array
+    // Asegurar que siempre devolvamos un array
     return Array.isArray(result) ? result : [];
   } catch (error) {
     console.error("Error en getPendingChanges:", error);
