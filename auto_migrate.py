@@ -263,3 +263,39 @@ with app.app_context():
     except Exception as e:
         logger.error(f"Error general en el proceso de migración: {e}")
         raise
+
+# PASO ADICIONAL: ELIMINAR TRIGGERS DE SINCRONIZACIÓN
+logger.info("\nVerificando y eliminando triggers de sincronización...")
+try:
+    with db.engine.begin() as connection:
+        # Obtener todos los triggers del sistema
+        result = connection.execute(db.text("""
+            SELECT trigger_name, event_object_table
+            FROM information_schema.triggers
+            WHERE trigger_name LIKE '%sync%' OR trigger_name LIKE '%trigger_%'
+        """))
+        
+        triggers = result.fetchall()
+        for trigger in triggers:
+            trigger_name = trigger[0]
+            table_name = trigger[1]
+            try:
+                # Eliminar el trigger
+                connection.execute(db.text(f"""
+                    DROP TRIGGER IF EXISTS {trigger_name} ON {table_name}
+                """))
+                logger.info(f"  ✓ Trigger {trigger_name} eliminado de la tabla {table_name}")
+            except Exception as e:
+                logger.error(f"  ✗ Error al eliminar trigger {trigger_name}: {e}")
+        
+        # Intentar eliminar la función de registro de cambios
+        try:
+            connection.execute(db.text("""
+                DROP FUNCTION IF EXISTS registrar_cambio_sync()
+            """))
+            logger.info("  ✓ Función registrar_cambio_sync eliminada")
+        except Exception as e:
+            logger.error(f"  ✗ Error al eliminar función registrar_cambio_sync: {e}")
+            
+except Exception as e:
+    logger.error(f"  ✗ Error al verificar/eliminar triggers: {e}")
