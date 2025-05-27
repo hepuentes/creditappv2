@@ -8,7 +8,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-# Crear la aplicación para Gunicorn
+# Crear la aplicación para Gunicorn - ESTO ES CRÍTICO
 app = create_app()
 
 # Añadir manejador de errores global
