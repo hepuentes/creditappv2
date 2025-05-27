@@ -86,6 +86,7 @@ def create_app():
     # Configurar CORS para API
     @app.after_request
     def after_request(response):
+        from flask import request
         # Permitir CORS para endpoints de API
         if request.path.startswith('/api/'):
             response.headers.add('Access-Control-Allow-Origin', '*')
