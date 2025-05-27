@@ -601,34 +601,43 @@
         }
         
         async function verCambiosPendientes() {
-            if (!('indexedDB' in window) || !window.db || !window.db.getPendingChanges) {
-                log('⚠️ La base de datos local no está disponible');
-                return;
-            }
-            
-            try {
-                const pendingChanges = await window.db.getPendingChanges();
-                const resultDiv = document.getElementById('pendingChangesResult');
-                
-                if (pendingChanges.length === 0) {
-                    resultDiv.innerHTML = `<div class="alert alert-info">No hay cambios pendientes.</div>`;
-                    log('ℹ️ No hay cambios pendientes');
-                } else {
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-info">
-                            <strong>${pendingChanges.length} cambios pendientes</strong>
-                            <details>
-                                <summary>Ver detalles</summary>
-                                <pre>${JSON.stringify(pendingChanges, null, 2)}</pre>
-                            </details>
-                        </div>
-                    `;
-                    log(`ℹ️ ${pendingChanges.length} cambios pendientes encontrados`);
-                }
-            } catch (error) {
-                log(`⚠️ Error al obtener cambios pendientes: ${error.message}`);
-            }
+    if (!('indexedDB' in window) || !window.db || !window.db.getPendingChanges) {
+        log('⚠️ La base de datos local no está disponible');
+        return;
+    }
+    
+    try {
+        const pendingChanges = await window.db.getPendingChanges();
+        const resultDiv = document.getElementById('pendingChangesResult');
+        
+        // Asegurarnos que pendingChanges es un array
+        if (!pendingChanges || !Array.isArray(pendingChanges)) {
+            resultDiv.innerHTML = `<div class="alert alert-warning">No se pudieron obtener los cambios pendientes.</div>`;
+            log('⚠️ No se pudieron obtener los cambios pendientes o no son un array válido');
+            return;
         }
+        
+        if (pendingChanges.length === 0) {
+            resultDiv.innerHTML = `<div class="alert alert-info">No hay cambios pendientes.</div>`;
+            log('ℹ️ No hay cambios pendientes');
+        } else {
+            resultDiv.innerHTML = `
+                <div class="alert alert-info">
+                    <strong>${pendingChanges.length} cambios pendientes</strong>
+                    <details>
+                        <summary>Ver detalles</summary>
+                        <pre>${JSON.stringify(pendingChanges, null, 2)}</pre>
+                    </details>
+                </div>
+            `;
+            log(`ℹ️ ${pendingChanges.length} cambios pendientes encontrados`);
+        }
+    } catch (error) {
+        log(`⚠️ Error al obtener cambios pendientes: ${error.message}`);
+        const resultDiv = document.getElementById('pendingChangesResult');
+        resultDiv.innerHTML = `<div class="alert alert-danger">Error al obtener cambios pendientes: ${error.message}</div>`;
+    }
+}
         
         async function sincronizarCambiosPendientes() {
     if (!authToken) {
