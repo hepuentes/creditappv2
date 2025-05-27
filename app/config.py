@@ -30,6 +30,12 @@ class Config:
     # Configuración de subida de archivos
     UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static/uploads')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
+    
+    # NUEVO: Configuración de sincronización
+    SYNC_SECRET = os.getenv('SYNC_SECRET', 'sync_secret_key_2025')
+    SYNC_TTL = int(os.getenv('SYNC_TTL', '86400'))  # 24 horas en segundos
+    SYNC_MAX_BATCH_SIZE = int(os.getenv('SYNC_MAX_BATCH_SIZE', '1000'))
+    SYNC_CONFLICT_RESOLUTION = os.getenv('SYNC_CONFLICT_RESOLUTION', 'last_write_wins')
 
 # Configuración de logging
 import logging
