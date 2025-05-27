@@ -39,8 +39,58 @@ with app.app_context():
                 raise
 
     try:
+        # PASO 0: Eliminar triggers problemáticos PRIMERO, antes de cualquier otra operación
+        logger.info("\n=== ELIMINANDO TRIGGERS PROBLEMÁTICOS ===")
+        with db.engine.begin() as connection:
+            # Desactivar todos los triggers
+            try:
+                connection.execute(db.text("SET session_replication_role = 'replica';"))
+                logger.info("✓ Triggers desactivados temporalmente")
+            except Exception as e:
+                logger.error(f"✗ Error al desactivar triggers: {e}")
+
+            # Intentar eliminar triggers específicos que sabemos que dan problemas
+            try:
+                # Obtener lista de todos los triggers
+                result = connection.execute(db.text("""
+                    SELECT trigger_name, event_object_table
+                    FROM information_schema.triggers
+                    WHERE trigger_name LIKE '%sync%' OR trigger_name LIKE '%trigger_%'
+                """))
+                
+                # Eliminar cada trigger
+                for trigger in result.fetchall():
+                    trigger_name = trigger[0]
+                    table_name = trigger[1]
+                    try:
+                        connection.execute(db.text(f"""
+                            DROP TRIGGER IF EXISTS {trigger_name} ON {table_name}
+                        """))
+                        logger.info(f"  ✓ Trigger {trigger_name} eliminado de la tabla {table_name}")
+                    except Exception as e:
+                        logger.error(f"  ✗ Error al eliminar trigger {trigger_name}: {e}")
+                
+                # Eliminar la función registrar_cambio_sync
+                try:
+                    connection.execute(db.text("""
+                        DROP FUNCTION IF EXISTS registrar_cambio_sync() CASCADE
+                    """))
+                    logger.info("  ✓ Función registrar_cambio_sync eliminada")
+                except Exception as e:
+                    logger.error(f"  ✗ Error al eliminar función registrar_cambio_sync: {e}")
+            
+            except Exception as e:
+                logger.error(f"  ✗ Error al eliminar triggers: {e}")
+            
+            # Volver a activar triggers para el resto de operaciones
+            try:
+                connection.execute(db.text("SET session_replication_role = 'origin';"))
+                logger.info("✓ Triggers reactivados")
+            except Exception as e:
+                logger.error(f"✗ Error al reactivar triggers: {e}")
+
         # PASO 1: Reparar las secuencias de IDs en todas las tablas
-        logger.info("Reparando secuencias de autoincremento...")
+        logger.info("\nReparando secuencias de autoincremento...")
         with db.engine.connect() as connection:
             # Obtener todas las tablas de la base de datos
             tablas = connection.execute(db.text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")).fetchall()
@@ -169,17 +219,20 @@ with app.app_context():
         except Exception as e:
             logger.error(f"  ✗ Error al modificar la tabla abonos: {e}")
 
-        # PASO 4: Corregir datos incongruentes
+        # PASO 4: Corregir datos incongruentes - CON PROTECCIÓN CONTRA TRIGGERS
         logger.info("\nVerificando y corrigiendo datos incongruentes...")
-        # Corregir ventas a crédito con saldo_pendiente=0 que deberían estar pagadas
         try:
             with db.engine.begin() as connection:
-                # Usar un enfoque más seguro para evitar errores con triggers
+                # Desactivar triggers temporalmente para evitar errores
+                connection.execute(db.text("SET session_replication_role = 'replica';"))
+                
+                # Corregir ventas a crédito con saldo_pendiente=0 que deberían estar pagadas
                 connection.execute(db.text(
                     "UPDATE ventas SET estado = 'pagado' " +
-                    "WHERE id IN (SELECT id FROM ventas WHERE tipo = 'credito' AND (saldo_pendiente IS NULL OR saldo_pendiente <= 0))"
+                    "WHERE tipo = 'credito' AND (saldo_pendiente IS NULL OR saldo_pendiente <= 0)"
                 ))
                 logger.info("  ✓ Ventas a crédito con saldo 0 marcadas como pagadas")
+                
                 # Asegurar que todas las ventas tienen estado
                 connection.execute(db.text(
                     "UPDATE ventas SET estado = 'pendiente' WHERE estado IS NULL AND tipo = 'credito'"
@@ -188,6 +241,9 @@ with app.app_context():
                     "UPDATE ventas SET estado = 'pagado' WHERE estado IS NULL AND tipo = 'contado'"
                 ))
                 logger.info("  ✓ Ventas sin estado actualizado correctamente")
+                
+                # Reactivar triggers
+                connection.execute(db.text("SET session_replication_role = 'origin';"))
         except Exception as e:
             logger.error(f"  ✗ Error al corregir datos incongruentes: {e}")
 
@@ -264,38 +320,4 @@ with app.app_context():
         logger.error(f"Error general en el proceso de migración: {e}")
         raise
 
-# PASO ADICIONAL: ELIMINAR TRIGGERS DE SINCRONIZACIÓN
-logger.info("\nVerificando y eliminando triggers de sincronización...")
-try:
-    with db.engine.begin() as connection:
-        # Obtener todos los triggers del sistema
-        result = connection.execute(db.text("""
-            SELECT trigger_name, event_object_table
-            FROM information_schema.triggers
-            WHERE trigger_name LIKE '%sync%' OR trigger_name LIKE '%trigger_%'
-        """))
-        
-        triggers = result.fetchall()
-        for trigger in triggers:
-            trigger_name = trigger[0]
-            table_name = trigger[1]
-            try:
-                # Eliminar el trigger
-                connection.execute(db.text(f"""
-                    DROP TRIGGER IF EXISTS {trigger_name} ON {table_name}
-                """))
-                logger.info(f"  ✓ Trigger {trigger_name} eliminado de la tabla {table_name}")
-            except Exception as e:
-                logger.error(f"  ✗ Error al eliminar trigger {trigger_name}: {e}")
-        
-        # Intentar eliminar la función de registro de cambios
-        try:
-            connection.execute(db.text("""
-                DROP FUNCTION IF EXISTS registrar_cambio_sync()
-            """))
-            logger.info("  ✓ Función registrar_cambio_sync eliminada")
-        except Exception as e:
-            logger.error(f"  ✗ Error al eliminar función registrar_cambio_sync: {e}")
-            
-except Exception as e:
-    logger.error(f"  ✗ Error al verificar/eliminar triggers: {e}")
+logger.info("\n=== PROCESO DE MIGRACIÓN COMPLETADO ===")
