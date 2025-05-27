@@ -388,4 +388,377 @@
                     }
                 } else {
                     resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || response.statusText}</div>`;
-                    log(`
+                    log(`✗ Error descargando productos: ${data.error || response.statusText}`);
+                }
+            } catch (error) {
+                const resultDiv = document.getElementById('syncResult');
+                resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+                log(`✗ Error de conexión: ${error.message}`);
+            }
+        }
+
+        async function syncPullVentas() {
+            if (!authToken) {
+                alert('Primero debes autenticarte');
+                return;
+            }
+
+            if (!isReallyOnline()) {
+                log('⚠️ Sin conexión a internet. No se pueden descargar ventas.');
+                const resultDiv = document.getElementById('syncResult');
+                resultDiv.innerHTML = `<div class="alert alert-warning">Sin conexión a internet. No se pueden descargar ventas.</div>`;
+                return;
+            }
+
+            try {
+                log('Descargando ventas...');
+                const response = await fetch(`${baseURL}/sync/ventas`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                let data;
+                try {
+                    data = await response.json();
+                } catch (error) {
+                    log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
+                    throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
+                }
+                
+                const resultDiv = document.getElementById('syncResult');
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <strong>Ventas descargadas:</strong> ${data.count}<br>
+                            <details>
+                                <summary>Ver datos (primeros 3)</summary>
+                                <pre>${JSON.stringify(data.data.slice(0, 3), null, 2)}</pre>
+                            </details>
+                        </div>
+                    `;
+                    log(`✓ Descargadas ${data.count} ventas`);
+                    
+                    // Guardar en IndexedDB si está disponible
+                    if ('indexedDB' in window && window.db && window.db.saveVentas) {
+                        try {
+                            await window.db.saveVentas(data.data);
+                            log('✓ Ventas guardadas en la base de datos local');
+                        } catch (dbError) {
+                            log(`⚠️ Error al guardar ventas localmente: ${dbError.message}`);
+                        }
+                    }
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || response.statusText}</div>`;
+                    log(`✗ Error descargando ventas: ${data.error || response.statusText}`);
+                }
+            } catch (error) {
+                const resultDiv = document.getElementById('syncResult');
+                resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+                log(`✗ Error de conexión: ${error.message}`);
+            }
+        }
+
+        async function simularCambioCliente() {
+            if (!authToken && !window.db) {
+                alert('Primero debes autenticarte');
+                return;
+            }
+
+            const nombre = document.getElementById('clienteNombre').value;
+            const cedula = document.getElementById('clienteCedula').value;
+            const telefono = document.getElementById('clienteTelefono').value;
+
+            if (!nombre || !cedula) {
+                alert('Ingrese nombre y cédula del cliente');
+                return;
+            }
+
+            try {
+                log(`Simulando creación de cliente: ${nombre} (${cedula})...`);
+                
+                const clienteData = {
+                    nombre: nombre,
+                    cedula: cedula,
+                    telefono: telefono || "3001234567",
+                    email: "",
+                    direccion: "Dirección de prueba"
+                };
+
+                // Crear un UUID para el cambio
+                const uuid = 'change-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+                
+                // Si estamos sin conexión o tenemos IndexedDB, almacenamos localmente
+                if (!isReallyOnline() && 'indexedDB' in window && window.db) {
+                    try {
+                        // Crear un cambio pendiente
+                        const change = {
+                            uuid: uuid,
+                            tabla: 'clientes',
+                            registro_uuid: 'client-' + Date.now(),
+                            operacion: 'INSERT',
+                            datos: clienteData,
+                            timestamp: new Date().toISOString(),
+                            version: 1
+                        };
+                        
+                        await window.db.savePendingChange(change);
+                        
+                        // Actualizar contador
+                        updatePendingChangesCount();
+                        
+                        const pushDiv = document.getElementById('pushResult');
+                        pushDiv.innerHTML = `
+                            <div class="alert alert-warning">
+                                <strong>Cambio almacenado localmente</strong><br>
+                                <p>El cliente se ha guardado localmente y se sincronizará cuando haya conexión.</p>
+                            </div>
+                        `;
+                        log(`✓ Cambio almacenado localmente: Cliente "${nombre}"`);
+                        return;
+                    } catch (dbError) {
+                        log(`⚠️ Error al guardar cambio localmente: ${dbError.message}`);
+                    }
+                }
+                
+                // Si hay conexión, enviar directamente
+                if (isReallyOnline()) {
+                    const response = await fetch(`${baseURL}/sync/push`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            changes: [
+                                {
+                                    uuid: uuid,
+                                    tabla: 'clientes',
+                                    registro_uuid: 'client-' + Date.now(),
+                                    operacion: 'INSERT',
+                                    datos: clienteData,
+                                    timestamp: new Date().toISOString(),
+                                    version: 1
+                                }
+                            ],
+                            device_timestamp: new Date().toISOString()
+                        })
+                    });
+
+                    let data;
+                    try {
+                        data = await response.json();
+                    } catch (error) {
+                        log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
+                        throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
+                    }
+
+                    const pushDiv = document.getElementById('pushResult');
+                    
+                    if (data.success) {
+                        pushDiv.innerHTML = `
+                            <div class="alert alert-success">
+                                <strong>Cliente creado correctamente</strong><br>
+                                <p>Se ha enviado el nuevo cliente al servidor.</p>
+                                <details>
+                                    <summary>Ver respuesta</summary>
+                                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                                </details>
+                            </div>
+                        `;
+                        log(`✓ Cliente creado y enviado correctamente`);
+                    } else {
+                        pushDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || 'Error desconocido'}</div>`;
+                        log(`✗ Error al crear cliente: ${data.error || 'Error desconocido'}`);
+                    }
+                } else {
+                    const pushDiv = document.getElementById('pushResult');
+                    pushDiv.innerHTML = `<div class="alert alert-danger">Sin conexión a internet y no se pudo guardar localmente.</div>`;
+                    log(`✗ Sin conexión a internet y no se pudo guardar localmente.`);
+                }
+            } catch (error) {
+                const pushDiv = document.getElementById('pushResult');
+                pushDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+                log(`✗ Error de conexión: ${error.message}`);
+            }
+        }
+        
+        async function updatePendingChangesCount() {
+            if ('indexedDB' in window && window.db && window.db.countPendingChanges) {
+                try {
+                    const count = await window.db.countPendingChanges();
+                    const countElement = document.getElementById('pending-count');
+                    if (countElement) {
+                        countElement.textContent = count.toString();
+                    }
+                } catch (error) {
+                    console.error('Error al contar cambios pendientes:', error);
+                }
+            }
+        }
+        
+        async function verCambiosPendientes() {
+            if (!('indexedDB' in window) || !window.db || !window.db.getPendingChanges) {
+                log('⚠️ La base de datos local no está disponible');
+                return;
+            }
+            
+            try {
+                const pendingChanges = await window.db.getPendingChanges();
+                const resultDiv = document.getElementById('pendingChangesResult');
+                
+                if (pendingChanges.length === 0) {
+                    resultDiv.innerHTML = `<div class="alert alert-info">No hay cambios pendientes.</div>`;
+                    log('ℹ️ No hay cambios pendientes');
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-info">
+                            <strong>${pendingChanges.length} cambios pendientes</strong>
+                            <details>
+                                <summary>Ver detalles</summary>
+                                <pre>${JSON.stringify(pendingChanges, null, 2)}</pre>
+                            </details>
+                        </div>
+                    `;
+                    log(`ℹ️ ${pendingChanges.length} cambios pendientes encontrados`);
+                }
+            } catch (error) {
+                log(`⚠️ Error al obtener cambios pendientes: ${error.message}`);
+            }
+        }
+        
+        async function sincronizarCambiosPendientes() {
+            if (!authToken) {
+                alert('Primero debes autenticarte');
+                return;
+            }
+            
+            if (!isReallyOnline()) {
+                log('⚠️ Sin conexión a internet. No se pueden sincronizar los cambios.');
+                const resultDiv = document.getElementById('pendingChangesResult');
+                resultDiv.innerHTML = `<div class="alert alert-warning">Sin conexión a internet. No se pueden sincronizar los cambios.</div>`;
+                return;
+            }
+            
+            if (!('indexedDB' in window) || !window.db || !window.db.getPendingChanges) {
+                log('⚠️ La base de datos local no está disponible');
+                return;
+            }
+            
+            try {
+                log('Sincronizando cambios pendientes...');
+                
+                // Obtener cambios pendientes
+                const pendingChanges = await window.db.getPendingChanges();
+                
+                if (pendingChanges.length === 0) {
+                    log('ℹ️ No hay cambios pendientes para sincronizar');
+                    const resultDiv = document.getElementById('pendingChangesResult');
+                    resultDiv.innerHTML = `<div class="alert alert-info">No hay cambios pendientes para sincronizar.</div>`;
+                    return;
+                }
+                
+                const response = await fetch(`${baseURL}/sync/push`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        changes: pendingChanges,
+                        device_timestamp: new Date().toISOString()
+                    })
+                });
+                
+                let data;
+                try {
+                    data = await response.json();
+                } catch (error) {
+                    log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
+                    throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
+                }
+                
+                const resultDiv = document.getElementById('pendingChangesResult');
+                
+                if (data.success) {
+                    // Eliminar cambios sincronizados
+                    const syncedChanges = pendingChanges.map(change => change.uuid);
+                    await window.db.deletePendingChanges(syncedChanges);
+                    
+                    // Actualizar contador
+                    await updatePendingChangesCount();
+                    
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <strong>Cambios sincronizados correctamente</strong><br>
+                            <p>Se han sincronizado ${pendingChanges.length} cambios.</p>
+                            <details>
+                                <summary>Ver respuesta</summary>
+                                <pre>${JSON.stringify(data, null, 2)}</pre>
+                            </details>
+                        </div>
+                    `;
+                    log(`✓ Sincronizados ${pendingChanges.length} cambios correctamente`);
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || 'Error desconocido'}</div>`;
+                    log(`✗ Error al sincronizar cambios: ${data.error || 'Error desconocido'}`);
+                }
+            } catch (error) {
+                const resultDiv = document.getElementById('pendingChangesResult');
+                resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+                log(`✗ Error de conexión: ${error.message}`);
+            }
+        }
+
+        // Inicializar cuando el documento esté listo
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Configurar eventos de conexión
+            window.addEventListener('online', function() {
+                updateConnectionStatus();
+                log('✓ Conexión a internet restaurada');
+            });
+            
+            window.addEventListener('offline', function() {
+                updateConnectionStatus();
+                log('⚠️ Conexión a internet perdida');
+            });
+            
+            // Inicializar estado
+            updateConnectionStatus();
+            
+            // Inicializar IndexedDB y contador de cambios pendientes
+            if ('indexedDB' in window) {
+                try {
+                    // Inicializar la base de datos
+                    if (window.db && window.db.openDB) {
+                        await window.db.openDB();
+                        log('✓ Base de datos local inicializada');
+                        
+                        // Actualizar contador de cambios pendientes
+                        await updatePendingChangesCount();
+                    }
+                } catch (error) {
+                    log(`⚠️ Error al inicializar la base de datos local: ${error.message}`);
+                }
+            } else {
+                log('⚠️ IndexedDB no está disponible en este navegador');
+            }
+            
+            // Registrar Service Worker si está disponible
+            if ('serviceWorker' in navigator) {
+                try {
+                    const registration = await navigator.serviceWorker.register('/static/js/sw.js');
+                    log('✓ Service Worker registrado correctamente');
+                } catch (error) {
+                    log(`⚠️ Error al registrar Service Worker: ${error.message}`);
+                }
+            } else {
+                log('⚠️ Service Worker no está disponible en este navegador');
+            }
+        });
+    </script>
+</body>
+</html>
