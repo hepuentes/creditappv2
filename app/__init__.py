@@ -82,19 +82,19 @@ def create_app():
     app.register_blueprint(test_sync_bp)
     
     # Registrar blueprint de API
-    from app.api import api as api_bp
-    app.register_blueprint(api_bp)
-    
-    # Configurar CORS para API
-    @app.after_request
-    def after_request(response):
-        from flask import request
-        # Permitir CORS para endpoints de API
-        if request.path.startswith('/api/'):
-            response.headers.add('Access-Control-Allow-Origin', '*')
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-        return response
+from app.api import api as api_bp
+app.register_blueprint(api_bp)
+
+# Configurar CORS para API
+@app.after_request
+def after_request(response):
+    from flask import request
+    # Permitir CORS para endpoints de API
+    if request.path.startswith('/api/'):
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
     
     # Crear todas las tablas
     with app.app_context():
