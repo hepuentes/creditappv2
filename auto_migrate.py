@@ -197,9 +197,10 @@ with app.app_context():
         # Corregir ventas a crédito con saldo_pendiente=0 que deberían estar pagadas
         try:
             with db.engine.begin() as connection:
+                # Usar un enfoque más seguro para evitar errores con triggers
                 connection.execute(db.text(
                     "UPDATE ventas SET estado = 'pagado' " +
-                    "WHERE tipo = 'credito' AND (saldo_pendiente IS NULL OR saldo_pendiente <= 0)"
+                    "WHERE id IN (SELECT id FROM ventas WHERE tipo = 'credito' AND (saldo_pendiente IS NULL OR saldo_pendiente <= 0))"
                 ))
                 logger.info("  ✓ Ventas a crédito con saldo 0 marcadas como pagadas")
                 
@@ -287,31 +288,4 @@ with app.app_context():
                     """))
                     logger.info("  ✓ Registro de configuración inicial creado")
         except Exception as e:
-            logger.error(f"  ✗ Error al verificar/actualizar tabla configuraciones: {e}")
-        
-        # PASO 7: NUEVOS PASOS PARA SINCRONIZACIÓN OFFLINE-FIRST
-        logger.info("\n=== PREPARANDO SISTEMA PARA SINCRONIZACIÓN OFFLINE-FIRST ===")
-        
-        if SYNC_MODELS_AVAILABLE:
-            # Agregar campos de sincronización a tablas existentes
-            logger.info("\nAgregando campos de sincronización a tablas existentes...")
-            try:
-                agregar_campos_sync()
-            except Exception as e:
-                logger.error(f"Error agregando campos de sincronización: {e}")
-            
-            # Crear triggers para change log
-            logger.info("\nCreando triggers para registro automático de cambios...")
-            try:
-                crear_triggers_change_log()
-            except Exception as e:
-                logger.error(f"Error creando triggers: {e}")
-        else:
-            logger.warning("Modelos de sincronización no disponibles. Omitiendo preparación para offline-first.")
-        
-        logger.info("=== PROCESO DE MIGRACIÓN Y PREPARACIÓN COMPLETADO ===")
-        
-    except Exception as e:
-        logger.error(f"ERROR GENERAL EN AUTO-MIGRATE: {e}")
-        # No hacemos raise para evitar que falle el arranque de la aplicación
-        logger.error("A pesar del error, se intentará iniciar la aplicación.")
+            logger.error(f"  ✗
