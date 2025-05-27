@@ -1,3 +1,4 @@
+<!-- app/templates/test_sync.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -5,14 +6,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Prueba de Sincronización - CreditApp</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 </head>
 <body>
     <div class="container mt-4">
-        <h1>Prueba de Sincronización Offline</h1>
+        <h1>Prueba de Sincronización Offline <i class="fas fa-sync"></i></h1>
+        
+        <!-- Estado de Conexión -->
+        <div class="alert alert-info mb-4" id="connection-status-bar">
+            <strong>Estado de Conexión:</strong> <span id="connection-status" class="badge bg-success">En línea</span>
+            <div class="float-end">
+                <button class="btn btn-sm btn-outline-primary" onclick="toggleNetworkSimulation()">
+                    <i class="fas fa-wifi"></i> Simular Sin Conexión
+                </button>
+            </div>
+        </div>
         
         <!-- Sección de Login -->
         <div class="card mb-4">
-            <div class="card-header">
+            <div class="card-header bg-primary text-white">
                 <h3>1. Autenticación API</h3>
             </div>
             <div class="card-body">
@@ -21,7 +33,7 @@
                         <input type="email" id="email" class="form-control mb-2" placeholder="Email" value="admin@creditapp.com">
                         <input type="password" id="password" class="form-control mb-2" placeholder="Contraseña" value="admin123">
                         <input type="text" id="deviceName" class="form-control mb-2" placeholder="Nombre del dispositivo" value="Navegador de Prueba">
-                        <button onclick="loginAPI()" class="btn btn-primary">Conectar</button>
+                        <button onclick="loginAPI()" class="btn btn-primary"><i class="fas fa-sign-in-alt"></i> Conectar</button>
                     </div>
                     <div class="col-md-6">
                         <div id="loginResult" class="alert" style="display:none;"></div>
@@ -36,20 +48,20 @@
 
         <!-- Sección de Sincronización -->
         <div class="card mb-4">
-            <div class="card-header">
+            <div class="card-header bg-success text-white">
                 <h3>2. Descargar Datos (Sync Pull)</h3>
             </div>
             <div class="card-body">
-                <button onclick="syncPull()" class="btn btn-success me-2">Descargar Clientes</button>
-                <button onclick="syncPullProductos()" class="btn btn-success me-2">Descargar Productos</button>
-                <button onclick="syncPullVentas()" class="btn btn-success">Descargar Ventas</button>
+                <button onclick="syncPull()" class="btn btn-success me-2"><i class="fas fa-users"></i> Descargar Clientes</button>
+                <button onclick="syncPullProductos()" class="btn btn-success me-2"><i class="fas fa-box"></i> Descargar Productos</button>
+                <button onclick="syncPullVentas()" class="btn btn-success"><i class="fas fa-shopping-cart"></i> Descargar Ventas</button>
                 <div id="syncResult" class="mt-3"></div>
             </div>
         </div>
 
         <!-- Sección de Envío -->
         <div class="card mb-4">
-            <div class="card-header">
+            <div class="card-header bg-warning text-dark">
                 <h3>3. Enviar Cambios (Sync Push)</h3>
             </div>
             <div class="card-body">
@@ -57,17 +69,37 @@
                     <label>Simular cambio en cliente:</label>
                     <input type="text" id="clienteNombre" class="form-control mb-2" placeholder="Nombre del cliente" value="Cliente de Prueba">
                     <input type="text" id="clienteCedula" class="form-control mb-2" placeholder="Cédula" value="12345678">
-                    <button onclick="simularCambioCliente()" class="btn btn-warning">Simular Nuevo Cliente</button>
+                    <input type="text" id="clienteTelefono" class="form-control mb-2" placeholder="Teléfono" value="3001234567">
+                    <button onclick="simularCambioCliente()" class="btn btn-warning"><i class="fas fa-paper-plane"></i> Simular Nuevo Cliente</button>
                 </div>
                 <div id="pushResult" class="mt-3"></div>
+            </div>
+        </div>
+        
+        <!-- Cola de Cambios Pendientes -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h3>4. Cola de Cambios Pendientes</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Cambios pendientes:</strong> <span id="pending-count">0</span></p>
+                        <button onclick="verCambiosPendientes()" class="btn btn-info me-2"><i class="fas fa-list"></i> Ver Cambios</button>
+                        <button onclick="sincronizarCambiosPendientes()" class="btn btn-primary"><i class="fas fa-sync"></i> Sincronizar Ahora</button>
+                    </div>
+                    <div class="col-md-6">
+                        <div id="pendingChangesResult" class="mt-3"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- Log de Actividad -->
         <div class="card">
-            <div class="card-header">
+            <div class="card-header bg-dark text-white">
                 <h3>Log de Actividad</h3>
-                <button onclick="clearLog()" class="btn btn-sm btn-secondary">Limpiar</button>
+                <button onclick="clearLog()" class="btn btn-sm btn-outline-light">Limpiar</button>
             </div>
             <div class="card-body">
                 <pre id="activityLog" style="max-height: 300px; overflow-y: auto; background: #f8f9fa; padding: 10px;"></pre>
@@ -75,9 +107,47 @@
         </div>
     </div>
 
+    <!-- Cargar scripts de IndexedDB y sincronización -->
+    <script src="/static/js/db.js"></script>
+    <script src="/static/js/sync.js"></script>
+    <script src="/static/js/offline.js"></script>
+
     <script>
         let authToken = '';
         let baseURL = window.location.origin + '/api/v1';
+        let isOfflineSimulated = false;
+
+        // Inicializar la detección de estado de conexión
+        function updateConnectionStatus() {
+            const statusElement = document.getElementById('connection-status');
+            const isOnlineNow = !isOfflineSimulated && navigator.onLine;
+            
+            if (statusElement) {
+                statusElement.className = isOnlineNow ? 'badge bg-success' : 'badge bg-danger';
+                statusElement.textContent = isOnlineNow ? 'En línea' : 'Sin conexión';
+            }
+        }
+
+        // Simular cambio de conexión
+        function toggleNetworkSimulation() {
+            isOfflineSimulated = !isOfflineSimulated;
+            updateConnectionStatus();
+            const button = document.querySelector('button[onclick="toggleNetworkSimulation()"]');
+            if (button) {
+                button.innerHTML = isOfflineSimulated ? 
+                    '<i class="fas fa-wifi-slash"></i> Simular Conexión' : 
+                    '<i class="fas fa-wifi"></i> Simular Sin Conexión';
+                button.className = isOfflineSimulated ? 
+                    'btn btn-sm btn-outline-success' : 
+                    'btn btn-sm btn-outline-primary';
+            }
+            log(isOfflineSimulated ? '✓ Simulando modo sin conexión' : '✓ Simulando modo en línea');
+        }
+
+        // Verificar si realmente está online (considerando simulación)
+        function isReallyOnline() {
+            return navigator.onLine && !isOfflineSimulated;
+        }
 
         function log(message) {
             const logElement = document.getElementById('activityLog');
@@ -97,6 +167,42 @@
 
             try {
                 log('Intentando autenticación...');
+                
+                if (!isReallyOnline()) {
+                    log('⚠️ Sin conexión a internet. Intentando recuperar credenciales locales...');
+                    
+                    // Verificar si tenemos IndexedDB disponible y una sesión guardada
+                    if ('indexedDB' in window && window.db) {
+                        try {
+                            const authData = await window.db.getAuthData();
+                            if (authData && authData.token) {
+                                authToken = authData.token;
+                                const resultDiv = document.getElementById('loginResult');
+                                resultDiv.className = 'alert alert-warning';
+                                resultDiv.textContent = 'Autenticación recuperada del almacenamiento local';
+                                resultDiv.style.display = 'block';
+                                
+                                document.getElementById('tokenValue').textContent = authData.token.substring(0, 20) + '...';
+                                document.getElementById('userInfo').textContent = authData.usuario ? 
+                                    `${authData.usuario.nombre} (${authData.usuario.rol})` : 'Información no disponible';
+                                document.getElementById('tokenInfo').style.display = 'block';
+                                
+                                log(`✓ Autenticación recuperada del almacenamiento local`);
+                                return;
+                            }
+                        } catch (dbError) {
+                            log(`⚠️ Error al recuperar datos locales: ${dbError.message}`);
+                        }
+                    }
+                    
+                    const resultDiv = document.getElementById('loginResult');
+                    resultDiv.className = 'alert alert-danger';
+                    resultDiv.textContent = 'Sin conexión y no hay credenciales guardadas';
+                    resultDiv.style.display = 'block';
+                    log(`✗ Sin conexión y no hay credenciales guardadas`);
+                    return;
+                }
+                
                 const response = await fetch(`${baseURL}/auth/login`, {
                     method: 'POST',
                     headers: {
@@ -131,6 +237,21 @@
                     document.getElementById('tokenInfo').style.display = 'block';
                     
                     log(`✓ Autenticación exitosa para ${data.usuario.nombre}`);
+                    
+                    // Guardar en IndexedDB si está disponible
+                    if ('indexedDB' in window && window.db) {
+                        try {
+                            await window.db.saveAuthData({
+                                token: data.token,
+                                usuario: data.usuario,
+                                deviceUuid: data.device_uuid,
+                                timestamp: new Date().toISOString()
+                            });
+                            log('✓ Datos de autenticación guardados localmente');
+                        } catch (dbError) {
+                            log(`⚠️ Error al guardar datos localmente: ${dbError.message}`);
+                        }
+                    }
                 } else {
                     resultDiv.className = 'alert alert-danger';
                     resultDiv.textContent = 'Error: ' + (data.error || 'Error desconocido');
@@ -149,6 +270,13 @@
         async function syncPull() {
             if (!authToken) {
                 alert('Primero debes autenticarte');
+                return;
+            }
+
+            if (!isReallyOnline()) {
+                log('⚠️ Sin conexión a internet. No se pueden descargar clientes.');
+                const resultDiv = document.getElementById('syncResult');
+                resultDiv.innerHTML = `<div class="alert alert-warning">Sin conexión a internet. No se pueden descargar clientes.</div>`;
                 return;
             }
 
@@ -183,6 +311,16 @@
                         </div>
                     `;
                     log(`✓ Descargados ${data.count} clientes`);
+                    
+                    // Guardar en IndexedDB si está disponible
+                    if ('indexedDB' in window && window.db && window.db.saveClientes) {
+                        try {
+                            await window.db.saveClientes(data.data);
+                            log('✓ Clientes guardados en la base de datos local');
+                        } catch (dbError) {
+                            log(`⚠️ Error al guardar clientes localmente: ${dbError.message}`);
+                        }
+                    }
                 } else {
                     resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || response.statusText}</div>`;
                     log(`✗ Error descargando clientes: ${data.error || response.statusText}`);
@@ -197,6 +335,13 @@
         async function syncPullProductos() {
             if (!authToken) {
                 alert('Primero debes autenticarte');
+                return;
+            }
+
+            if (!isReallyOnline()) {
+                log('⚠️ Sin conexión a internet. No se pueden descargar productos.');
+                const resultDiv = document.getElementById('syncResult');
+                resultDiv.innerHTML = `<div class="alert alert-warning">Sin conexión a internet. No se pueden descargar productos.</div>`;
                 return;
             }
 
@@ -231,145 +376,16 @@
                         </div>
                     `;
                     log(`✓ Descargados ${data.count} productos`);
-                } else {
-                    resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || response.statusText}</div>`;
-                    log(`✗ Error descargando productos: ${data.error || response.statusText}`);
-                }
-            } catch (error) {
-                const resultDiv = document.getElementById('syncResult');
-                resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
-                log(`✗ Error de conexión: ${error.message}`);
-            }
-        }
-
-        async function syncPullVentas() {
-            if (!authToken) {
-                alert('Primero debes autenticarte');
-                return;
-            }
-
-            try {
-                log('Descargando ventas...');
-                const response = await fetch(`${baseURL}/sync/ventas`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                let data;
-                try {
-                    data = await response.json();
-                } catch (error) {
-                    log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
-                    throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
-                }
-                
-                const resultDiv = document.getElementById('syncResult');
-                
-                if (data.success) {
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-success">
-                            <strong>Ventas descargadas:</strong> ${data.count}<br>
-                            <details>
-                                <summary>Ver datos (primeros 3)</summary>
-                                <pre>${JSON.stringify(data.data.slice(0, 3), null, 2)}</pre>
-                            </details>
-                        </div>
-                    `;
-                    log(`✓ Descargadas ${data.count} ventas`);
-                } else {
-                    resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || response.statusText}</div>`;
-                    log(`✗ Error descargando ventas: ${data.error || response.statusText}`);
-                }
-            } catch (error) {
-                const resultDiv = document.getElementById('syncResult');
-                resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
-                log(`✗ Error de conexión: ${error.message}`);
-            }
-        }
-
-        async function simularCambioCliente() {
-        if (!authToken) {
-            alert('Primero debes autenticarte');
-            return;
-        }
-
-        const nombre = document.getElementById('clienteNombre').value;
-        const cedula = document.getElementById('clienteCedula').value;
-
-        if (!nombre || !cedula) {
-            alert('Ingrese nombre y cédula del cliente');
-            return;
-        }
-
-        try {
-            log(`Simulando creación de cliente: ${nombre} (${cedula})...`);
-            
-            const clienteData = {
-                nombre: nombre,
-                cedula: cedula,
-                telefono: "3001234567",
-                email: "",
-                direccion: "Dirección de prueba"
-            };
-
-            // Usar la ruta /sync/push directamente
-            const response = await fetch(`${baseURL}/sync/push`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${authToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    changes: [
-                        {
-                            uuid: 'test-' + Date.now(),
-                            tabla: 'clientes',
-                            registro_uuid: 'client-' + Date.now(),
-                            operacion: 'INSERT',
-                            datos: clienteData,
-                            timestamp: new Date().toISOString(),
-                            version: 1
+                    
+                    // Guardar en IndexedDB si está disponible
+                    if ('indexedDB' in window && window.db && window.db.saveProductos) {
+                        try {
+                            await window.db.saveProductos(data.data);
+                            log('✓ Productos guardados en la base de datos local');
+                        } catch (dbError) {
+                            log(`⚠️ Error al guardar productos localmente: ${dbError.message}`);
                         }
-                    ],
-                    device_timestamp: new Date().toISOString()
-                })
-            });
-
-            let data;
-            try {
-                data = await response.json();
-            } catch (error) {
-                log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
-                throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
-            }
-
-            const pushDiv = document.getElementById('pushResult');
-            
-            if (data.success) {
-                pushDiv.innerHTML = `
-                    <div class="alert alert-success">
-                        <strong>Simulación enviada correctamente</strong><br>
-                        <p>Se ha simulado el envío de un nuevo cliente desde el dispositivo.</p>
-                        <details>
-                            <summary>Ver respuesta</summary>
-                            <pre>${JSON.stringify(data, null, 2)}</pre>
-                        </details>
-                    </div>
-                `;
-                log(`✓ Simulación de cliente enviada correctamente`);
-            } else {
-                pushDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || 'Error desconocido'}</div>`;
-                log(`✗ Error en simulación: ${data.error || 'Error desconocido'}`);
-            }
-        } catch (error) {
-            const pushDiv = document.getElementById('pushResult');
-            pushDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
-            log(`✗ Error de conexión: ${error.message}`);
-        }
-    }
-</script>
-</body>
-</html>
+                    }
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || response.statusText}</div>`;
+                    log(`
