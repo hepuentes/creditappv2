@@ -30,7 +30,6 @@ with app.app_context():
     import time
     max_retries = 3
     retry_delay = 5
-    
     for attempt in range(max_retries):
         try:
             # Probar conexión a la base de datos
@@ -46,15 +45,13 @@ with app.app_context():
             else:
                 logger.error("No se pudo establecer conexión con la base de datos")
                 raise
-    
+
     try:
         # PASO 1: Reparar las secuencias de IDs en todas las tablas
         logger.info("Reparando secuencias de autoincremento...")
-        
         with db.engine.connect() as connection:
             # Obtener todas las tablas de la base de datos
             tablas = connection.execute(db.text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")).fetchall()
-            
             for tabla_info in tablas:
                 tabla = tabla_info[0]
                 try:
@@ -62,11 +59,9 @@ with app.app_context():
                     result = connection.execute(db.text(
                         "SELECT column_name FROM information_schema.columns WHERE table_name = :tabla AND column_name = 'id'"
                     ), {'tabla': tabla}).fetchone()
-                    
                     if result:
                         # Obtener el valor máximo de ID
                         max_id = connection.execute(db.text(f"SELECT MAX(id) FROM {tabla}")).scalar() or 0
-                        
                         # Resetear la secuencia al valor máximo + 1
                         connection.execute(db.text(
                             f"SELECT setval(pg_get_serial_sequence('{tabla}', 'id'), {max_id + 1}, false)"
@@ -74,17 +69,14 @@ with app.app_context():
                         logger.info(f"  ✓ Secuencia reparada para tabla: {tabla} (próximo ID: {max_id + 1})")
                 except Exception as e:
                     logger.error(f"  ✗ Error al reparar secuencia para tabla {tabla}: {e}")
-        
+
         # PASO 2: Verificar y reparar la estructura de las tablas
         logger.info("\nVerificando estructura de tablas críticas...")
-        
         # Tabla movimiento_caja
         logger.info("Verificando tabla 'movimiento_caja'...")
         inspector = inspect(db.engine)
-        
         if 'movimiento_caja' in inspector.get_table_names():
             columnas = [c['name'] for c in inspector.get_columns('movimiento_caja')]
-            
             with db.engine.begin() as connection:
                 # Verificar columna venta_id
                 if 'venta_id' not in columnas:
@@ -99,7 +91,6 @@ with app.app_context():
                         logger.info("  ✓ Foreign key para venta_id agregada")
                     except Exception as e:
                         logger.warning(f"    No se pudo agregar foreign key para venta_id: {e}")
-                
                 # Verificar columna abono_id
                 if 'abono_id' not in columnas:
                     logger.info("  ✓ Agregando columna 'abono_id' a movimiento_caja...")
@@ -113,7 +104,6 @@ with app.app_context():
                         logger.info("  ✓ Foreign key para abono_id agregada")
                     except Exception as e:
                         logger.warning(f"    No se pudo agregar foreign key para abono_id: {e}")
-                
                 # Verificar columna caja_destino_id
                 if 'caja_destino_id' not in columnas:
                     logger.info("  ✓ Agregando columna 'caja_destino_id' a movimiento_caja...")
@@ -129,13 +119,11 @@ with app.app_context():
                         logger.warning(f"    No se pudo agregar foreign key para caja_destino_id: {e}")
         else:
             logger.warning("La tabla 'movimiento_caja' no existe. Se creará durante db.create_all()")
-        
+
         # Tabla comisiones - Añadir nuevos campos
         logger.info("Verificando tabla 'comisiones'...")
-        
         if 'comisiones' in inspector.get_table_names():
             columnas = [c['name'] for c in inspector.get_columns('comisiones')]
-            
             with db.engine.begin() as connection:
                 # Verificar columna venta_id
                 if 'venta_id' not in columnas:
@@ -150,7 +138,6 @@ with app.app_context():
                         logger.info("  ✓ Foreign key para venta_id agregada a comisiones")
                     except Exception as e:
                         logger.warning(f"    No se pudo agregar foreign key para venta_id en comisiones: {e}")
-                
                 # Verificar columna abono_id
                 if 'abono_id' not in columnas:
                     logger.info("  ✓ Agregando columna 'abono_id' a comisiones...")
@@ -166,11 +153,11 @@ with app.app_context():
                         logger.warning(f"    No se pudo agregar foreign key para abono_id en comisiones: {e}")
         else:
             logger.warning("La tabla 'comisiones' no existe. Se creará durante db.create_all()")
-        
+
         # PASO 3: Crear tablas faltantes o reparar inconsistencias
         logger.info("\nCreando tablas faltantes y verificando relaciones...")
         db.create_all()
-        
+
         # PASO ADICIONAL: Eliminar la restricción problemática de la tabla abonos
         try:
             with db.engine.begin() as connection:
@@ -179,7 +166,6 @@ with app.app_context():
                     "ALTER TABLE abonos DROP CONSTRAINT IF EXISTS check_credito_reference"
                 ))
                 logger.info("  ✓ Restricción check_credito_reference eliminada de la tabla abonos")
-                
                 # Asegurar que ciertos campos no sean nulos en la tabla abonos
                 connection.execute(db.text(
                     "ALTER TABLE abonos ALTER COLUMN cobrador_id SET NOT NULL"
@@ -190,10 +176,9 @@ with app.app_context():
                 logger.info("  ✓ Campos obligatorios en la tabla abonos actualizados")
         except Exception as e:
             logger.error(f"  ✗ Error al modificar la tabla abonos: {e}")
-        
+
         # PASO 4: Corregir datos incongruentes
         logger.info("\nVerificando y corrigiendo datos incongruentes...")
-        
         # Corregir ventas a crédito con saldo_pendiente=0 que deberían estar pagadas
         try:
             with db.engine.begin() as connection:
@@ -203,7 +188,6 @@ with app.app_context():
                     "WHERE id IN (SELECT id FROM ventas WHERE tipo = 'credito' AND (saldo_pendiente IS NULL OR saldo_pendiente <= 0))"
                 ))
                 logger.info("  ✓ Ventas a crédito con saldo 0 marcadas como pagadas")
-                
                 # Asegurar que todas las ventas tienen estado
                 connection.execute(db.text(
                     "UPDATE ventas SET estado = 'pendiente' WHERE estado IS NULL AND tipo = 'credito'"
@@ -214,35 +198,29 @@ with app.app_context():
                 logger.info("  ✓ Ventas sin estado actualizado correctamente")
         except Exception as e:
             logger.error(f"  ✗ Error al corregir datos incongruentes: {e}")
-        
+
         # PASO 5: Validar integridad referencial
         logger.info("\nValidando integridad referencial...")
-        
         try:
             # Verificar que los clientes existen
             ventas_sin_cliente = db.session.query(Venta).filter(
                 ~Venta.cliente_id.in_(db.session.query(Cliente.id))
             ).all()
-            
             if ventas_sin_cliente:
                 logger.warning(f"  ! Se encontraron {len(ventas_sin_cliente)} ventas con clientes inexistentes")
                 # No eliminamos automáticamente para evitar pérdida de datos
-            
             # Verificar que los vendedores existen
             ventas_sin_vendedor = db.session.query(Venta).filter(
                 ~Venta.vendedor_id.in_(db.session.query(Usuario.id))
             ).all()
-            
             if ventas_sin_vendedor:
                 logger.warning(f"  ! Se encontraron {len(ventas_sin_vendedor)} ventas con vendedores inexistentes")
                 # No eliminamos automáticamente para evitar pérdida de datos
-            
         except Exception as e:
             logger.error(f"  ✗ Error al validar integridad referencial: {e}")
-        
+
         # PASO 6: Verificar y actualizar tabla configuraciones
         logger.info("\nVerificando tabla 'configuraciones'...")
-        
         try:
             with db.engine.begin() as connection:
                 # Verificar si las columnas existen
@@ -252,14 +230,12 @@ with app.app_context():
                     WHERE table_name = 'configuraciones'
                 """))
                 existing_columns = [row[0] for row in result.fetchall()]
-                
                 # Columnas que deben existir
                 required_columns = {
                     'porcentaje_comision_vendedor': 'INTEGER DEFAULT 5',
                     'porcentaje_comision_cobrador': 'INTEGER DEFAULT 3',
-                    'periodo_comision': 'VARCHAR(20) DEFAULT \'mensual\''
+                    'periodo_comision': "VARCHAR(20) DEFAULT 'mensual'"
                 }
-                
                 # Agregar columnas faltantes
                 for column_name, column_definition in required_columns.items():
                     if column_name not in existing_columns:
@@ -270,10 +246,8 @@ with app.app_context():
                         logger.info(f"  ✓ Columna {column_name} agregada a configuraciones")
                     else:
                         logger.info(f"  ✓ Columna {column_name} ya existe en configuraciones")
-                
                 # Verificar si existe algún registro de configuración
                 config_count = connection.execute(db.text("SELECT COUNT(*) FROM configuraciones")).scalar()
-                
                 if config_count == 0:
                     # Crear registro de configuración inicial
                     connection.execute(db.text("""
@@ -289,27 +263,30 @@ with app.app_context():
                     logger.info("  ✓ Registro de configuración inicial creado")
         except Exception as e:
             logger.error(f"  ✗ Error al verificar/actualizar tabla configuraciones: {e}")
-        
-        # PASO 7: NUEVOS PASOS PARA SINCRONIZACIÓN OFFLINE-FIRST
-logger.info("\n=== PREPARANDO SISTEMA PARA SINCRONIZACIÓN OFFLINE-FIRST ===")
 
-if SYNC_MODELS_AVAILABLE:
-    # Omitir la sincronización para evitar errores
-    logger.info("Omitiendo preparación para sincronización offline para evitar timeouts en entorno Render.")
-    '''
-    # Agregar campos de sincronización a tablas existentes
-    logger.info("\nAgregando campos de sincronización a tablas existentes...")
-    try:
-        agregar_campos_sync()
+        # PASO 7: NUEVOS PASOS PARA SINCRONIZACIÓN OFFLINE-FIRST (DESACTIVADO)
+        logger.info("\n=== PREPARANDO SISTEMA PARA SINCRONIZACIÓN OFFLINE-FIRST ===")
+
+        if SYNC_MODELS_AVAILABLE:
+            # Omitir la sincronización para evitar errores
+            logger.info("Omitiendo preparación para sincronización offline para evitar timeouts en entorno Render.")
+            '''
+            # Agregar campos de sincronización a tablas existentes
+            logger.info("\nAgregando campos de sincronización a tablas existentes...")
+            try:
+                agregar_campos_sync()
+            except Exception as e:
+                logger.error(f"Error agregando campos de sincronización: {e}")
+            
+            # Crear triggers para change log
+            logger.info("\nCreando triggers para registro automático de cambios...")
+            try:
+                crear_triggers_change_log()
+            except Exception as e:
+                logger.error(f"Error creando triggers: {e}")
+            '''
+        else:
+            logger.warning("Modelos de sincronización no disponibles. Omitiendo preparación para offline-first.")
+
     except Exception as e:
-        logger.error(f"Error agregando campos de sincronización: {e}")
-    
-    # Crear triggers para change log
-    logger.info("\nCreando triggers para registro automático de cambios...")
-    try:
-        crear_triggers_change_log()
-    except Exception as e:
-        logger.error(f"Error creando triggers: {e}")
-    '''
-else:
-    logger.warning("Modelos de sincronización no disponibles. Omitiendo preparación para offline-first.")
+        logger.error(f"Error general en el proceso de migración: {e}")
