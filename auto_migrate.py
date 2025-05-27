@@ -26,6 +26,27 @@ app = create_app()
 with app.app_context():
     logger.info("=== INICIANDO PROCESO DE MIGRACIÓN Y PREPARACIÓN PARA SINCRONIZACIÓN ===")
     
+    # Configurar manejo de errores de conexión DB mejorado
+    import time
+    max_retries = 3
+    retry_delay = 5
+    
+    for attempt in range(max_retries):
+        try:
+            # Probar conexión a la base de datos
+            with db.engine.connect() as connection:
+                connection.execute(text("SELECT 1")).fetchone()
+            logger.info(f"✓ Conexión a la base de datos establecida (intento {attempt + 1})")
+            break
+        except Exception as e:
+            logger.warning(f"Intento {attempt + 1} de conexión fallido: {e}")
+            if attempt < max_retries - 1:
+                logger.info(f"Reintentando en {retry_delay} segundos...")
+                time.sleep(retry_delay)
+            else:
+                logger.error("No se pudo establecer conexión con la base de datos")
+                raise
+    
     try:
         # PASO 1: Reparar las secuencias de IDs en todas las tablas
         logger.info("Reparando secuencias de autoincremento...")
