@@ -92,11 +92,19 @@ async function savePendingChange(change) {
 
 // Función para obtener todos los cambios pendientes
 async function getPendingChanges() {
-  const db = await openDB();
-  const tx = db.transaction('pendingChanges', 'readonly');
-  const store = tx.objectStore('pendingChanges');
-  
-  return store.getAll();
+  try {
+    const db = await openDB();
+    const tx = db.transaction('pendingChanges', 'readonly');
+    const store = tx.objectStore('pendingChanges');
+    
+    const result = await store.getAll();
+    
+    // Asegurar que siempre devolvemos un array
+    return Array.isArray(result) ? result : [];
+  } catch (error) {
+    console.error("Error en getPendingChanges:", error);
+    return []; // Devolver array vacío en caso de error
+  }
 }
 
 // Función para eliminar cambios pendientes
