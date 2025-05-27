@@ -291,28 +291,25 @@ with app.app_context():
             logger.error(f"  ✗ Error al verificar/actualizar tabla configuraciones: {e}")
         
         # PASO 7: NUEVOS PASOS PARA SINCRONIZACIÓN OFFLINE-FIRST
-        logger.info("\n=== PREPARANDO SISTEMA PARA SINCRONIZACIÓN OFFLINE-FIRST ===")
-        
-        if SYNC_MODELS_AVAILABLE:
-            # Agregar campos de sincronización a tablas existentes
-            logger.info("\nAgregando campos de sincronización a tablas existentes...")
-            try:
-                agregar_campos_sync()
-            except Exception as e:
-                logger.error(f"Error agregando campos de sincronización: {e}")
-            
-            # Crear triggers para change log
-            logger.info("\nCreando triggers para registro automático de cambios...")
-            try:
-                crear_triggers_change_log()
-            except Exception as e:
-                logger.error(f"Error creando triggers: {e}")
-        else:
-            logger.warning("Modelos de sincronización no disponibles. Omitiendo preparación para offline-first.")
-        
-        logger.info("=== PROCESO DE MIGRACIÓN Y PREPARACIÓN COMPLETADO ===")
-        
+logger.info("\n=== PREPARANDO SISTEMA PARA SINCRONIZACIÓN OFFLINE-FIRST ===")
+
+if SYNC_MODELS_AVAILABLE:
+    # Omitir la sincronización para evitar errores
+    logger.info("Omitiendo preparación para sincronización offline para evitar timeouts en entorno Render.")
+    '''
+    # Agregar campos de sincronización a tablas existentes
+    logger.info("\nAgregando campos de sincronización a tablas existentes...")
+    try:
+        agregar_campos_sync()
     except Exception as e:
-        logger.error(f"ERROR GENERAL EN AUTO-MIGRATE: {e}")
-        # No hacemos raise para evitar que falle el arranque de la aplicación
-        logger.error("A pesar del error, se intentará iniciar la aplicación.")
+        logger.error(f"Error agregando campos de sincronización: {e}")
+    
+    # Crear triggers para change log
+    logger.info("\nCreando triggers para registro automático de cambios...")
+    try:
+        crear_triggers_change_log()
+    except Exception as e:
+        logger.error(f"Error creando triggers: {e}")
+    '''
+else:
+    logger.warning("Modelos de sincronización no disponibles. Omitiendo preparación para offline-first.")
