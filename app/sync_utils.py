@@ -87,4 +87,27 @@ class SyncMixin:
     def before_update(self):
         """Llamar antes de actualizar"""
         self.sync_version += 1
-        self.updated_at = datetime.utcn
+        self.updated_at = datetime.utcnow()
+    
+    def to_sync_dict(self):
+        """Convierte el registro a diccionario para sincronización"""
+        return serializar_registro(self)
+
+# Decorador para rastrear cambios automáticamente
+def track_changes(f):
+    """
+    Decorador para rastrear cambios en operaciones de base de datos
+    """
+    from functools import wraps
+    
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Ejecutar función original
+        result = f(*args, **kwargs)
+        
+        # Rastrear cambios después de la operación
+        # Implementar lógica específica según necesidad
+        
+        return result
+    
+    return decorated_function
