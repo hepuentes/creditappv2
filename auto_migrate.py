@@ -8,15 +8,7 @@ from app.models import (Usuario, Cliente, Venta, Credito, Abono, Caja,
                         Comision, Configuracion, Producto)
 import logging
 
-# Importar nuevos modelos de sincronización
-try:
-    from app.models_sync import DispositivoMovil, ChangeLog, SyncSession, ConflictoSync
-    from app.models_update import agregar_campos_sync, crear_triggers_change_log
-    SYNC_MODELS_AVAILABLE = True
-except ImportError:
-    SYNC_MODELS_AVAILABLE = False
-    print("ADVERTENCIA: Modelos de sincronización no disponibles")
-
+# Configurar logging para mayor claridad
 logging.basicConfig(level=logging.INFO, 
                    format='%(asctime)s [AUTO-MIGRATE] %(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -24,7 +16,7 @@ logger = logging.getLogger(__name__)
 app = create_app()
 
 with app.app_context():
-    logger.info("=== INICIANDO PROCESO DE MIGRACIÓN Y PREPARACIÓN PARA SINCRONIZACIÓN ===")
+    logger.info("=== INICIANDO PROCESO DE MIGRACIÓN Y PREPARACIÓN PARA BASE DE DATOS ===")
     
     # Configurar manejo de errores de conexión DB mejorado
     import time
@@ -264,29 +256,10 @@ with app.app_context():
         except Exception as e:
             logger.error(f"  ✗ Error al verificar/actualizar tabla configuraciones: {e}")
 
-        # PASO 7: NUEVOS PASOS PARA SINCRONIZACIÓN OFFLINE-FIRST (DESACTIVADO)
-        logger.info("\n=== PREPARANDO SISTEMA PARA SINCRONIZACIÓN OFFLINE-FIRST ===")
-
-        if SYNC_MODELS_AVAILABLE:
-            # Omitir la sincronización para evitar errores
-            logger.info("Omitiendo preparación para sincronización offline para evitar timeouts en entorno Render.")
-            '''
-            # Agregar campos de sincronización a tablas existentes
-            logger.info("\nAgregando campos de sincronización a tablas existentes...")
-            try:
-                agregar_campos_sync()
-            except Exception as e:
-                logger.error(f"Error agregando campos de sincronización: {e}")
-            
-            # Crear triggers para change log
-            logger.info("\nCreando triggers para registro automático de cambios...")
-            try:
-                crear_triggers_change_log()
-            except Exception as e:
-                logger.error(f"Error creando triggers: {e}")
-            '''
-        else:
-            logger.warning("Modelos de sincronización no disponibles. Omitiendo preparación para offline-first.")
+        # PASO 7: NO SE REALIZAN OPERACIONES DE SINCRONIZACIÓN OFFLINE
+        logger.info("\n=== OMITIENDO PREPARACIÓN PARA SINCRONIZACIÓN OFFLINE ===")
+        logger.info("La sincronización offline está desactivada para evitar problemas con Render free.")
 
     except Exception as e:
         logger.error(f"Error general en el proceso de migración: {e}")
+        raise
