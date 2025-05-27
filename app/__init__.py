@@ -65,6 +65,7 @@ def create_app():
     from app.controllers.config import config_bp
     from app.controllers.reportes import reportes_bp
     from app.controllers.public import public_bp
+    from app.controllers.test_sync import test_sync_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -78,8 +79,9 @@ def create_app():
     app.register_blueprint(config_bp)
     app.register_blueprint(reportes_bp)
     app.register_blueprint(public_bp)
+    app.register_blueprint(test_sync_bp)
     
-    # NUEVO: Registrar blueprint de API
+    # Registrar blueprint de API
     from app.api import api as api_bp
     app.register_blueprint(api_bp)
     
