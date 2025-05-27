@@ -291,88 +291,85 @@
         }
 
         async function simularCambioCliente() {
-            if (!authToken) {
-                alert('Primero debes autenticarte');
-                return;
-            }
-
-            const nombre = document.getElementById('clienteNombre').value;
-            const cedula = document.getElementById('clienteCedula').value;
-
-            if (!nombre || !cedula) {
-                alert('Ingrese nombre y cédula del cliente');
-                return;
-            }
-
-            try {
-                log(`Simulando creación de cliente: ${nombre} (${cedula})...`);
-                
-                const clienteData = {
-                    nombre: nombre,
-                    cedula: cedula,
-                    telefono: "3001234567",
-                    email: "",
-                    direccion: "Dirección de prueba",
-                    timestamp: new Date().toISOString()
-                };
-
-                const response = await fetch(`${baseURL}/sync/push`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        changes: [
-                            {
-                                uuid: 'test-' + Date.now(),
-                                tabla: 'clientes',
-                                registro_uuid: 'client-' + Date.now(),
-                                operacion: 'INSERT',
-                                datos: clienteData,
-                                timestamp: new Date().toISOString(),
-                                version: 1
-                            }
-                        ],
-                        device_timestamp: new Date().toISOString()
-                    })
-                });
-
-                let data;
-                try {
-                    data = await response.json();
-                } catch (error) {
-                    log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
-                    throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
-                }
-
-                const pushDiv = document.getElementById('pushResult');
-                
-                if (data.success) {
-                    pushDiv.innerHTML = `
-                        <div class="alert alert-success">
-                            <strong>Simulación enviada correctamente</strong><br>
-                            <p>Se ha simulado el envío de un nuevo cliente desde el dispositivo.</p>
-                            <details>
-                                <summary>Ver respuesta</summary>
-                                <pre>${JSON.stringify(data, null, 2)}</pre>
-                            </details>
-                        </div>
-                    `;
-                    log(`✓ Simulación de cliente enviada correctamente`);
-                } else {
-                    pushDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || 'Error desconocido'}</div>`;
-                    log(`✗ Error en simulación: ${data.error || 'Error desconocido'}`);
-                }
-            } catch (error) {
-                const pushDiv = document.getElementById('pushResult');
-                pushDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
-                log(`✗ Error de conexión: ${error.message}`);
-            }
+        if (!authToken) {
+            alert('Primero debes autenticarte');
+            return;
         }
 
-        // Inicialización
-        log('Página de pruebas cargada. Lista para probar sincronización.');
-    </script>
+        const nombre = document.getElementById('clienteNombre').value;
+        const cedula = document.getElementById('clienteCedula').value;
+
+        if (!nombre || !cedula) {
+            alert('Ingrese nombre y cédula del cliente');
+            return;
+        }
+
+        try {
+            log(`Simulando creación de cliente: ${nombre} (${cedula})...`);
+            
+            const clienteData = {
+                nombre: nombre,
+                cedula: cedula,
+                telefono: "3001234567",
+                email: "",
+                direccion: "Dirección de prueba"
+            };
+
+            // Usar la ruta /sync/push directamente
+            const response = await fetch(`${baseURL}/sync/push`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    changes: [
+                        {
+                            uuid: 'test-' + Date.now(),
+                            tabla: 'clientes',
+                            registro_uuid: 'client-' + Date.now(),
+                            operacion: 'INSERT',
+                            datos: clienteData,
+                            timestamp: new Date().toISOString(),
+                            version: 1
+                        }
+                    ],
+                    device_timestamp: new Date().toISOString()
+                })
+            });
+
+            let data;
+            try {
+                data = await response.json();
+            } catch (error) {
+                log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
+                throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
+            }
+
+            const pushDiv = document.getElementById('pushResult');
+            
+            if (data.success) {
+                pushDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <strong>Simulación enviada correctamente</strong><br>
+                        <p>Se ha simulado el envío de un nuevo cliente desde el dispositivo.</p>
+                        <details>
+                            <summary>Ver respuesta</summary>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </details>
+                    </div>
+                `;
+                log(`✓ Simulación de cliente enviada correctamente`);
+            } else {
+                pushDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || 'Error desconocido'}</div>`;
+                log(`✗ Error en simulación: ${data.error || 'Error desconocido'}`);
+            }
+        } catch (error) {
+            const pushDiv = document.getElementById('pushResult');
+            pushDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+            log(`✗ Error de conexión: ${error.message}`);
+        }
+    }
+</script>
 </body>
 </html>
