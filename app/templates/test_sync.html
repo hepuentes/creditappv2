@@ -5,13 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Prueba de Sincronización - CreditApp</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap @5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css ">
 </head>
 <body>
     <div class="container mt-4">
         <h1>Prueba de Sincronización Offline <i class="fas fa-sync"></i></h1>
-        
         <!-- Estado de Conexión -->
         <div class="alert alert-info mb-4" id="connection-status-bar">
             <strong>Estado de Conexión:</strong> <span id="connection-status" class="badge bg-success">En línea</span>
@@ -21,7 +20,6 @@
                 </button>
             </div>
         </div>
-        
         <!-- Sección de Login -->
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
@@ -45,7 +43,6 @@
                 </div>
             </div>
         </div>
-
         <!-- Sección de Sincronización -->
         <div class="card mb-4">
             <div class="card-header bg-success text-white">
@@ -58,7 +55,6 @@
                 <div id="syncResult" class="mt-3"></div>
             </div>
         </div>
-
         <!-- Sección de Envío -->
         <div class="card mb-4">
             <div class="card-header bg-warning text-dark">
@@ -75,7 +71,6 @@
                 <div id="pushResult" class="mt-3"></div>
             </div>
         </div>
-        
         <!-- Cola de Cambios Pendientes -->
         <div class="card mb-4">
             <div class="card-header bg-info text-white">
@@ -94,7 +89,6 @@
                 </div>
             </div>
         </div>
-
         <!-- Log de Actividad -->
         <div class="card">
             <div class="card-header bg-dark text-white">
@@ -106,12 +100,10 @@
             </div>
         </div>
     </div>
-
     <!-- Cargar scripts de IndexedDB y sincronización -->
     <script src="/static/js/db.js"></script>
     <script src="/static/js/sync.js"></script>
     <script src="/static/js/offline.js"></script>
-
     <script>
         let authToken = '';
         let baseURL = window.location.origin + '/api/v1';
@@ -121,7 +113,6 @@
         function updateConnectionStatus() {
             const statusElement = document.getElementById('connection-status');
             const isOnlineNow = !isOfflineSimulated && navigator.onLine;
-            
             if (statusElement) {
                 statusElement.className = isOnlineNow ? 'badge bg-success' : 'badge bg-danger';
                 statusElement.textContent = isOnlineNow ? 'En línea' : 'Sin conexión';
@@ -164,13 +155,10 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const deviceName = document.getElementById('deviceName').value;
-
             try {
                 log('Intentando autenticación...');
-                
                 if (!isReallyOnline()) {
                     log('⚠️ Sin conexión a internet. Intentando recuperar credenciales locales...');
-                    
                     // Verificar si tenemos IndexedDB disponible y una sesión guardada
                     if ('indexedDB' in window && window.db) {
                         try {
@@ -181,12 +169,10 @@
                                 resultDiv.className = 'alert alert-warning';
                                 resultDiv.textContent = 'Autenticación recuperada del almacenamiento local';
                                 resultDiv.style.display = 'block';
-                                
                                 document.getElementById('tokenValue').textContent = authData.token.substring(0, 20) + '...';
                                 document.getElementById('userInfo').textContent = authData.usuario ? 
                                     `${authData.usuario.nombre} (${authData.usuario.rol})` : 'Información no disponible';
                                 document.getElementById('tokenInfo').style.display = 'block';
-                                
                                 log(`✓ Autenticación recuperada del almacenamiento local`);
                                 return;
                             }
@@ -194,7 +180,6 @@
                             log(`⚠️ Error al recuperar datos locales: ${dbError.message}`);
                         }
                     }
-                    
                     const resultDiv = document.getElementById('loginResult');
                     resultDiv.className = 'alert alert-danger';
                     resultDiv.textContent = 'Sin conexión y no hay credenciales guardadas';
@@ -202,7 +187,6 @@
                     log(`✗ Sin conexión y no hay credenciales guardadas`);
                     return;
                 }
-                
                 const response = await fetch(`${baseURL}/auth/login`, {
                     method: 'POST',
                     headers: {
@@ -215,7 +199,6 @@
                         device_uuid: 'test-browser-' + Date.now()
                     })
                 });
-
                 let data;
                 try {
                     data = await response.json();
@@ -223,21 +206,16 @@
                     log(`✗ Error al procesar respuesta: ${error.message}`);
                     throw new Error(`Error al procesar respuesta: ${error.message}`);
                 }
-
                 const resultDiv = document.getElementById('loginResult');
-                
                 if (data.success) {
                     authToken = data.token;
                     resultDiv.className = 'alert alert-success';
                     resultDiv.textContent = 'Autenticación exitosa';
                     resultDiv.style.display = 'block';
-                    
                     document.getElementById('tokenValue').textContent = data.token.substring(0, 20) + '...';
                     document.getElementById('userInfo').textContent = `${data.usuario.nombre} (${data.usuario.rol})`;
                     document.getElementById('tokenInfo').style.display = 'block';
-                    
                     log(`✓ Autenticación exitosa para ${data.usuario.nombre}`);
-                    
                     // Guardar en IndexedDB si está disponible
                     if ('indexedDB' in window && window.db) {
                         try {
@@ -272,14 +250,12 @@
                 alert('Primero debes autenticarte');
                 return;
             }
-
             if (!isReallyOnline()) {
                 log('⚠️ Sin conexión a internet. No se pueden descargar clientes.');
                 const resultDiv = document.getElementById('syncResult');
                 resultDiv.innerHTML = `<div class="alert alert-warning">Sin conexión a internet. No se pueden descargar clientes.</div>`;
                 return;
             }
-
             try {
                 log('Descargando clientes...');
                 const response = await fetch(`${baseURL}/sync/clientes`, {
@@ -289,7 +265,6 @@
                         'Content-Type': 'application/json'
                     }
                 });
-
                 let data;
                 try {
                     data = await response.json();
@@ -297,9 +272,7 @@
                     log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
                     throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
                 }
-
                 const resultDiv = document.getElementById('syncResult');
-                
                 if (data.success) {
                     resultDiv.innerHTML = `
                         <div class="alert alert-success">
@@ -311,7 +284,6 @@
                         </div>
                     `;
                     log(`✓ Descargados ${data.count} clientes`);
-                    
                     // Guardar en IndexedDB si está disponible
                     if ('indexedDB' in window && window.db && window.db.saveClientes) {
                         try {
@@ -337,14 +309,12 @@
                 alert('Primero debes autenticarte');
                 return;
             }
-
             if (!isReallyOnline()) {
                 log('⚠️ Sin conexión a internet. No se pueden descargar productos.');
                 const resultDiv = document.getElementById('syncResult');
                 resultDiv.innerHTML = `<div class="alert alert-warning">Sin conexión a internet. No se pueden descargar productos.</div>`;
                 return;
             }
-
             try {
                 log('Descargando productos...');
                 const response = await fetch(`${baseURL}/sync/productos`, {
@@ -354,7 +324,6 @@
                         'Content-Type': 'application/json'
                     }
                 });
-
                 let data;
                 try {
                     data = await response.json();
@@ -362,9 +331,7 @@
                     log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
                     throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
                 }
-                
                 const resultDiv = document.getElementById('syncResult');
-                
                 if (data.success) {
                     resultDiv.innerHTML = `
                         <div class="alert alert-success">
@@ -376,7 +343,6 @@
                         </div>
                     `;
                     log(`✓ Descargados ${data.count} productos`);
-                    
                     // Guardar en IndexedDB si está disponible
                     if ('indexedDB' in window && window.db && window.db.saveProductos) {
                         try {
@@ -402,14 +368,12 @@
                 alert('Primero debes autenticarte');
                 return;
             }
-
             if (!isReallyOnline()) {
                 log('⚠️ Sin conexión a internet. No se pueden descargar ventas.');
                 const resultDiv = document.getElementById('syncResult');
                 resultDiv.innerHTML = `<div class="alert alert-warning">Sin conexión a internet. No se pueden descargar ventas.</div>`;
                 return;
             }
-
             try {
                 log('Descargando ventas...');
                 const response = await fetch(`${baseURL}/sync/ventas`, {
@@ -419,7 +383,6 @@
                         'Content-Type': 'application/json'
                     }
                 });
-
                 let data;
                 try {
                     data = await response.json();
@@ -427,9 +390,7 @@
                     log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
                     throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
                 }
-                
                 const resultDiv = document.getElementById('syncResult');
-                
                 if (data.success) {
                     resultDiv.innerHTML = `
                         <div class="alert alert-success">
@@ -441,7 +402,6 @@
                         </div>
                     `;
                     log(`✓ Descargadas ${data.count} ventas`);
-                    
                     // Guardar en IndexedDB si está disponible
                     if ('indexedDB' in window && window.db && window.db.saveVentas) {
                         try {
@@ -467,19 +427,15 @@
                 alert('Primero debes autenticarte');
                 return;
             }
-
             const nombre = document.getElementById('clienteNombre').value;
             const cedula = document.getElementById('clienteCedula').value;
             const telefono = document.getElementById('clienteTelefono').value;
-
             if (!nombre || !cedula) {
                 alert('Ingrese nombre y cédula del cliente');
                 return;
             }
-
             try {
                 log(`Simulando creación de cliente: ${nombre} (${cedula})...`);
-                
                 const clienteData = {
                     nombre: nombre,
                     cedula: cedula,
@@ -487,10 +443,8 @@
                     email: "",
                     direccion: "Dirección de prueba"
                 };
-
                 // Crear un UUID para el cambio
                 const uuid = 'change-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
-                
                 // Si estamos sin conexión o tenemos IndexedDB, almacenamos localmente
                 if (!isReallyOnline() && 'indexedDB' in window && window.db) {
                     try {
@@ -504,12 +458,9 @@
                             timestamp: new Date().toISOString(),
                             version: 1
                         };
-                        
                         await window.db.savePendingChange(change);
-                        
                         // Actualizar contador
                         updatePendingChangesCount();
-                        
                         const pushDiv = document.getElementById('pushResult');
                         pushDiv.innerHTML = `
                             <div class="alert alert-warning">
@@ -523,7 +474,6 @@
                         log(`⚠️ Error al guardar cambio localmente: ${dbError.message}`);
                     }
                 }
-                
                 // Si hay conexión, enviar directamente
                 if (isReallyOnline()) {
                     const response = await fetch(`${baseURL}/sync/push`, {
@@ -547,7 +497,6 @@
                             device_timestamp: new Date().toISOString()
                         })
                     });
-
                     let data;
                     try {
                         data = await response.json();
@@ -555,9 +504,7 @@
                         log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
                         throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
                     }
-
                     const pushDiv = document.getElementById('pushResult');
-                    
                     if (data.success) {
                         pushDiv.innerHTML = `
                             <div class="alert alert-success">
@@ -585,7 +532,7 @@
                 log(`✗ Error de conexión: ${error.message}`);
             }
         }
-        
+
         async function updatePendingChangesCount() {
             if ('indexedDB' in window && window.db && window.db.countPendingChanges) {
                 try {
@@ -599,145 +546,129 @@
                 }
             }
         }
-        
+
         async function verCambiosPendientes() {
-    if (!('indexedDB' in window) || !window.db || !window.db.getPendingChanges) {
-        log('⚠️ La base de datos local no está disponible');
-        return;
-    }
-    
-    try {
-        const pendingChanges = await window.db.getPendingChanges();
-        const resultDiv = document.getElementById('pendingChangesResult');
-        
-        // Asegurarnos que pendingChanges es un array
-        if (!pendingChanges || !Array.isArray(pendingChanges)) {
-            resultDiv.innerHTML = `<div class="alert alert-warning">No se pudieron obtener los cambios pendientes.</div>`;
-            log('⚠️ No se pudieron obtener los cambios pendientes o no son un array válido');
-            return;
-        }
-        
-        if (pendingChanges.length === 0) {
-            resultDiv.innerHTML = `<div class="alert alert-info">No hay cambios pendientes.</div>`;
-            log('ℹ️ No hay cambios pendientes');
-        } else {
-            resultDiv.innerHTML = `
-                <div class="alert alert-info">
-                    <strong>${pendingChanges.length} cambios pendientes</strong>
-                    <details>
-                        <summary>Ver detalles</summary>
-                        <pre>${JSON.stringify(pendingChanges, null, 2)}</pre>
-                    </details>
-                </div>
-            `;
-            log(`ℹ️ ${pendingChanges.length} cambios pendientes encontrados`);
-        }
-    } catch (error) {
-        log(`⚠️ Error al obtener cambios pendientes: ${error.message}`);
-        const resultDiv = document.getElementById('pendingChangesResult');
-        resultDiv.innerHTML = `<div class="alert alert-danger">Error al obtener cambios pendientes: ${error.message}</div>`;
-    }
-}
-        
-        async function sincronizarCambiosPendientes() {
-    if (!authToken) {
-        alert('Primero debes autenticarte');
-        return;
-    }
-    
-    if (!isReallyOnline()) {
-        log('⚠️ Sin conexión a internet. No se pueden sincronizar los cambios.');
-        const resultDiv = document.getElementById('pendingChangesResult');
-        resultDiv.innerHTML = `<div class="alert alert-warning">Sin conexión a internet. No se pueden sincronizar los cambios.</div>`;
-        return;
-    }
-    
-    if (!('indexedDB' in window) || !window.db || !window.db.getPendingChanges) {
-        log('⚠️ La base de datos local no está disponible');
-        return;
-    }
-    
-    try {
-        log('Sincronizando cambios pendientes...');
-        
-        // Obtener cambios pendientes
-        const pendingChanges = await window.db.getPendingChanges();
-        
-        // Asegurarnos que pendingChanges es un array
-        if (!pendingChanges || !Array.isArray(pendingChanges)) {
-            log('⚠️ No hay cambios pendientes válidos para sincronizar');
-            const resultDiv = document.getElementById('pendingChangesResult');
-            resultDiv.innerHTML = `<div class="alert alert-warning">No hay cambios pendientes válidos para sincronizar.</div>`;
-            return;
-        }
-        
-        if (pendingChanges.length === 0) {
-            log('ℹ️ No hay cambios pendientes para sincronizar');
-            const resultDiv = document.getElementById('pendingChangesResult');
-            resultDiv.innerHTML = `<div class="alert alert-info">No hay cambios pendientes para sincronizar.</div>`;
-            return;
-        }
-        
-        const response = await fetch(`${baseURL}/sync/push`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${authToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                changes: pendingChanges,
-                device_timestamp: new Date().toISOString()
-            })
-        });
-        
-        let data;
-        try {
-            data = await response.json();
-        } catch (error) {
-            log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
-            throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
-        }
-        
-        const resultDiv = document.getElementById('pendingChangesResult');
-        
-        if (data.success) {
-            // Obtener array de UUIDs para eliminar
-            const syncedChanges = pendingChanges.map(change => change.uuid);
-            
-            // Solo intentar eliminar si tenemos UUIDs válidos
-            if (syncedChanges && syncedChanges.length > 0) {
-                try {
-                    await window.db.deletePendingChanges(syncedChanges);
-                    log(`✓ Eliminados ${syncedChanges.length} cambios sincronizados`);
-                } catch (deleteError) {
-                    log(`⚠️ Error al eliminar cambios sincronizados: ${deleteError.message}`);
-                }
+            if (!('indexedDB' in window) || !window.db || !window.db.getPendingChanges) {
+                log('⚠️ La base de datos local no está disponible');
+                return;
             }
-            
-            // Actualizar contador
-            await updatePendingChangesCount();
-            
-            resultDiv.innerHTML = `
-                <div class="alert alert-success">
-                    <strong>Cambios sincronizados correctamente</strong><br>
-                    <p>Se han sincronizado ${pendingChanges.length} cambios.</p>
-                    <details>
-                        <summary>Ver respuesta</summary>
-                        <pre>${JSON.stringify(data, null, 2)}</pre>
-                    </details>
-                </div>
-            `;
-            log(`✓ Sincronizados ${pendingChanges.length} cambios correctamente`);
-        } else {
-            resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || 'Error desconocido'}</div>`;
-            log(`✗ Error al sincronizar cambios: ${data.error || 'Error desconocido'}`);
+            try {
+                const pendingChanges = await window.db.getPendingChanges();
+                const resultDiv = document.getElementById('pendingChangesResult');
+                // Asegurarnos que pendingChanges es un array
+                if (!pendingChanges || !Array.isArray(pendingChanges)) {
+                    resultDiv.innerHTML = `<div class="alert alert-warning">No se pudieron obtener los cambios pendientes.</div>`;
+                    log('⚠️ No se pudieron obtener los cambios pendientes o no son un array válido');
+                    return;
+                }
+                if (pendingChanges.length === 0) {
+                    resultDiv.innerHTML = `<div class="alert alert-info">No hay cambios pendientes.</div>`;
+                    log('ℹ️ No hay cambios pendientes');
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-info">
+                            <strong>${pendingChanges.length} cambios pendientes</strong>
+                            <details>
+                                <summary>Ver detalles</summary>
+                                <pre>${JSON.stringify(pendingChanges, null, 2)}</pre>
+                            </details>
+                        </div>
+                    `;
+                    log(`ℹ️ ${pendingChanges.length} cambios pendientes encontrados`);
+                }
+            } catch (error) {
+                log(`⚠️ Error al obtener cambios pendientes: ${error.message}`);
+                const resultDiv = document.getElementById('pendingChangesResult');
+                resultDiv.innerHTML = `<div class="alert alert-danger">Error al obtener cambios pendientes: ${error.message}</div>`;
+            }
         }
-    } catch (error) {
-        const resultDiv = document.getElementById('pendingChangesResult');
-        resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
-        log(`✗ Error de conexión: ${error.message}`);
-    }
-}
+
+        async function sincronizarCambiosPendientes() {
+            if (!authToken) {
+                alert('Primero debes autenticarte');
+                return;
+            }
+            if (!isReallyOnline()) {
+                log('⚠️ Sin conexión a internet. No se pueden sincronizar los cambios.');
+                const resultDiv = document.getElementById('pendingChangesResult');
+                resultDiv.innerHTML = `<div class="alert alert-warning">Sin conexión a internet. No se pueden sincronizar los cambios.</div>`;
+                return;
+            }
+            if (!('indexedDB' in window) || !window.db || !window.db.getPendingChanges) {
+                log('⚠️ La base de datos local no está disponible');
+                return;
+            }
+            try {
+                log('Sincronizando cambios pendientes...');
+                // Obtener cambios pendientes
+                const pendingChanges = await window.db.getPendingChanges();
+                // Asegurarnos que pendingChanges es un array
+                if (!pendingChanges || !Array.isArray(pendingChanges)) {
+                    log('⚠️ No hay cambios pendientes válidos para sincronizar');
+                    const resultDiv = document.getElementById('pendingChangesResult');
+                    resultDiv.innerHTML = `<div class="alert alert-warning">No hay cambios pendientes válidos para sincronizar.</div>`;
+                    return;
+                }
+                if (pendingChanges.length === 0) {
+                    log('ℹ️ No hay cambios pendientes para sincronizar');
+                    const resultDiv = document.getElementById('pendingChangesResult');
+                    resultDiv.innerHTML = `<div class="alert alert-info">No hay cambios pendientes para sincronizar.</div>`;
+                    return;
+                }
+                const response = await fetch(`${baseURL}/sync/push`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        changes: pendingChanges,
+                        device_timestamp: new Date().toISOString()
+                    })
+                });
+                let data;
+                try {
+                    data = await response.json();
+                } catch (error) {
+                    log(`✗ Error al procesar respuesta: ${response.status} ${response.statusText}`);
+                    throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
+                }
+                const resultDiv = document.getElementById('pendingChangesResult');
+                if (data.success) {
+                    // Obtener array de UUIDs para eliminar
+                    const syncedChanges = pendingChanges.map(change => change.uuid);
+                    // Solo intentar eliminar si tenemos UUIDs válidos
+                    if (syncedChanges && syncedChanges.length > 0) {
+                        try {
+                            await window.db.deletePendingChanges(syncedChanges);
+                            log(`✓ Eliminados ${syncedChanges.length} cambios sincronizados`);
+                        } catch (deleteError) {
+                            log(`⚠️ Error al eliminar cambios sincronizados: ${deleteError.message}`);
+                        }
+                    }
+                    // Actualizar contador
+                    await updatePendingChangesCount();
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <strong>Cambios sincronizados correctamente</strong><br>
+                            <p>Se han sincronizado ${pendingChanges.length} cambios.</p>
+                            <details>
+                                <summary>Ver respuesta</summary>
+                                <pre>${JSON.stringify(data, null, 2)}</pre>
+                            </details>
+                        </div>
+                    `;
+                    log(`✓ Sincronizados ${pendingChanges.length} cambios correctamente`);
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${data.error || 'Error desconocido'}</div>`;
+                    log(`✗ Error al sincronizar cambios: ${data.error || 'Error desconocido'}`);
+                }
+            } catch (error) {
+                const resultDiv = document.getElementById('pendingChangesResult');
+                resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+                log(`✗ Error de conexión: ${error.message}`);
+            }
+        }
 
         // Inicializar cuando el documento esté listo
         document.addEventListener('DOMContentLoaded', async function() {
@@ -746,15 +677,12 @@
                 updateConnectionStatus();
                 log('✓ Conexión a internet restaurada');
             });
-            
             window.addEventListener('offline', function() {
                 updateConnectionStatus();
                 log('⚠️ Conexión a internet perdida');
             });
-            
             // Inicializar estado
             updateConnectionStatus();
-            
             // Inicializar IndexedDB y contador de cambios pendientes
             if ('indexedDB' in window) {
                 try {
@@ -762,7 +690,6 @@
                     if (window.db && window.db.openDB) {
                         await window.db.openDB();
                         log('✓ Base de datos local inicializada');
-                        
                         // Actualizar contador de cambios pendientes
                         await updatePendingChangesCount();
                     }
@@ -772,7 +699,6 @@
             } else {
                 log('⚠️ IndexedDB no está disponible en este navegador');
             }
-            
             // Registrar Service Worker si está disponible
             if ('serviceWorker' in navigator) {
                 try {
