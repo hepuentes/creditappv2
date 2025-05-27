@@ -1,4 +1,4 @@
-# auto_migrate.py 
+# auto_migrate.py (versión corregida)
 import os
 import shutil
 from sqlalchemy import text, inspect
@@ -39,55 +39,9 @@ with app.app_context():
                 raise
 
     try:
-        # PASO 0: Eliminar triggers problemáticos PRIMERO, antes de cualquier otra operación
-        logger.info("\n=== ELIMINANDO TRIGGERS PROBLEMÁTICOS ===")
-        with db.engine.begin() as connection:
-            # Desactivar todos los triggers
-            try:
-                connection.execute(db.text("SET session_replication_role = 'replica';"))
-                logger.info("✓ Triggers desactivados temporalmente")
-            except Exception as e:
-                logger.error(f"✗ Error al desactivar triggers: {e}")
-
-            # Intentar eliminar triggers específicos que sabemos que dan problemas
-            try:
-                # Obtener lista de todos los triggers
-                result = connection.execute(db.text("""
-                    SELECT trigger_name, event_object_table
-                    FROM information_schema.triggers
-                    WHERE trigger_name LIKE '%sync%' OR trigger_name LIKE '%trigger_%'
-                """))
-                
-                # Eliminar cada trigger
-                for trigger in result.fetchall():
-                    trigger_name = trigger[0]
-                    table_name = trigger[1]
-                    try:
-                        connection.execute(db.text(f"""
-                            DROP TRIGGER IF EXISTS {trigger_name} ON {table_name}
-                        """))
-                        logger.info(f"  ✓ Trigger {trigger_name} eliminado de la tabla {table_name}")
-                    except Exception as e:
-                        logger.error(f"  ✗ Error al eliminar trigger {trigger_name}: {e}")
-                
-                # Eliminar la función registrar_cambio_sync
-                try:
-                    connection.execute(db.text("""
-                        DROP FUNCTION IF EXISTS registrar_cambio_sync() CASCADE
-                    """))
-                    logger.info("  ✓ Función registrar_cambio_sync eliminada")
-                except Exception as e:
-                    logger.error(f"  ✗ Error al eliminar función registrar_cambio_sync: {e}")
-            
-            except Exception as e:
-                logger.error(f"  ✗ Error al eliminar triggers: {e}")
-            
-            # Volver a activar triggers para el resto de operaciones
-            try:
-                connection.execute(db.text("SET session_replication_role = 'origin';"))
-                logger.info("✓ Triggers reactivados")
-            except Exception as e:
-                logger.error(f"✗ Error al reactivar triggers: {e}")
+        # PASO 0: OMITIR operaciones de privilegios elevados
+        logger.info("\n=== OMITIENDO OPERACIONES QUE REQUIEREN PRIVILEGIOS ELEVADOS ===")
+        logger.info("Las operaciones de desactivación de triggers serán omitidas en entorno Render")
 
         # PASO 1: Reparar las secuencias de IDs en todas las tablas
         logger.info("\nReparando secuencias de autoincremento...")
@@ -200,54 +154,11 @@ with app.app_context():
         logger.info("\nCreando tablas faltantes y verificando relaciones...")
         db.create_all()
 
-        # PASO ADICIONAL: Eliminar la restricción problemática de la tabla abonos
-        try:
-            with db.engine.begin() as connection:
-                # Eliminar la restricción check_credito_reference que causa problemas
-                connection.execute(db.text(
-                    "ALTER TABLE abonos DROP CONSTRAINT IF EXISTS check_credito_reference"
-                ))
-                logger.info("  ✓ Restricción check_credito_reference eliminada de la tabla abonos")
-                # Asegurar que ciertos campos no sean nulos en la tabla abonos
-                connection.execute(db.text(
-                    "ALTER TABLE abonos ALTER COLUMN cobrador_id SET NOT NULL"
-                ))
-                connection.execute(db.text(
-                    "ALTER TABLE abonos ALTER COLUMN caja_id SET NOT NULL"
-                ))
-                logger.info("  ✓ Campos obligatorios en la tabla abonos actualizados")
-        except Exception as e:
-            logger.error(f"  ✗ Error al modificar la tabla abonos: {e}")
+        # PASO 4: OMITIR operaciones que requieren privilegios elevados
+        logger.info("\nOMITIENDO operaciones que requieren privilegios elevados...")
+        logger.info("Las operaciones que requieren desactivar triggers serán omitidas en entorno Render")
 
-        # PASO 4: Corregir datos incongruentes - CON PROTECCIÓN CONTRA TRIGGERS
-        logger.info("\nVerificando y corrigiendo datos incongruentes...")
-        try:
-            with db.engine.begin() as connection:
-                # Desactivar triggers temporalmente para evitar errores
-                connection.execute(db.text("SET session_replication_role = 'replica';"))
-                
-                # Corregir ventas a crédito con saldo_pendiente=0 que deberían estar pagadas
-                connection.execute(db.text(
-                    "UPDATE ventas SET estado = 'pagado' " +
-                    "WHERE tipo = 'credito' AND (saldo_pendiente IS NULL OR saldo_pendiente <= 0)"
-                ))
-                logger.info("  ✓ Ventas a crédito con saldo 0 marcadas como pagadas")
-                
-                # Asegurar que todas las ventas tienen estado
-                connection.execute(db.text(
-                    "UPDATE ventas SET estado = 'pendiente' WHERE estado IS NULL AND tipo = 'credito'"
-                ))
-                connection.execute(db.text(
-                    "UPDATE ventas SET estado = 'pagado' WHERE estado IS NULL AND tipo = 'contado'"
-                ))
-                logger.info("  ✓ Ventas sin estado actualizado correctamente")
-                
-                # Reactivar triggers
-                connection.execute(db.text("SET session_replication_role = 'origin';"))
-        except Exception as e:
-            logger.error(f"  ✗ Error al corregir datos incongruentes: {e}")
-
-        # PASO 5: Validar integridad referencial
+        # PASO 5: Validar integridad referencial sin operaciones privilegiadas
         logger.info("\nValidando integridad referencial...")
         try:
             # Verificar que los clientes existen
@@ -312,9 +223,9 @@ with app.app_context():
         except Exception as e:
             logger.error(f"  ✗ Error al verificar/actualizar tabla configuraciones: {e}")
 
-        # PASO 7: NO SE REALIZAN OPERACIONES DE SINCRONIZACIÓN OFFLINE
+        # PASO 7: OMITIR sincronización offline compleja
         logger.info("\n=== OMITIENDO PREPARACIÓN PARA SINCRONIZACIÓN OFFLINE ===")
-        logger.info("La sincronización offline está desactivada para evitar problemas con Render free.")
+        logger.info("La sincronización offline se implementará mediante JavaScript en el cliente")
 
     except Exception as e:
         logger.error(f"Error general en el proceso de migración: {e}")
