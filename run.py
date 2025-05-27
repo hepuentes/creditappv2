@@ -1,5 +1,6 @@
-from app import create_app
+import os
 import logging
+from app import create_app
 
 # Configurar logging
 logging.basicConfig(
