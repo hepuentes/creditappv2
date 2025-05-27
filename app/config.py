@@ -16,15 +16,15 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
-        'pool_timeout': 30,  # Aumentado de 20 a 30
-        'max_overflow': 10,  # Aumentado de 0 a 10
-        'pool_size': 10,     # Aumentado de 5 a 10
+        'pool_timeout': 30,  
+        'max_overflow': 5,  
+        'pool_size': 5,     
         'connect_args': {
-            'connect_timeout': 60,
+            'connect_timeout': 30,
             'application_name': 'creditapp',
             # Configuración SSL más robusta
             'sslmode': 'prefer',  # Permite conexión SSL si está disponible
-            'options': '-c statement_timeout=30000'  # 30 segundos timeout
+            'options': '-c statement_timeout=00000'  # 10 segundos timeout
         }
     }
     
