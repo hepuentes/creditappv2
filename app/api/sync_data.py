@@ -6,6 +6,7 @@ from app.api import api
 from flask_login import current_user
 from datetime import datetime
 import json
+import uuid
 
 def require_api_auth(f):
     """Versión simplificada del decorador para pruebas"""
@@ -179,6 +180,41 @@ def sync_push_simple(dispositivo=None):
                         'status': 'success',
                         'id': nuevo_cliente.id
                     })
+                # Agregar más tipos de operaciones según necesidad
+                elif change.get('tabla') == 'clientes' and change.get('operacion') == 'UPDATE':
+                    cliente_data = change.get('datos', {})
+                    cliente_id = cliente_data.get('id')
+                    
+                    if cliente_id:
+                        cliente = Cliente.query.get(cliente_id)
+                        if cliente:
+                            # Actualizar campos
+                            if 'nombre' in cliente_data:
+                                cliente.nombre = cliente_data['nombre']
+                            if 'telefono' in cliente_data:
+                                cliente.telefono = cliente_data['telefono']
+                            if 'email' in cliente_data:
+                                cliente.email = cliente_data['email']
+                            if 'direccion' in cliente_data:
+                                cliente.direccion = cliente_data['direccion']
+                            
+                            response_status.append({
+                                'uuid': change.get('uuid'),
+                                'status': 'success',
+                                'id': cliente.id
+                            })
+                        else:
+                            response_status.append({
+                                'uuid': change.get('uuid'),
+                                'status': 'error',
+                                'message': 'Cliente no encontrado'
+                            })
+                    else:
+                        response_status.append({
+                            'uuid': change.get('uuid'),
+                            'status': 'error',
+                            'message': 'ID de cliente no especificado'
+                        })
             except Exception as inner_e:
                 current_app.logger.error(f"Error procesando cambio: {str(inner_e)}")
                 response_status.append({
