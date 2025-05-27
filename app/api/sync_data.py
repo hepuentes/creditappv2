@@ -137,17 +137,77 @@ def sync_get_ventas(dispositivo=None):
 
 @api.route('/sync/push', methods=['POST'])
 @require_api_auth
-def sync_push(dispositivo=None):
-    """Recibe cambios desde el cliente (simplificado para pruebas)"""
+def sync_push_simple(dispositivo=None):
+    """Versión simplificada de sync/push que no requiere campos UUID ni triggers"""
     try:
         data = request.get_json()
+        changes = data.get('changes', [])
+        
+        response_status = []
+        
+        for change in changes:
+            try:
+                if change.get('tabla') == 'clientes' and change.get('operacion') == 'INSERT':
+                    cliente_data = change.get('datos', {})
+                    
+                    # Verificar si el cliente ya existe
+                    existing_cliente = Cliente.query.filter_by(cedula=cliente_data.get('cedula')).first()
+                    if existing_cliente:
+                        response_status.append({
+                            'uuid': change.get('uuid'),
+                            'status': 'error',
+                            'message': 'Cliente con esta cédula ya existe'
+                        })
+                        continue
+                    
+                    # Crear cliente manualmente sin depender de uuid
+                    nuevo_cliente = Cliente(
+                        nombre=cliente_data.get('nombre'),
+                        cedula=cliente_data.get('cedula'),
+                        telefono=cliente_data.get('telefono'),
+                        email=cliente_data.get('email'),
+                        direccion=cliente_data.get('direccion')
+                    )
+                    
+                    # Usar with session.no_autoflush para evitar errores de flush
+                    with db.session.no_autoflush:
+                        db.session.add(nuevo_cliente)
+                        db.session.flush()  # Asignar ID
+                    
+                    response_status.append({
+                        'uuid': change.get('uuid'),
+                        'status': 'success',
+                        'id': nuevo_cliente.id
+                    })
+            except Exception as inner_e:
+                current_app.logger.error(f"Error procesando cambio: {str(inner_e)}")
+                response_status.append({
+                    'uuid': change.get('uuid'),
+                    'status': 'error',
+                    'message': str(inner_e)
+                })
+                db.session.rollback()
+        
+        # Commit después de procesar todos los cambios
+        try:
+            db.session.commit()
+        except Exception as commit_error:
+            current_app.logger.error(f"Error en commit: {str(commit_error)}")
+            db.session.rollback()
+            return jsonify({
+                'success': False,
+                'error': str(commit_error),
+                'results': response_status
+            }), 500
         
         return jsonify({
             'success': True,
-            'message': 'Cambios recibidos correctamente (simulación)',
-            'received': data
+            'message': 'Cambios procesados',
+            'results': response_status
         }), 200
         
     except Exception as e:
         current_app.logger.error(f"Error en sync push: {str(e)}")
+        # Asegurar rollback en caso de error
+        db.session.rollback()
         return jsonify({'error': f'Error en sincronización: {str(e)}'}), 500
