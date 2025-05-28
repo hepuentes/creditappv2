@@ -5,11 +5,21 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db, login_manager, bcrypt
 
+import uuid as uuid_lib
+
+# Definir un mixin para sincronización que usarán todos los modelos
+class SyncMixin:
+    """Mixin que agrega campos requeridos para sincronización offline"""
+    uuid = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid_lib.uuid4()))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    sync_version = db.Column(db.Integer, default=1, nullable=False)
+
 @login_manager.user_loader
 def load_user(user_id):
     return Usuario.query.get(int(user_id))
 
-class Usuario(db.Model, UserMixin):
+class Usuario(db.Model, UserMixin, SyncMixin):
     __tablename__ = 'usuarios'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -52,7 +62,7 @@ class Usuario(db.Model, UserMixin):
         return self.rol == 'cobrador'
 
 
-class Cliente(db.Model):
+class Cliente(db.Model, SyncMixin):
     __tablename__ = 'clientes'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -70,7 +80,7 @@ class Cliente(db.Model):
         return sum(v.saldo_pendiente for v in self.ventas if v.tipo == 'credito')
 
 
-class Venta(db.Model):
+class Venta(db.Model, SyncMixin):
     __tablename__ = 'ventas'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -89,7 +99,7 @@ class Venta(db.Model):
     abonos = db.relationship('Abono', back_populates='venta', foreign_keys='Abono.venta_id', lazy=True)
 
 
-class Credito(db.Model):
+class Credito(db.Model, SyncMixin):
     __tablename__ = 'creditos'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -111,7 +121,7 @@ class Credito(db.Model):
         return f"<Credito #{self.id} Cliente:{self.cliente_id} Monto:{self.monto}>"
 
 
-class Abono(db.Model):
+class Abono(db.Model, SyncMixin):
     __tablename__ = 'abonos'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -139,7 +149,7 @@ class Abono(db.Model):
         return None
 
 
-class Caja(db.Model):
+class Caja(db.Model, SyncMixin):
     __tablename__ = 'cajas'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -155,7 +165,7 @@ class Caja(db.Model):
                                  lazy=True, cascade='all, delete-orphan')
 
 
-class MovimientoCaja(db.Model):
+class MovimientoCaja(db.Model, SyncMixin):
     __tablename__ = 'movimiento_caja'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -184,8 +194,7 @@ class MovimientoCaja(db.Model):
         return f"<MovimientoCaja #{self.id} Tipo:{self.tipo} Monto:{self.monto}>"
 
 
-# CreditoVenta
-class CreditoVenta(db.Model):
+class CreditoVenta(db.Model, SyncMixin):
     __tablename__ = 'creditos_venta'  
 
     id = db.Column(db.Integer, primary_key=True)
@@ -210,7 +219,7 @@ class CreditoVenta(db.Model):
         return f"<CreditoVenta #{self.id} Cliente:{self.cliente_id} Total:{self.total}>"
 
 
-class DetalleVenta(db.Model):
+class DetalleVenta(db.Model, SyncMixin):
     __tablename__ = 'detalle_ventas'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -221,7 +230,7 @@ class DetalleVenta(db.Model):
     subtotal = db.Column(db.Integer, nullable=False)
 
 
-class Comision(db.Model):
+class Comision(db.Model, SyncMixin):
     __tablename__ = 'comisiones'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -245,7 +254,7 @@ class Comision(db.Model):
     abono = db.relationship('Abono', foreign_keys=[abono_id], backref='comisiones')
 
 
-class Configuracion(db.Model):
+class Configuracion(db.Model, SyncMixin):
     __tablename__ = 'configuraciones'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -264,7 +273,7 @@ class Configuracion(db.Model):
     min_password = db.Column(db.Integer, nullable=False, default=6)
 
 
-class Producto(db.Model):
+class Producto(db.Model, SyncMixin):
     __tablename__ = 'productos'
 
     id = db.Column(db.Integer, primary_key=True)
