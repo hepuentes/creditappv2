@@ -267,5 +267,118 @@
         window.addEventListener('offline', updateOnlineStatus);
         document.addEventListener('DOMContentLoaded', updateOnlineStatus);
     </script>
+
+    <!-- Scripts para el soporte offline -->
+    <script src="{{ url_for('static', filename='js/offline-forms.js') }}"></script>
+    
+    <!-- Service Worker para soporte offline -->
+    <script>
+        // Registrar Service Worker para soporte offline
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/static/js/sw.js')
+                    .then(function(registration) {
+                        console.log('Service Worker registrado con éxito:', registration.scope);
+                        
+                        // Verificar si hay una nueva versión y actualizar
+                        if (registration.waiting) {
+                            registration.waiting.postMessage({action: 'skipWaiting'});
+                        }
+                        
+                        // Registrar para sincronización periódica
+                        if ('sync' in registration) {
+                            navigator.serviceWorker.ready.then(function(registration) {
+                                registration.sync.register('sync-pending-changes')
+                                    .catch(function(error) {
+                                        console.error('Error al registrar sync:', error);
+                                    });
+                            });
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Error al registrar Service Worker:', error);
+                    });
+            });
+        }
+
+        // Monitor de conexión mejorado
+        function updateOnlineStatus() {
+            const indicator = document.createElement('div');
+            indicator.id = 'offline-indicator';
+            
+            if (navigator.onLine) {
+                // Si estamos online, remover indicador si existe
+                const existingIndicator = document.getElementById('offline-indicator');
+                if (existingIndicator) {
+                    existingIndicator.remove();
+                }
+                
+                // Asegurar que el sidebar esté visible en modo online si estaba oculto
+                const content = document.getElementById('content');
+                if (content) {
+                    content.style.width = '';
+                    content.style.marginLeft = '';
+                }
+            } else {
+                // Si estamos offline, mostrar indicador
+                if (!document.getElementById('offline-indicator')) {
+                    indicator.style.position = 'fixed';
+                    indicator.style.bottom = '10px';
+                    indicator.style.right = '10px';
+                    indicator.style.backgroundColor = '#ffab00';
+                    indicator.style.color = 'white';
+                    indicator.style.padding = '10px 15px';
+                    indicator.style.borderRadius = '5px';
+                    indicator.style.zIndex = '9999';
+                    indicator.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+                    indicator.innerHTML = '<i class="fas fa-wifi-slash"></i> Modo Offline';
+                    document.body.appendChild(indicator);
+                }
+                
+                // Asegurar que el sidebar sea visible en modo offline
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar && !sidebar.classList.contains('show')) {
+                    sidebar.classList.add('show');
+                }
+            }
+        }
+
+        // Inicializar y configurar eventos
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        document.addEventListener('DOMContentLoaded', updateOnlineStatus);
+        
+        // Mantener visible el menú en modo offline
+        function ensureSidebarVisibility() {
+            if (!navigator.onLine) {
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar) {
+                    sidebar.classList.add('show');
+                    sidebar.style.marginLeft = '0';
+                    
+                    // Forzar el sidebar a ser visible
+                    sidebar.style.position = 'fixed';
+                    sidebar.style.left = '0';
+                    sidebar.style.visibility = 'visible';
+                    sidebar.style.opacity = '1';
+                    
+                    // Ajustar el contenido
+                    const content = document.getElementById('content');
+                    if (content) {
+                        content.style.marginLeft = '250px';
+                    }
+                }
+            }
+        }
+        
+        // Comprobar visibilidad del sidebar periódicamente en modo offline
+        setInterval(function() {
+            if (!navigator.onLine) {
+                ensureSidebarVisibility();
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
 </body>
 </html>
