@@ -1,4 +1,4 @@
-# auto_migrate.py 
+# auto_migrate.py - VERSIÓN MEJORADA
 import os
 import shutil
 from sqlalchemy import text, inspect
@@ -8,6 +8,7 @@ from app.models import (Usuario, Cliente, Venta, Credito, Abono, Caja,
                         Comision, Configuracion, Producto)
 import logging
 import time
+import uuid
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, 
@@ -58,9 +59,18 @@ with app.app_context():
                 except Exception as e:
                     logger.warning(f"  ! No se pudo eliminar trigger para {tabla}: {e}")
 
-        # PASO 2: Agregar campos UUID y sync a todas las tablas
-        logger.info("\n=== PASO 2: AGREGANDO CAMPOS DE SINCRONIZACIÓN ===")
+        # PASO 2: Agregar campos UUID y sync a todas las tablas CON VALOR DEFAULT
+        logger.info("\n=== PASO 2: MODIFICANDO CAMPOS DE SINCRONIZACIÓN CON DEFAULTS ===")
         with db.engine.begin() as connection:
+            # Primero, asegurar que la función gen_random_uuid() esté disponible
+            try:
+                connection.execute(db.text("""
+                    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+                """))
+                logger.info("  ✓ Extensión pgcrypto habilitada para UUIDs")
+            except Exception as e:
+                logger.warning(f"  ! No se pudo habilitar pgcrypto: {e}")
+            
             for tabla in tablas_principales:
                 try:
                     # Verificar si la tabla existe
@@ -80,12 +90,12 @@ with app.app_context():
                     """)
                     existing_columns = [row[0] for row in connection.execute(columns_query, {'tabla': tabla}).fetchall()]
                     
-                    # Agregar campo uuid si no existe
+                    # Si no existe la columna uuid, agregarla con DEFAULT
                     if 'uuid' not in existing_columns:
-                        logger.info(f"  → Agregando campo uuid a {tabla}")
+                        logger.info(f"  → Agregando campo uuid a {tabla} con DEFAULT")
                         connection.execute(db.text(f"""
                             ALTER TABLE {tabla} 
-                            ADD COLUMN uuid VARCHAR(36) UNIQUE
+                            ADD COLUMN uuid VARCHAR(36) DEFAULT gen_random_uuid()
                         """))
                         
                         # Generar UUIDs para registros existentes
@@ -101,17 +111,42 @@ with app.app_context():
                             ALTER COLUMN uuid SET NOT NULL
                         """))
                         
-                        logger.info(f"    ✓ Campo UUID agregado y poblado para {tabla}")
-                    else:
-                        # Si existe pero algunos registros no tienen UUID
+                        # Agregar restricción UNIQUE después
                         connection.execute(db.text(f"""
-                            UPDATE {tabla} 
-                            SET uuid = gen_random_uuid()::text 
-                            WHERE uuid IS NULL OR uuid = ''
+                            ALTER TABLE {tabla} 
+                            ADD CONSTRAINT {tabla}_uuid_unique UNIQUE (uuid)
                         """))
-                        logger.info(f"    ✓ UUIDs actualizados para registros sin UUID en {tabla}")
+                        
+                        logger.info(f"    ✓ Campo UUID agregado con DEFAULT para {tabla}")
+                    else:
+                        # Si la columna uuid existe pero no tiene DEFAULT, asignarlo
+                        try:
+                            # Verificar si ya tiene DEFAULT
+                            default_check = connection.execute(db.text("""
+                                SELECT column_default
+                                FROM information_schema.columns 
+                                WHERE table_name = :tabla AND column_name = 'uuid'
+                            """), {'tabla': tabla}).fetchone()
+                            
+                            if not default_check[0]:
+                                # Agregar DEFAULT para futuras inserciones
+                                connection.execute(db.text(f"""
+                                    ALTER TABLE {tabla} 
+                                    ALTER COLUMN uuid SET DEFAULT gen_random_uuid()
+                                """))
+                                logger.info(f"    ✓ DEFAULT gen_random_uuid() agregado a columna uuid en {tabla}")
+                                
+                            # Actualizar valores NULL existentes
+                            connection.execute(db.text(f"""
+                                UPDATE {tabla} 
+                                SET uuid = gen_random_uuid()::text 
+                                WHERE uuid IS NULL OR uuid = ''
+                            """))
+                            logger.info(f"    ✓ UUIDs actualizados para registros sin UUID en {tabla}")
+                        except Exception as def_error:
+                            logger.warning(f"    ! Error al configurar DEFAULT para uuid en {tabla}: {def_error}")
                     
-                    # Agregar created_at si no existe
+                    # Verificar y agregar created_at, updated_at, sync_version
                     if 'created_at' not in existing_columns:
                         connection.execute(db.text(f"""
                             ALTER TABLE {tabla} 
@@ -119,7 +154,6 @@ with app.app_context():
                         """))
                         logger.info(f"    ✓ Campo created_at agregado a {tabla}")
                     
-                    # Agregar updated_at si no existe
                     if 'updated_at' not in existing_columns:
                         connection.execute(db.text(f"""
                             ALTER TABLE {tabla} 
@@ -127,7 +161,6 @@ with app.app_context():
                         """))
                         logger.info(f"    ✓ Campo updated_at agregado a {tabla}")
                     
-                    # Agregar sync_version si no existe
                     if 'sync_version' not in existing_columns:
                         connection.execute(db.text(f"""
                             ALTER TABLE {tabla} 
@@ -137,7 +170,6 @@ with app.app_context():
                         
                 except Exception as e:
                     logger.error(f"  ✗ Error actualizando tabla {tabla}: {e}")
-                    continue
 
         # PASO 3: Crear tablas de sincronización
         logger.info("\n=== PASO 3: CREANDO TABLAS DE SINCRONIZACIÓN ===")
@@ -158,49 +190,31 @@ with app.app_context():
                     operacion VARCHAR(10);
                     datos_json TEXT;
                     registro_uuid VARCHAR(36);
-                    tabla_uuid VARCHAR(36);
+                    v_uuid VARCHAR(36);
                 BEGIN
                     -- Determinar operación
                     IF TG_OP = 'INSERT' THEN
                         operacion := 'INSERT';
-                        -- Verificar si existe campo uuid
-                        BEGIN
-                            EXECUTE format('SELECT ($1).%I', 'uuid') USING NEW INTO tabla_uuid;
-                            registro_uuid := tabla_uuid;
-                        EXCEPTION WHEN OTHERS THEN
-                            -- Si no existe uuid, generar uno temporal
-                            registro_uuid := gen_random_uuid()::text;
-                        END;
+                        -- Asignar UUID si es NULL
+                        IF NEW.uuid IS NULL THEN
+                            v_uuid := gen_random_uuid();
+                            NEW.uuid := v_uuid;
+                        END IF;
+                        registro_uuid := NEW.uuid;
                         datos_json := row_to_json(NEW)::text;
                         
                     ELSIF TG_OP = 'UPDATE' THEN
                         operacion := 'UPDATE';
-                        -- Verificar si existe campo uuid
-                        BEGIN
-                            EXECUTE format('SELECT ($1).%I', 'uuid') USING NEW INTO tabla_uuid;
-                            registro_uuid := tabla_uuid;
-                        EXCEPTION WHEN OTHERS THEN
-                            -- Si no existe uuid, usar el ID
-                            EXECUTE format('SELECT ($1).%I', 'id') USING NEW INTO registro_uuid;
-                            registro_uuid := 'id-' || registro_uuid;
-                        END;
+                        registro_uuid := NEW.uuid;
                         datos_json := row_to_json(NEW)::text;
                         
                     ELSIF TG_OP = 'DELETE' THEN
                         operacion := 'DELETE';
-                        -- Verificar si existe campo uuid en OLD
-                        BEGIN
-                            EXECUTE format('SELECT ($1).%I', 'uuid') USING OLD INTO tabla_uuid;
-                            registro_uuid := tabla_uuid;
-                        EXCEPTION WHEN OTHERS THEN
-                            -- Si no existe uuid, usar el ID
-                            EXECUTE format('SELECT ($1).%I', 'id') USING OLD INTO registro_uuid;
-                            registro_uuid := 'id-' || registro_uuid;
-                        END;
+                        registro_uuid := OLD.uuid;
                         datos_json := row_to_json(OLD)::text;
                     END IF;
                     
-                    -- Solo insertar en change_log si la tabla existe
+                    -- Insertar en change_log
                     BEGIN
                         INSERT INTO change_log (
                             uuid, tabla, registro_uuid, operacion, 
@@ -217,7 +231,7 @@ with app.app_context():
                         );
                     EXCEPTION WHEN OTHERS THEN
                         -- Si change_log no existe, no hacer nada
-                        NULL;
+                        RAISE NOTICE 'Error registrando cambio en change_log: %', SQLERRM;
                     END;
                     
                     -- Retornar el registro apropiado
@@ -231,7 +245,7 @@ with app.app_context():
             """))
             logger.info("  ✓ Función de sincronización mejorada creada")
             
-            # Crear triggers solo para tablas que existen y tienen uuid
+            # Crear triggers BEFORE INSERT para asignar UUID si es NULL
             for tabla in tablas_principales:
                 try:
                     # Verificar que la tabla tenga campo uuid
@@ -242,18 +256,42 @@ with app.app_context():
                     """), {'tabla': tabla}).fetchone()
                     
                     if result:
+                        # Primero crear trigger BEFORE INSERT para asignar UUID si es NULL
                         connection.execute(db.text(f"""
+                            DROP TRIGGER IF EXISTS before_insert_{tabla} ON {tabla};
+                            
+                            CREATE OR REPLACE FUNCTION ensure_uuid_{tabla}()
+                            RETURNS TRIGGER AS $$
+                            BEGIN
+                                IF NEW.uuid IS NULL THEN
+                                    NEW.uuid := gen_random_uuid();
+                                END IF;
+                                RETURN NEW;
+                            END;
+                            $$ LANGUAGE plpgsql;
+                            
+                            CREATE TRIGGER before_insert_{tabla}
+                            BEFORE INSERT ON {tabla}
+                            FOR EACH ROW
+                            EXECUTE FUNCTION ensure_uuid_{tabla}();
+                        """))
+                        logger.info(f"    ✓ Trigger BEFORE INSERT creado para {tabla}")
+                        
+                        # Luego crear trigger AFTER para sincronización
+                        connection.execute(db.text(f"""
+                            DROP TRIGGER IF EXISTS sync_trigger_{tabla} ON {tabla};
+                            
                             CREATE TRIGGER sync_trigger_{tabla}
                             AFTER INSERT OR UPDATE OR DELETE ON {tabla}
                             FOR EACH ROW
                             EXECUTE FUNCTION registrar_cambio_sync();
                         """))
-                        logger.info(f"    ✓ Trigger de sincronización creado para {tabla}")
+                        logger.info(f"    ✓ Trigger AFTER para sincronización creado para {tabla}")
                     else:
                         logger.warning(f"    ! Tabla {tabla} no tiene campo uuid, trigger omitido")
                         
                 except Exception as e:
-                    logger.warning(f"    ! Error creando trigger para {tabla}: {e}")
+                    logger.warning(f"    ! Error creando triggers para {tabla}: {e}")
 
         # PASO 5: Crear trigger para updated_at
         logger.info("\n=== PASO 5: CREANDO TRIGGERS PARA UPDATED_AT ===")
@@ -351,9 +389,40 @@ with app.app_context():
                 """))
                 logger.info("    ✓ Usuario administrador creado con UUID")
 
+        # PASO 8: Asegurar que todas las clases de modelo tienen soporte UUID
+        logger.info("\n=== PASO 8: VERIFICACIÓN FINAL DE MODELOS Y DATOS ===")
+        
+        # Validar datos existentes
+        tablas_a_verificar = [
+            ('ventas', Venta),
+            ('productos', Producto),
+            ('abonos', Abono),
+            ('cajas', Caja),
+            ('movimiento_caja', MovimientoCaja),
+            ('clientes', Cliente)
+        ]
+        
+        for tabla_nombre, modelo in tablas_a_verificar:
+            try:
+                # Contar registros sin UUID
+                count_null = db.session.query(modelo).filter(modelo.uuid == None).count()
+                if count_null > 0:
+                    logger.warning(f"    ! Se encontraron {count_null} registros sin UUID en {tabla_nombre}")
+                    
+                    # Intento de reparación final
+                    with db.engine.begin() as connection:
+                        connection.execute(db.text(f"""
+                            UPDATE {tabla_nombre} 
+                            SET uuid = gen_random_uuid()::text 
+                            WHERE uuid IS NULL OR uuid = ''
+                        """))
+                    logger.info(f"    ✓ Se repararon registros sin UUID en {tabla_nombre}")
+            except Exception as e:
+                logger.warning(f"    ! Error verificando UUIDs en {tabla_nombre}: {e}")
+
         logger.info("\n=== REPARACIÓN COMPLETA EXITOSA ===")
-        logger.info("✓ Campos UUID agregados a todas las tablas")
-        logger.info("✓ Triggers de sincronización creados")
+        logger.info("✓ Campos UUID agregados a todas las tablas con DEFAULT")
+        logger.info("✓ Triggers mejorados creados para asignar UUID automáticamente")
         logger.info("✓ Secuencias reparadas")
         logger.info("✓ Sistema listo para sincronización offline")
 
