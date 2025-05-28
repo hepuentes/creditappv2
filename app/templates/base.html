@@ -209,7 +209,7 @@
     {% block extra_js %}{% endblock %}
 
     <!-- Service Worker para soporte offline -->
-    <script>
+        <script>
         // Registrar Service Worker para soporte offline
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
@@ -232,6 +232,40 @@
                     });
             });
         }
+
+        // Monitor de conexión mejorado
+        function updateOnlineStatus() {
+            const indicator = document.createElement('div');
+            indicator.id = 'offline-indicator';
+            
+            if (navigator.onLine) {
+                // Si estamos online, remover indicador si existe
+                const existingIndicator = document.getElementById('offline-indicator');
+                if (existingIndicator) {
+                    existingIndicator.remove();
+                }
+            } else {
+                // Si estamos offline, mostrar indicador
+                if (!document.getElementById('offline-indicator')) {
+                    indicator.style.position = 'fixed';
+                    indicator.style.bottom = '10px';
+                    indicator.style.right = '10px';
+                    indicator.style.backgroundColor = '#ffab00';
+                    indicator.style.color = 'white';
+                    indicator.style.padding = '10px 15px';
+                    indicator.style.borderRadius = '5px';
+                    indicator.style.zIndex = '9999';
+                    indicator.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+                    indicator.innerHTML = '<i class="fas fa-wifi-slash"></i> Modo Offline';
+                    document.body.appendChild(indicator);
+                }
+            }
+        }
+
+        // Inicializar y configurar eventos
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        document.addEventListener('DOMContentLoaded', updateOnlineStatus);
     </script>
 </body>
 </html>
