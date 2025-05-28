@@ -1,14 +1,11 @@
-// app/static/js/sw.js - COMPLETAMENTE REESCRITO
-const CACHE_NAME = 'creditapp-cache-v1';
-const OFFLINE_PAGE = '/test/offline';
-
-// Lista de páginas a cachear para navegación offline
-const pagesToCache = [
+// app/static/js/sw.js
+const CACHE_NAME = 'creditapp-v2';
+const urlsToCache = [
   '/',
   '/dashboard',
   '/clientes',
   '/clientes/crear',
-  '/productos',
+  '/productos', 
   '/productos/crear',
   '/ventas',
   '/ventas/crear',
@@ -16,149 +13,151 @@ const pagesToCache = [
   '/abonos/crear',
   '/creditos',
   '/cajas',
-  '/cajas/nuevo-movimiento',
-  OFFLINE_PAGE
-];
-
-// Assets estáticos cruciales
-const assetsToCache = [
+  '/test/offline',
+  // CSS y JS esenciales
   '/static/css/style.css',
   '/static/js/main.js',
-  '/static/js/offline-basic.js',
+  '/static/js/offline-forms.js',
   '/static/js/pwa-helper.js',
+  '/static/js/db.js',
+  '/static/js/sync.js',
+  // Librerías externas críticas
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js',
   'https://code.jquery.com/jquery-3.7.1.min.js'
 ];
 
-// Instalación del Service Worker
+// Instalación - cachear todo inmediatamente
 self.addEventListener('install', event => {
-  console.log('⚙️ Service Worker: Instalando...');
+  console.log('[SW] Instalando...');
+  self.skipWaiting(); // Activar inmediatamente
   
-  // Cachear páginas y assets básicos inmediatamente
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('📦 Service Worker: Cacheando páginas básicas');
-        // Primero cachear páginas principales
-        return cache.addAll([...pagesToCache, ...assetsToCache])
-          .then(() => self.skipWaiting())
-          .catch(error => {
-            console.error('❌ Error cacheando recursos:', error);
-            // Intentar cachear al menos la página offline
-            return cache.add(OFFLINE_PAGE);
-          });
+        console.log('[SW] Cacheando archivos iniciales');
+        return cache.addAll(urlsToCache);
+      })
+      .catch(error => {
+        console.error('[SW] Error cacheando:', error);
       })
   );
 });
 
-// Activación - limpia caches antiguas
+// Activación - limpiar caches viejas
 self.addEventListener('activate', event => {
-  console.log('🚀 Service Worker: Activado');
-  
-  // Reclamar clientes abiertos sin recargar
+  console.log('[SW] Activado');
   event.waitUntil(
-    caches.keys()
-      .then(cacheNames => {
+    Promise.all([
+      // Limpiar caches antiguas
+      caches.keys().then(cacheNames => {
         return Promise.all(
-          cacheNames.filter(cacheName => {
-            return cacheName !== CACHE_NAME;
-          }).map(cacheName => {
-            console.log('🧹 Eliminando caché antigua:', cacheName);
-            return caches.delete(cacheName);
-          })
+          cacheNames.filter(cacheName => cacheName !== CACHE_NAME)
+            .map(cacheName => caches.delete(cacheName))
         );
-      })
-      .then(() => {
-        console.log('👑 Service Worker: Tomando control de todos los clientes');
-        return self.clients.claim();
-      })
+      }),
+      // Tomar control inmediato
+      self.clients.claim()
+    ])
   );
 });
 
-// Interceptar fetch requests
+// Fetch - estrategia cache-first con fallback
 self.addEventListener('fetch', event => {
-  // Solo manejar solicitudes GET
-  if (event.request.method !== 'GET') {
-    // Para POST, simplemente dejar pasar la solicitud
-    // El manejador de formularios offline se encargará de esto
+  const { request } = event;
+  const url = new URL(request.url);
+  
+  // Solo manejar GET requests
+  if (request.method !== 'GET') {
     return;
   }
   
-  const url = new URL(event.request.url);
-  
-  // Ignorar solicitudes a API o a otros dominios
-  if (url.pathname.startsWith('/api/') || url.origin !== self.location.origin) {
-    return;
-  }
-  
-  event.respondWith(
-    caches.match(event.request)
-      .then(cachedResponse => {
-        // Si está en caché, devolver la respuesta cacheada
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        
-        // Si no está en caché, intentar desde la red
-        return fetch(event.request)
-          .then(response => {
-            // Verificar si la respuesta es válida
-            if (!response || response.status !== 200) {
+  // Para navegación (páginas HTML)
+  if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(
+      // Primero intentar desde caché
+      caches.match(request)
+        .then(cachedResponse => {
+          if (cachedResponse) {
+            console.log('[SW] Sirviendo desde caché:', request.url);
+            return cachedResponse;
+          }
+          
+          // Si no está en caché, intentar desde la red
+          return fetch(request)
+            .then(response => {
+              // Solo cachear respuestas exitosas
+              if (response && response.status === 200) {
+                const responseToCache = response.clone();
+                caches.open(CACHE_NAME).then(cache => {
+                  cache.put(request, responseToCache);
+                });
+              }
               return response;
+            })
+            .catch(() => {
+              // Si falla la red, mostrar página offline
+              console.log('[SW] Sin conexión, mostrando página offline');
+              return caches.match('/test/offline');
+            });
+        })
+    );
+    return;
+  }
+  
+  // Para recursos estáticos (CSS, JS, imágenes)
+  if (request.url.includes('/static/') || request.url.includes('cdn.')) {
+    event.respondWith(
+      caches.match(request)
+        .then(cachedResponse => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          
+          return fetch(request).then(response => {
+            if (response && response.status === 200) {
+              const responseToCache = response.clone();
+              caches.open(CACHE_NAME).then(cache => {
+                cache.put(request, responseToCache);
+              });
             }
-            
-            // Clonar la respuesta para cachearla
-            const responseToCache = response.clone();
-            
-            // Añadir a caché
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                cache.put(event.request, responseToCache);
-              });
-            
             return response;
-          })
-          .catch(error => {
-            console.error('⛔ Error de red:', error);
-            
-            // Si falla la red, intentar servir la página principal de la sección
-            const pathname = url.pathname;
-            const mainSection = '/' + pathname.split('/')[1];
-            
-            return caches.match(mainSection)
-              .then(mainSectionResponse => {
-                if (mainSectionResponse) {
-                  return mainSectionResponse;
-                }
-                
-                // Si todo falla, mostrar página offline
-                return caches.match(OFFLINE_PAGE);
-              });
           });
+        })
+        .catch(() => {
+          console.log('[SW] Recurso no disponible offline:', request.url);
+          // Devolver respuesta vacía para evitar errores
+          return new Response('', { headers: { 'Content-Type': 'text/plain' } });
+        })
+    );
+    return;
+  }
+  
+  // Para API calls - no cachear, dejar pasar
+  if (request.url.includes('/api/')) {
+    return;
+  }
+  
+  // Default: network first, cache fallback
+  event.respondWith(
+    fetch(request)
+      .then(response => {
+        if (response && response.status === 200) {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(request, responseToCache);
+          });
+        }
+        return response;
       })
+      .catch(() => caches.match(request))
   );
 });
 
-// Manejo de sincronización en background
-self.addEventListener('sync', event => {
-  if (event.tag === 'sync-forms') {
-    console.log('🔄 Sincronizando formularios pendientes...');
-    event.waitUntil(syncPendingForms());
+// Escuchar mensajes para sincronización
+self.addEventListener('message', event => {
+  if (event.data && event.data.action === 'skipWaiting') {
+    self.skipWaiting();
   }
 });
-
-// Función de sincronización
-async function syncPendingForms() {
-  // Notificar a los clientes que intenten sincronizar
-  self.clients.matchAll().then(clients => {
-    clients.forEach(client => {
-      client.postMessage({
-        action: 'SYNC_FORMS'
-      });
-    });
-  });
-  
-  return true;
-}
