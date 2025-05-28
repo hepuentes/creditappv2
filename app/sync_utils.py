@@ -74,7 +74,7 @@ class SyncMixin:
     """
     Mixin para agregar capacidades de sincronización a modelos
     """
-    uuid = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid_lib.uuid4()))
+    uuid = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     sync_version = db.Column(db.Integer, default=1, nullable=False)
@@ -82,7 +82,7 @@ class SyncMixin:
     def before_insert(self):
         """Llamar antes de insertar"""
         if not self.uuid:
-            self.uuid = str(uuid_lib.uuid4())
+            self.uuid = str(uuid.uuid4())
     
     def before_update(self):
         """Llamar antes de actualizar"""
