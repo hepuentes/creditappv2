@@ -1,82 +1,86 @@
-<!-- Ruta: app/templates/offline.html -->
+<!-- app/templates/offline.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modo Offline - CreditApp</title>
+    <title>Sin Conexión - CreditApp</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <style>
         body {
-            background-color: #f5f5f5;
+            background-color: #f8f9fa;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         .offline-container {
-            max-width: 600px;
-            margin: 50px auto;
+            max-width: 90%;
+            margin: 40px auto;
+            padding: 20px;
         }
         .offline-card {
+            background-color: white;
             border-radius: 10px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.1);
             overflow: hidden;
         }
         .offline-header {
             background-color: #ffab00;
-            color: #fff;
+            color: white;
             padding: 20px;
             text-align: center;
         }
-        .offline-body {
-            padding: 30px;
-            background-color: #fff;
-        }
         .offline-icon {
             font-size: 60px;
-            margin-bottom: 20px;
+            margin: 20px 0;
             color: #ffab00;
             text-align: center;
         }
-        .offline-sync-status {
-            margin-top: 20px;
-            padding: 10px;
+        .offline-status {
+            padding: 15px;
             background-color: #f8f9fa;
             border-radius: 5px;
-            font-size: 14px;
+            margin: 20px 0;
         }
         .btn-reconnect {
             background-color: #007bff;
+            color: white;
             border: none;
             width: 100%;
-            padding: 12px;
-            border-radius: 5px;
-            color: white;
+            padding: 10px;
             font-weight: bold;
-            margin-top: 15px;
-        }
-        .btn-reconnect:hover {
-            background-color: #0069d9;
-        }
-        .navigation-links {
-            margin-top: 20px;
-        }
-        .navigation-links .link-card {
-            display: block;
-            padding: 15px;
-            background: #f8f9fa;
             border-radius: 5px;
+        }
+        .link-card {
+            display: block;
+            background: #f8f9fa;
+            padding: 15px;
             margin-bottom: 10px;
+            border-radius: 5px;
             text-decoration: none;
             color: #333;
             transition: all 0.2s ease;
         }
-        .navigation-links .link-card:hover {
+        .link-card:hover {
             background: #e9ecef;
             transform: translateY(-2px);
         }
-        .navigation-links .link-card i {
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
             margin-right: 10px;
-            color: #007bff;
+        }
+        .badge-online {
+            background-color: #28a745;
+            color: white;
+        }
+        .badge-offline {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        .pending-count {
+            font-weight: bold;
         }
     </style>
 </head>
@@ -84,37 +88,37 @@
     <div class="offline-container">
         <div class="offline-card">
             <div class="offline-header">
-                <h2><i class="fas fa-wifi-slash"></i> Modo Offline</h2>
+                <h2><i class="fas fa-wifi-slash"></i> Modo Sin Conexión</h2>
             </div>
-            <div class="offline-body">
+            <div class="p-4">
                 <div class="offline-icon">
                     <i class="fas fa-signal-slash"></i>
                 </div>
                 
-                <h3 class="text-center mb-4">Sin conexión a internet</h3>
+                <h3 class="text-center mb-4">No hay conexión a internet</h3>
                 
                 <p class="lead text-center">
-                    Estás trabajando en modo sin conexión. Puedes seguir usando la aplicación
-                    con funcionalidades limitadas.
+                    Puedes seguir trabajando en modo offline con funcionalidades limitadas.
+                    Los cambios se sincronizarán automáticamente cuando vuelvas a tener conexión.
                 </p>
                 
-                <div class="offline-sync-status">
+                <div class="offline-status">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <span class="status-indicator status-offline"></span>
-                            <span>Estado: Sin conexión</span>
+                            <span id="connection-indicator" class="status-badge badge-offline">Sin conexión</span>
+                            <span>Estado de red</span>
                         </div>
                         <div>
-                            Cambios pendientes: <span id="pending-count">0</span>
+                            Cambios pendientes: <span class="pending-count">0</span>
                         </div>
                     </div>
                 </div>
                 
-                <button id="try-reconnect" class="btn btn-reconnect mt-3">
+                <button id="try-reconnect" class="btn-reconnect mt-3">
                     <i class="fas fa-sync-alt"></i> Intentar Reconectar
                 </button>
                 
-                <h4 class="mt-4">Navegación disponible offline</h4>
+                <h4 class="mt-4 mb-3">Navegación Disponible Sin Conexión</h4>
                 <div class="navigation-links">
                     <a href="/dashboard" class="link-card">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
@@ -135,59 +139,63 @@
                         <i class="fas fa-money-bill-wave"></i> Abonos
                     </a>
                 </div>
-                
-                <div id="offline-status" class="mt-3"></div>
             </div>
         </div>
     </div>
 
+    <script src="{{ url_for('static', filename='js/pwa-helper.js') }}"></script>
     <script>
-        // Manejo de reconexión
+        // Manejar reconexión
         document.getElementById('try-reconnect').addEventListener('click', function() {
-            document.getElementById('offline-status').innerHTML = '<div class="alert alert-info">Intentando reconectar...</div>';
+            const statusElement = document.getElementById('connection-indicator');
+            statusElement.textContent = 'Verificando...';
             
             // Comprobar conexión
             if (navigator.onLine) {
-                document.getElementById('offline-status').innerHTML = '<div class="alert alert-success">¡Conexión restaurada! Redirigiendo...</div>';
+                statusElement.className = 'status-badge badge-online';
+                statusElement.textContent = 'En línea';
+                
+                // Mostrar mensaje de redirección
+                alert('¡Conexión restablecida! Redireccionando al dashboard...');
+                
+                // Redireccionar
                 setTimeout(() => {
                     window.location.href = '/dashboard';
-                }, 1500);
+                }, 1000);
             } else {
-                document.getElementById('offline-status').innerHTML = '<div class="alert alert-warning">Todavía sin conexión. Intente activar sus datos móviles o WiFi.</div>';
+                statusElement.className = 'status-badge badge-offline';
+                statusElement.textContent = 'Sin conexión';
+                alert('Todavía sin conexión. Activa tus datos móviles o conéctate a una red WiFi.');
             }
         });
         
-        // Evento de reconexión
+        // Detectar cambios en la conexión
         window.addEventListener('online', function() {
-            document.getElementById('offline-status').innerHTML = '<div class="alert alert-success">¡Conexión restaurada! Redirigiendo...</div>';
+            const statusElement = document.getElementById('connection-indicator');
+            statusElement.className = 'status-badge badge-online';
+            statusElement.textContent = 'En línea';
+            
+            // Mostrar mensaje de redirección
+            alert('¡Conexión restablecida! Redireccionando al dashboard...');
+            
+            // Redireccionar
             setTimeout(() => {
                 window.location.href = '/dashboard';
-            }, 1500);
+            }, 1000);
         });
-
-        // Actualizar contador de cambios pendientes
-        async function updatePendingCount() {
-            try {
-                if (window.indexedDB) {
-                    const request = indexedDB.open('CreditAppOfflineDB', 1);
-                    request.onsuccess = function(event) {
-                        const db = event.target.result;
-                        const transaction = db.transaction(['pendingChanges'], 'readonly');
-                        const store = transaction.objectStore('pendingChanges');
-                        const countRequest = store.count();
-                        countRequest.onsuccess = function() {
-                            document.getElementById('pending-count').textContent = countRequest.result;
-                        };
-                    };
-                }
-            } catch (err) {
-                console.error("Error al actualizar contador de cambios pendientes:", err);
-            }
-        }
         
-        // Inicializar al cargar
-        document.addEventListener('DOMContentLoaded', function() {
-            updatePendingCount();
+        // Actualizar contador de formularios pendientes
+        document.addEventListener('DOMContentLoaded', async function() {
+            if (window.offlineDB) {
+                try {
+                    const count = await window.offlineDB.countPendingForms();
+                    document.querySelectorAll('.pending-count').forEach(el => {
+                        el.textContent = count.toString();
+                    });
+                } catch (error) {
+                    console.error('Error al cargar contador de formularios pendientes:', error);
+                }
+            }
         });
     </script>
 </body>
