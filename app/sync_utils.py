@@ -111,3 +111,9 @@ def track_changes(f):
         return result
     
     return decorated_function
+
+#  función para generar UUID
+def generar_uuid():
+    """Genera un UUID versión 4 como string"""
+    import uuid
+    return str(uuid.uuid4())
