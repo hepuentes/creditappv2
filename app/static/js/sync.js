@@ -606,3 +606,174 @@ window.addEventListener('online', () => {
     syncOfflineChanges().catch(console.error);
   }, 2000);
 });
+
+// Función mejorada para manejar el envío de cambios pendientes al servidor
+async function syncOfflineChanges() {
+  if (!isOnline() || !window.db) {
+    console.log('No se puede sincronizar: sin conexión o sin DB');
+    return { success: false, reason: 'offline' };
+  }
+  
+  try {
+    // Obtener cambios pendientes
+    const pendingChanges = await window.db.getPendingChanges();
+    if (!pendingChanges || pendingChanges.length === 0) {
+      console.log('No hay cambios pendientes para sincronizar');
+      return { success: true, count: 0 };
+    }
+    
+    // Obtener token de autenticación
+    const authData = await window.db.getAuthData();
+    if (!authData || !authData.token) {
+      console.error('No hay token de autenticación disponible');
+      return { success: false, reason: 'no-auth' };
+    }
+    
+    // Agrupar cambios por lotes de 10
+    const batches = [];
+    for (let i = 0; i < pendingChanges.length; i += 10) {
+      batches.push(pendingChanges.slice(i, i + 10));
+    }
+    
+    let syncedChanges = [];
+    let errors = [];
+    
+    // Procesar cada lote
+    for (const batch of batches) {
+      try {
+        const response = await fetch('/api/v1/sync/push', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authData.token}`
+          },
+          body: JSON.stringify({
+            changes: batch,
+            device_timestamp: new Date().toISOString()
+          })
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Error en sincronización (${response.status}): ${errorText}`);
+          errors.push({
+            status: response.status,
+            text: errorText,
+            batch: batch.length
+          });
+          continue;
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          const uuidsToDelete = batch.map(change => change.uuid);
+          syncedChanges = [...syncedChanges, ...uuidsToDelete];
+        } else {
+          errors.push({
+            message: data.error || 'Error desconocido',
+            batch: batch.length
+          });
+        }
+      } catch (error) {
+        console.error('Error procesando lote:', error);
+        errors.push({
+          message: error.message,
+          batch: batch.length
+        });
+      }
+    }
+    
+    // Eliminar cambios sincronizados correctamente
+    if (syncedChanges.length > 0) {
+      await window.db.deletePendingChanges(syncedChanges);
+      
+      // Actualizar contador
+      if (window.db.countPendingChanges) {
+        const remainingCount = await window.db.countPendingChanges();
+        const countElements = document.querySelectorAll('#pending-count');
+        countElements.forEach(el => {
+          el.textContent = remainingCount;
+        });
+      }
+      
+      // Mostrar notificación
+      showSyncNotification(syncedChanges.length, errors.length);
+    }
+    
+    return {
+      success: true,
+      syncedCount: syncedChanges.length,
+      errorCount: errors.length,
+      errors: errors
+    };
+  } catch (error) {
+    console.error('Error general en sincronización:', error);
+    return {
+      success: false,
+      reason: 'error',
+      message: error.message
+    };
+  }
+}
+
+// Mostrar notificación de sincronización
+function showSyncNotification(syncedCount, errorCount) {
+  if (syncedCount === 0 && errorCount === 0) return;
+  
+  const notification = document.createElement('div');
+  notification.className = 'toast align-items-center text-white bg-primary border-0';
+  notification.setAttribute('role', 'alert');
+  notification.setAttribute('aria-live', 'assertive');
+  notification.setAttribute('aria-atomic', 'true');
+  notification.style.position = 'fixed';
+  notification.style.bottom = '20px';
+  notification.style.right = '20px';
+  notification.style.zIndex = '9999';
+  
+  let message = '';
+  if (syncedCount > 0 && errorCount === 0) {
+    message = `✅ ${syncedCount} cambios sincronizados correctamente`;
+    notification.className = 'toast align-items-center text-white bg-success border-0';
+  } else if (syncedCount > 0 && errorCount > 0) {
+    message = `⚠️ ${syncedCount} sincronizados, ${errorCount} con errores`;
+    notification.className = 'toast align-items-center text-white bg-warning border-0';
+  } else {
+    message = `❌ Error al sincronizar ${errorCount} cambios`;
+    notification.className = 'toast align-items-center text-white bg-danger border-0';
+  }
+  
+  notification.innerHTML = `
+    <div class="d-flex">
+      <div class="toast-body">
+        ${message}
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // Inicializar el toast con Bootstrap
+  const toast = new bootstrap.Toast(notification, { autohide: true, delay: 5000 });
+  toast.show();
+  
+  // Eliminar del DOM después de ocultarse
+  notification.addEventListener('hidden.bs.toast', function() {
+    notification.remove();
+  });
+}
+
+// Añadir función al objeto global
+if (window.sync) {
+  window.sync.syncOfflineChanges = syncOfflineChanges;
+} else {
+  window.sync = { syncOfflineChanges };
+}
+
+// Ejecutar sincronización cuando volvemos a estar online
+window.addEventListener('online', () => {
+  setTimeout(() => {
+    syncOfflineChanges().catch(console.error);
+  }, 2000);
+});
