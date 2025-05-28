@@ -509,3 +509,77 @@ body.sidebar-collapsed #content {
    margin-left: 0;
    margin-right: 0;
 }
+
+/* Forzar visibilidad del menú en modo PWA */
+@media (max-width: 767.98px) {
+  /* En móvil/PWA, hacer el sidebar más accesible */
+  .sidebar {
+    z-index: 1080 !important; /* Mayor que el navbar */
+    transition: transform 0.3s ease-in-out;
+    transform: translateX(-100%);
+  }
+  
+  .sidebar.show {
+    transform: translateX(0) !important;
+    margin-left: 0 !important;
+  }
+  
+  /* Overlay mejorado para móvil */
+  body.sidebar-open::before {
+    z-index: 1070;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+  
+  /* Botón hamburguesa siempre visible */
+  #sidebarCollapseContent {
+    position: relative;
+    z-index: 1090;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  }
+}
+
+/* Modo offline - indicador visual */
+body.offline-mode {
+  border-top: 3px solid #ffc107;
+}
+
+/* Mejoras de rendimiento */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Prevenir scroll horizontal en móvil */
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+/* Hacer clicables los elementos del menú más grandes en móvil */
+.sidebar ul li a {
+  padding: 15px 20px;
+  touch-action: manipulation;
+}
+
+/* Indicador de modo offline */
+.offline-indicator {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  background: #ffc107;
+  color: #000;
+  padding: 10px 15px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  z-index: 9999;
+  display: none;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+body.offline-mode .offline-indicator {
+  display: block;
+}
