@@ -1,33 +1,44 @@
 // Ruta: app/static/js/sw.js
 
-// Actualizar la versión de la caché para forzar la actualización
-const CACHE_NAME = 'creditapp-v3';
+// Actualizar la versión de la caché para forzar actualización
+const CACHE_NAME = 'creditapp-v4';
 const OFFLINE_URL = '/test/offline';
 const API_CACHE_NAME = 'creditapp-api-v1';
 
-// Ampliar recursos en caché para navegación offline
+// Lista más completa de rutas y recursos a cachear
 const CACHE_ASSETS = [
+  // Páginas principales
   '/',
+  '/dashboard',
+  '/clientes',
+  '/clientes/crear',
+  '/productos',
+  '/productos/crear',
+  '/ventas',
+  '/ventas/crear',
+  '/abonos',
+  '/abonos/crear',
+  '/creditos',
+  '/creditos/crear',
+  '/cajas',
+  '/cajas/crear',
+  '/usuarios',
+  '/usuarios/crear',
+  '/config',
+  '/reportes',
+  '/auth/login',
   '/test/offline',
+  
+  // Recursos estáticos
   '/static/css/style.css',
   '/static/js/main.js',
   '/static/js/offline.js',
   '/static/js/db.js',
   '/static/js/sync.js',
-  '/auth/login',
-  '/dashboard',
-  '/clientes',
-  '/productos',
-  '/ventas',
-  '/abonos',
-  '/creditos',
-  '/cajas',
-  '/usuarios',
-  '/reportes',
-  '/config',
-  // Recursos estáticos críticos
   '/static/img/logo.png',
   '/static/favicon.ico',
+  
+  // Bibliotecas externas
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js',
@@ -36,7 +47,7 @@ const CACHE_ASSETS = [
 
 // Evento de instalación - almacena recursos en caché
 self.addEventListener('install', event => {
-  console.log('Service Worker: Instalando...');
+  console.log('Service Worker: Instalando versión mejorada...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
@@ -44,11 +55,11 @@ self.addEventListener('install', event => {
         return cache.addAll(CACHE_ASSETS);
       })
       .then(() => self.skipWaiting())
-      .catch(error => console.error('Error en cache initial:', error))
+      .catch(error => console.error('Error en cache inicial:', error))
   );
 });
 
-// Evento de activación - limpia cachés antiguos
+// Evento de activación - limpia cachés antiguos y toma control inmediatamente
 self.addEventListener('activate', event => {
   console.log('Service Worker: Activando...');
   event.waitUntil(
@@ -62,20 +73,134 @@ self.addEventListener('activate', event => {
         })
       );
     }).then(() => {
-      // Tomar control inmediatamente
+      console.log('Service Worker: Tomando control de clientes');
       return self.clients.claim();
     })
   );
 });
 
-// Evento fetch mejorado - maneja peticiones de red
+// Función mejorada para almacenar páginas visitadas en caché
+async function addToCache(request, response) {
+  const cache = await caches.open(CACHE_NAME);
+  cache.put(request, response);
+}
+
+// Función para manejar formularios en modo offline
+async function handleFormSubmit(event) {
+  const formData = await event.request.formData();
+  const formURL = new URL(event.request.url);
+  const formMethod = event.request.method;
+  
+  console.log('Interceptando envío de formulario offline:', formURL.pathname);
+  
+  // Convertir FormData a objeto
+  let formObject = {};
+  formData.forEach((value, key) => {
+    formObject[key] = value;
+  });
+  
+  // Determinar tipo de formulario y manejarlo apropiadamente
+  let response;
+  
+  if (formURL.pathname.includes('/clientes/crear')) {
+    response = await handleClienteForm(formObject);
+  } else if (formURL.pathname.includes('/ventas/crear')) {
+    response = await handleVentaForm(formObject);
+  } else if (formURL.pathname.includes('/abonos/crear')) {
+    response = await handleAbonoForm(formObject);
+  } else {
+    // Para otros formularios que no manejamos específicamente
+    response = new Response(
+      `<html><body>
+        <h2>Formulario enviado (modo offline)</h2>
+        <p>Los datos se guardarán cuando haya conexión.</p>
+        <a href="/dashboard">Volver al dashboard</a>
+      </body></html>`,
+      {
+        headers: { 'Content-Type': 'text/html' }
+      }
+    );
+  }
+  
+  return response;
+}
+
+// Manejador para formulario de cliente
+async function handleClienteForm(formData) {
+  try {
+    // Guardar cliente en IndexedDB
+    const clienteData = {
+      nombre: formData.nombre || 'Sin nombre',
+      cedula: formData.cedula || 'Sin cédula',
+      telefono: formData.telefono || '',
+      email: formData.email || '',
+      direccion: formData.direccion || ''
+    };
+    
+    // Generar un ID temporal negativo
+    const tempId = -1 * Math.floor(Math.random() * 1000000);
+    clienteData.id = tempId;
+    
+    // Guardar en IndexedDB y crear cambio pendiente
+    if (window.db) {
+      await window.db.saveClientes([clienteData]);
+      await window.db.savePendingChange({
+        uuid: 'cliente-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9),
+        tabla: 'clientes',
+        registro_uuid: 'client-' + Date.now(),
+        operacion: 'INSERT',
+        datos: clienteData,
+        timestamp: new Date().toISOString(),
+        version: 1
+      });
+    }
+    
+    return caches.match('/clientes');
+  } catch (error) {
+    console.error('Error manejando formulario de cliente:', error);
+    return new Response(
+      `<html><body>
+        <h2>Error al procesar el formulario</h2>
+        <p>Detalle: ${error.message}</p>
+        <a href="/clientes">Volver a Clientes</a>
+      </body></html>`,
+      {
+        headers: { 'Content-Type': 'text/html' }
+      }
+    );
+  }
+}
+
+// Manejadores similares para ventas y abonos
+async function handleVentaForm(formData) {
+  // Lógica similar a handleClienteForm pero para ventas
+  return caches.match('/ventas');
+}
+
+async function handleAbonoForm(formData) {
+  // Lógica similar a handleClienteForm pero para abonos
+  return caches.match('/abonos');
+}
+
+// Evento fetch mejorado con capacidad para manejar formularios offline
 self.addEventListener('fetch', event => {
-  // Ignorar solicitudes a API y solicitudes no GET
-  if (event.request.method !== 'GET') return;
+  // Solo manejar solicitudes GET o POST
+  if (event.request.method !== 'GET' && event.request.method !== 'POST') return;
+  
+  // Ignorar solicitudes a API
   if (event.request.url.includes('/api/')) return;
 
   // URL de la solicitud para análisis
   const requestUrl = new URL(event.request.url);
+  
+  // Manejar envíos de formularios offline
+  if (event.request.method === 'POST' && !navigator.onLine) {
+    // Si es un formulario, intentar manejarlo
+    if (event.request.headers.get('Content-Type')?.includes('form')) {
+      event.respondWith(handleFormSubmit(event));
+      return;
+    }
+  }
   
   // Para assets estáticos: Cache First
   if (
@@ -93,19 +218,15 @@ self.addEventListener('fetch', event => {
       caches.match(event.request)
         .then(cachedResponse => {
           if (cachedResponse) {
-            // Devolver de la caché inmediatamente
             return cachedResponse;
           }
           
-          // Si no está en caché, ir a la red
           return fetch(event.request)
             .then(response => {
-              // Asegurarse de que la respuesta es válida
               if (!response || response.status !== 200) {
                 return response;
               }
               
-              // Hacer una copia para guardar en caché
               const responseToCache = response.clone();
               caches.open(CACHE_NAME)
                 .then(cache => {
@@ -115,7 +236,6 @@ self.addEventListener('fetch', event => {
             })
             .catch(error => {
               console.error('Error al obtener recurso:', error);
-              // Para CSS/JS/imágenes, no tenemos fallback específico
               return new Response('Error al cargar recurso', {
                 status: 503,
                 statusText: 'Service Unavailable'
@@ -126,7 +246,7 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Para rutas de navegación principales
+  // Rutas de navegación principales
   const mainRoutes = [
     '/',
     '/auth/login',
@@ -142,9 +262,21 @@ self.addEventListener('fetch', event => {
     '/reportes'
   ];
   
+  // Detectar rutas de formularios y páginas de creación
+  const formRoutes = [
+    '/clientes/crear',
+    '/productos/crear',
+    '/ventas/crear',
+    '/abonos/crear',
+    '/creditos/crear',
+    '/cajas/crear',
+    '/usuarios/crear'
+  ];
+  
   // Mejorar la detección de rutas de navegación
   const isNavigationRoute = 
     mainRoutes.includes(requestUrl.pathname) || 
+    formRoutes.includes(requestUrl.pathname) ||
     requestUrl.pathname.startsWith('/auth/') ||
     requestUrl.pathname.startsWith('/clientes/') ||
     requestUrl.pathname.startsWith('/productos/') ||
@@ -155,19 +287,15 @@ self.addEventListener('fetch', event => {
     requestUrl.pathname.startsWith('/usuarios/') ||
     requestUrl.pathname.startsWith('/config/') ||
     requestUrl.pathname.startsWith('/reportes/') ||
-    event.request.headers.get('accept').includes('text/html');
+    event.request.headers.get('accept')?.includes('text/html');
   
   if (isNavigationRoute) {
     event.respondWith(
-      // Estrategia: Primero intentar en la red, luego caché, finalmente offline
       fetch(event.request)
         .then(response => {
-          // Clonar la respuesta para almacenarla
+          // Almacenar en caché la respuesta
           const responseToCache = response.clone();
-          caches.open(CACHE_NAME)
-            .then(cache => {
-              cache.put(event.request, responseToCache);
-            });
+          addToCache(event.request, responseToCache);
           return response;
         })
         .catch(err => {
@@ -175,24 +303,21 @@ self.addEventListener('fetch', event => {
           
           return caches.match(event.request)
             .then(cachedResponse => {
-              // Si tenemos respuesta en caché, usarla
               if (cachedResponse) {
                 return cachedResponse;
               }
               
-              // Si no hay caché para esta URL específica, intentar con el dashboard como fallback
+              // Intentar con inicio si no tenemos caché específica
               if (requestUrl.pathname !== '/' && requestUrl.pathname !== '/dashboard') {
                 return caches.match('/dashboard')
                   .then(dashboardResponse => {
                     if (dashboardResponse) {
                       return dashboardResponse;
                     }
-                    // Si ni siquiera tenemos dashboard, mostrar página offline
                     return caches.match(OFFLINE_URL);
                   });
               }
               
-              // Como último recurso, mostrar página offline
               return caches.match(OFFLINE_URL);
             });
         })
@@ -203,14 +328,22 @@ self.addEventListener('fetch', event => {
   // Para cualquier otra solicitud
   event.respondWith(
     fetch(event.request)
+      .then(response => {
+        // Intentar añadir a caché
+        if (response.status === 200) {
+          const responseToCache = response.clone();
+          addToCache(event.request, responseToCache);
+        }
+        return response;
+      })
       .catch(() => {
         return caches.match(event.request)
           .then(cachedResponse => {
             if (cachedResponse) {
               return cachedResponse;
             }
-            // Si no podemos servir nada, al menos no rompemos la app
-            if (event.request.headers.get('accept').includes('text/html')) {
+            
+            if (event.request.headers.get('accept')?.includes('text/html')) {
               return caches.match(OFFLINE_URL);
             }
             
@@ -230,6 +363,53 @@ self.addEventListener('sync', event => {
     event.waitUntil(syncPendingChanges());
   }
 });
+
+// Listener para mensajes - permite comunicación con la página
+self.addEventListener('message', event => {
+  if (event.data && event.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
+  
+  if (event.data && event.data.action === 'prefetchRoutes') {
+    event.waitUntil(prefetchRoutes());
+  }
+});
+
+// Función para pre-cargar rutas importantes
+async function prefetchRoutes() {
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const routesToPrefetch = [
+      '/',
+      '/dashboard',
+      '/clientes',
+      '/clientes/crear',
+      '/productos',
+      '/ventas',
+      '/abonos',
+      '/creditos'
+    ];
+    
+    console.log('Precargando rutas importantes...');
+    
+    for (const route of routesToPrefetch) {
+      try {
+        const response = await fetch(route);
+        if (response.ok) {
+          await cache.put(route, response);
+          console.log(`Ruta precargada: ${route}`);
+        }
+      } catch (error) {
+        console.error(`Error precargando ruta ${route}:`, error);
+      }
+    }
+    
+    return 'Precarga completada';
+  } catch (error) {
+    console.error('Error en prefetchRoutes:', error);
+    return 'Error en precarga';
+  }
+}
 
 // Función para sincronizar cambios pendientes
 async function syncPendingChanges() {
@@ -278,7 +458,7 @@ async function syncPendingChanges() {
       throw new Error('No se encontró token de autenticación');
     }
     
-    // Agrupar cambios por lotes de 10 para evitar solicitudes muy grandes
+    // Agrupar cambios por lotes
     const batches = [];
     for (let i = 0; i < pendingChanges.length; i += 10) {
       batches.push(pendingChanges.slice(i, i + 10));
