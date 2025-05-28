@@ -1,11 +1,11 @@
-<!-- app/templates/offline.html -->
+<!-- Ruta: app/templates/offline.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Modo Offline - CreditApp</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <style>
         body {
@@ -57,36 +57,26 @@
         .btn-reconnect:hover {
             background-color: #0069d9;
         }
-        .action-buttons {
-            margin-top: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .offline-features {
+        .navigation-links {
             margin-top: 20px;
         }
-        .feature-item {
+        .navigation-links .link-card {
+            display: block;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
             margin-bottom: 10px;
-            display: flex;
-            align-items: center;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.2s ease;
         }
-        .feature-item i {
+        .navigation-links .link-card:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
+        }
+        .navigation-links .link-card i {
             margin-right: 10px;
-            color: #28a745;
-        }
-        .status-indicator {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 5px;
-        }
-        .status-online {
-            background-color: #28a745;
-        }
-        .status-offline {
-            background-color: #dc3545;
+            color: #007bff;
         }
     </style>
 </head>
@@ -104,21 +94,9 @@
                 <h3 class="text-center mb-4">Sin conexión a internet</h3>
                 
                 <p class="lead text-center">
-                    Estás trabajando en modo sin conexión. Algunas funciones estarán limitadas, pero puedes seguir usando la aplicación.
+                    Estás trabajando en modo sin conexión. Puedes seguir usando la aplicación
+                    con funcionalidades limitadas.
                 </p>
-                
-                <div class="offline-features">
-                    <h5>Funciones disponibles offline:</h5>
-                    <div class="feature-item">
-                        <i class="fas fa-check-circle"></i> Ver datos previamente cargados
-                    </div>
-                    <div class="feature-item">
-                        <i class="fas fa-check-circle"></i> Crear nuevos clientes (se sincronizarán luego)
-                    </div>
-                    <div class="feature-item">
-                        <i class="fas fa-check-circle"></i> Registrar ventas offline
-                    </div>
-                </div>
                 
                 <div class="offline-sync-status">
                     <div class="d-flex justify-content-between align-items-center">
@@ -132,19 +110,30 @@
                     </div>
                 </div>
                 
-                <div class="action-buttons">
-                    <button id="try-reconnect" class="btn btn-reconnect">
-                        <i class="fas fa-sync-alt"></i> Intentar Reconectar
-                    </button>
-                    
-                    <div class="d-flex gap-2">
-                        <a href="/" class="btn btn-outline-secondary flex-grow-1">
-                            <i class="fas fa-home"></i> Inicio
-                        </a>
-                        <a href="/test/sync" class="btn btn-outline-info flex-grow-1">
-                            <i class="fas fa-database"></i> Ver Sincronización
-                        </a>
-                    </div>
+                <button id="try-reconnect" class="btn btn-reconnect mt-3">
+                    <i class="fas fa-sync-alt"></i> Intentar Reconectar
+                </button>
+                
+                <h4 class="mt-4">Navegación disponible offline</h4>
+                <div class="navigation-links">
+                    <a href="/dashboard" class="link-card">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                    <a href="/clientes" class="link-card">
+                        <i class="fas fa-users"></i> Clientes
+                    </a>
+                    <a href="/productos" class="link-card">
+                        <i class="fas fa-box"></i> Productos
+                    </a>
+                    <a href="/ventas" class="link-card">
+                        <i class="fas fa-shopping-cart"></i> Ventas
+                    </a>
+                    <a href="/creditos" class="link-card">
+                        <i class="fas fa-credit-card"></i> Créditos
+                    </a>
+                    <a href="/abonos" class="link-card">
+                        <i class="fas fa-money-bill-wave"></i> Abonos
+                    </a>
                 </div>
                 
                 <div id="offline-status" class="mt-3"></div>
@@ -152,8 +141,6 @@
         </div>
     </div>
 
-    <script src="/static/js/db.js"></script>
-    <script src="/static/js/offline.js"></script>
     <script>
         // Manejo de reconexión
         document.getElementById('try-reconnect').addEventListener('click', function() {
@@ -163,7 +150,7 @@
             if (navigator.onLine) {
                 document.getElementById('offline-status').innerHTML = '<div class="alert alert-success">¡Conexión restaurada! Redirigiendo...</div>';
                 setTimeout(() => {
-                    window.location.href = '/';
+                    window.location.href = '/dashboard';
                 }, 1500);
             } else {
                 document.getElementById('offline-status').innerHTML = '<div class="alert alert-warning">Todavía sin conexión. Intente activar sus datos móviles o WiFi.</div>';
@@ -174,8 +161,33 @@
         window.addEventListener('online', function() {
             document.getElementById('offline-status').innerHTML = '<div class="alert alert-success">¡Conexión restaurada! Redirigiendo...</div>';
             setTimeout(() => {
-                window.location.href = '/';
+                window.location.href = '/dashboard';
             }, 1500);
+        });
+
+        // Actualizar contador de cambios pendientes
+        async function updatePendingCount() {
+            try {
+                if (window.indexedDB) {
+                    const request = indexedDB.open('CreditAppOfflineDB', 1);
+                    request.onsuccess = function(event) {
+                        const db = event.target.result;
+                        const transaction = db.transaction(['pendingChanges'], 'readonly');
+                        const store = transaction.objectStore('pendingChanges');
+                        const countRequest = store.count();
+                        countRequest.onsuccess = function() {
+                            document.getElementById('pending-count').textContent = countRequest.result;
+                        };
+                    };
+                }
+            } catch (err) {
+                console.error("Error al actualizar contador de cambios pendientes:", err);
+            }
+        }
+        
+        // Inicializar al cargar
+        document.addEventListener('DOMContentLoaded', function() {
+            updatePendingCount();
         });
     </script>
 </body>
