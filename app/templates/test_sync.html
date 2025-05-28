@@ -143,7 +143,8 @@
         function log(message) {
             const logElement = document.getElementById('activityLog');
             const timestamp = new Date().toLocaleTimeString();
-            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.textContent += `[${timestamp}] ${message}
+`;
             logElement.scrollTop = logElement.scrollHeight;
         }
 
@@ -671,47 +672,46 @@
         }
 
         // Inicializar cuando el documento esté listo
-<script>
-    document.addEventListener('DOMContentLoaded', async function() {
-        // Configurar eventos de conexión
-        window.addEventListener('online', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Configurar eventos de conexión
+            window.addEventListener('online', function() {
+                updateConnectionStatus();
+                log('✓ Conexión a internet restaurada');
+            });
+            window.addEventListener('offline', function() {
+                updateConnectionStatus();
+                log('⚠️ Conexión a internet perdida');
+            });
+            // Inicializar estado
             updateConnectionStatus();
-            log('✓ Conexión a internet restaurada');
-        });
-        window.addEventListener('offline', function() {
-            updateConnectionStatus();
-            log('⚠️ Conexión a internet perdida');
-        });
-        // Inicializar estado
-        updateConnectionStatus();
-        // Inicializar IndexedDB y contador de cambios pendientes
-        if ('indexedDB' in window) {
-            try {
-                // Inicializar la base de datos
-                if (window.db && window.db.openDB) {
-                    await window.db.openDB();
-                    log('✓ Base de datos local inicializada');
-                    // Actualizar contador de cambios pendientes
-                    await updatePendingChangesCount();
+            // Inicializar IndexedDB y contador de cambios pendientes
+            if ('indexedDB' in window) {
+                try {
+                    // Inicializar la base de datos
+                    if (window.db && window.db.openDB) {
+                        await window.db.openDB();
+                        log('✓ Base de datos local inicializada');
+                        // Actualizar contador de cambios pendientes
+                        await updatePendingChangesCount();
+                    }
+                } catch (error) {
+                    log(`⚠️ Error al inicializar la base de datos local: ${error.message}`);
                 }
-            } catch (error) {
-                log(`⚠️ Error al inicializar la base de datos local: ${error.message}`);
+            } else {
+                log('⚠️ IndexedDB no está disponible en este navegador');
             }
-        } else {
-            log('⚠️ IndexedDB no está disponible en este navegador');
-        }
-        // Registrar Service Worker si está disponible
-        if ('serviceWorker' in navigator) {
-            try {
-                const registration = await navigator.serviceWorker.register('/static/js/sw.js');
-                log('✓ Service Worker registrado correctamente');
-            } catch (error) {
-                log(`⚠️ Error al registrar Service Worker: ${error.message}`);
+            // Registrar Service Worker si está disponible
+            if ('serviceWorker' in navigator) {
+                try {
+                    const registration = await navigator.serviceWorker.register('/static/js/sw.js');
+                    log('✓ Service Worker registrado correctamente');
+                } catch (error) {
+                    log(`⚠️ Error al registrar Service Worker: ${error.message}`);
+                }
+            } else {
+                log('⚠️ Service Worker no está disponible en este navegador');
             }
-        } else {
-            log('⚠️ Service Worker no está disponible en este navegador');
-        }
-    });
-</script>
+        });
+    </script>
 </body>
 </html>
