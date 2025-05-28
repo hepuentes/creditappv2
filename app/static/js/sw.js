@@ -1,9 +1,9 @@
-// Service Worker mejorado para navegación offline completa
-const CACHE_NAME = 'creditapp-v5';
+// app/static/js/sw.js
+const CACHE_NAME = 'creditapp-v6';
 const OFFLINE_URL = '/test/offline';
 const API_CACHE_NAME = 'creditapp-api-v1';
 
-// Lista completa de rutas y recursos a cachear
+// Lista ampliada de rutas y recursos a cachear
 const CACHE_ASSETS = [
   // Páginas principales
   '/',
@@ -76,19 +76,22 @@ self.addEventListener('activate', event => {
 
 // Evento fetch mejorado
 self.addEventListener('fetch', event => {
-  // Solo manejar solicitudes GET y POST
-  if (!['GET', 'POST'].includes(event.request.method)) return;
-  
-  // Ignorar API requests para sincronización
-  if (event.request.url.includes('/api/')) return;
-
-  const requestUrl = new URL(event.request.url);
-  
-  // Manejar formularios offline (POST)
-  if (event.request.method === 'POST' && !navigator.onLine) {
-    event.respondWith(handleOfflineFormSubmit(event));
+  // Manejar solicitudes API con credenciales
+  if (event.request.url.includes('/api/') && event.request.method === 'GET') {
+    event.respondWith(handleApiRequest(event.request));
     return;
   }
+
+  // Para formularios (POST, PUT, etc.)
+  if (event.request.method !== 'GET') {
+    if (!navigator.onLine) {
+      // Si estamos offline, capturar el formulario para procesamiento local
+      event.respondWith(handleOfflineFormSubmit(event));
+    }
+    return;
+  }
+  
+  const requestUrl = new URL(event.request.url);
   
   // Para assets estáticos: Cache First
   if (isStaticAsset(requestUrl)) {
@@ -121,6 +124,11 @@ self.addEventListener('fetch', event => {
               return cachedResponse;
             }
             
+            if (requestUrl.pathname.endsWith('/crear')) {
+              // Si es una página de creación, intentar servir la plantilla de formulario desde caché
+              return caches.match(new URL(requestUrl.pathname, requestUrl.origin));
+            }
+            
             if (event.request.headers.get('accept')?.includes('text/html')) {
               return caches.match(OFFLINE_URL);
             }
@@ -133,6 +141,40 @@ self.addEventListener('fetch', event => {
       })
   );
 });
+
+// Función para manejar peticiones a la API
+async function handleApiRequest(request) {
+  try {
+    // Primero intentar red, luego caché
+    const response = await fetch(request);
+    
+    // Cachear respuesta exitosa para uso offline
+    if (response.status === 200) {
+      const responseToCache = response.clone();
+      const cache = await caches.open(API_CACHE_NAME);
+      cache.put(request, responseToCache);
+    }
+    
+    return response;
+  } catch (error) {
+    console.log('Red no disponible para API, comprobando caché...');
+    
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    
+    // Respuesta predeterminada para API en modo offline
+    return new Response(JSON.stringify({
+      error: 'Sin conexión',
+      offline: true,
+      message: 'Servicio no disponible sin conexión'
+    }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
 
 // Funciones auxiliares
 function isStaticAsset(url) {
@@ -194,90 +236,166 @@ async function handleNavigationRequest(request) {
     
     return response;
   } catch (error) {
-    console.log('Network failed for navigation, checking cache...');
+    console.log('Red no disponible para navegación, comprobando caché...');
     
-    // Try exact match first
+    // Intentar coincidencia exacta primero
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       return cachedResponse;
     }
     
-    // Try dashboard fallback for app routes
+    // Para páginas de creación, intenta servir la plantilla desde caché
     const url = new URL(request.url);
-    if (url.pathname !== '/' && url.pathname !== '/dashboard') {
-      const dashboardResponse = await caches.match('/dashboard');
-      if (dashboardResponse) {
-        return dashboardResponse;
+    if (url.pathname.endsWith('/crear')) {
+      // Intentar obtener plantilla de creación desde caché
+      const basePathResponse = await caches.match(url.pathname);
+      if (basePathResponse) {
+        return basePathResponse;
       }
     }
     
-    // Final fallback to offline page
+    // Buscar respuesta para la ruta principal
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    if (pathParts.length > 0) {
+      const mainPath = '/' + pathParts[0];
+      const mainPathResponse = await caches.match(mainPath);
+      if (mainPathResponse) {
+        return mainPathResponse;
+      }
+    }
+    
+    // Último recurso: página offline
     return caches.match(OFFLINE_URL);
   }
 }
 
 async function handleOfflineFormSubmit(event) {
-  const formData = await event.request.formData();
-  const url = new URL(event.request.url);
-  
-  console.log('Manejando formulario offline:', url.pathname);
-  
-  // Crear respuesta de éxito temporal
-  const successResponse = new Response(
-    generateOfflineFormResponse(url.pathname),
-    {
-      status: 200,
-      headers: { 'Content-Type': 'text/html' }
-    }
-  );
-  
-  // Intentar guardar datos en IndexedDB
   try {
-    await saveFormDataOffline(url.pathname, formData);
+    // Clonar la solicitud para trabajar con ella
+    const request = event.request.clone();
+    const url = new URL(request.url);
+    
+    // Intentar extraer los datos del formulario
+    let formData;
+    try {
+      formData = await request.formData();
+    } catch (e) {
+      console.error("Error al extraer formData:", e);
+      // Si no podemos extraer formData, intentamos con el cuerpo JSON
+      try {
+        const contentType = request.headers.get('Content-Type');
+        if (contentType && contentType.includes('application/json')) {
+          const body = await request.json();
+          // Enviar mensaje al cliente para procesar este envío JSON
+          self.clients.matchAll().then(clients => {
+            clients.forEach(client => {
+              client.postMessage({
+                type: 'OFFLINE_FORM_JSON',
+                url: url.pathname,
+                method: request.method,
+                body: body,
+                timestamp: new Date().getTime()
+              });
+            });
+          });
+        }
+      } catch (jsonError) {
+        console.error("Error al procesar JSON:", jsonError);
+      }
+      
+      // Devolver respuesta de fallback
+      return createOfflineResponse(url.pathname);
+    }
+    
+    // Convertir FormData a objeto
+    const formObject = {};
+    formData.forEach((value, key) => {
+      // Manejar campos de archivo especialmente
+      if (value instanceof File) {
+        formObject[key] = {
+          type: 'file',
+          name: value.name,
+          size: value.size,
+          type: value.type
+        };
+        // No podemos almacenar el archivo completo en IndexedDB fácilmente
+        // Esta es una aproximación simplificada
+      } else {
+        formObject[key] = value;
+      }
+    });
+    
+    // Enviar mensaje al cliente para procesar este envío
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'OFFLINE_FORM_SUBMIT',
+          url: url.pathname,
+          method: request.method,
+          formData: formObject,
+          timestamp: new Date().getTime()
+        });
+      });
+    });
+    
+    // Crear una respuesta offline personalizada
+    return createOfflineResponse(url.pathname);
+    
   } catch (error) {
-    console.error('Error guardando formulario offline:', error);
+    console.error('Error en handleOfflineFormSubmit:', error);
+    return new Response('Error al procesar formulario offline', {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' }
+    });
   }
-  
-  return successResponse;
 }
 
-function generateOfflineFormResponse(pathname) {
+function createOfflineResponse(pathname) {
   let redirectPath = '/dashboard';
-  let message = 'Datos guardados offline';
+  let entityType = 'registro';
   
   if (pathname.includes('/clientes')) {
     redirectPath = '/clientes';
-    message = 'Cliente guardado offline';
+    entityType = 'cliente';
   } else if (pathname.includes('/productos')) {
     redirectPath = '/productos';
-    message = 'Producto guardado offline';
+    entityType = 'producto';
   } else if (pathname.includes('/ventas')) {
     redirectPath = '/ventas';
-    message = 'Venta guardada offline';
+    entityType = 'venta';
   } else if (pathname.includes('/abonos')) {
     redirectPath = '/abonos';
-    message = 'Abono guardado offline';
+    entityType = 'abono';
+  } else if (pathname.includes('/cajas')) {
+    redirectPath = '/cajas';
+    entityType = 'movimiento';
   }
   
-  return `
+  const htmlResponse = `
     <!DOCTYPE html>
     <html>
     <head>
       <title>Guardado Offline - CreditApp</title>
+      <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     </head>
     <body>
       <div class="container mt-5">
-        <div class="alert alert-warning text-center">
-          <h4><i class="fas fa-wifi-slash"></i> Modo Offline</h4>
-          <p>${message}. Se sincronizará cuando haya conexión.</p>
-          <button onclick="window.location.href='${redirectPath}'" class="btn btn-primary">
-            Continuar
-          </button>
+        <div class="alert alert-warning">
+          <h4 class="alert-heading"><i class="fas fa-wifi-slash"></i> Modo Offline</h4>
+          <p>Se ha guardado el ${entityType} localmente. Se sincronizará cuando se restablezca la conexión.</p>
+          <hr>
+          <p class="mb-0">
+            <button onclick="window.location.href='${redirectPath}'" class="btn btn-primary">
+              <i class="fas fa-arrow-left"></i> Volver a ${redirectPath.replace('/', '')}
+            </button>
+          </p>
         </div>
       </div>
       <script>
+        // Redirigir automáticamente después de 3 segundos
         setTimeout(() => {
           window.location.href = '${redirectPath}';
         }, 3000);
@@ -285,13 +403,37 @@ function generateOfflineFormResponse(pathname) {
     </body>
     </html>
   `;
+  
+  return new Response(htmlResponse, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html' }
+  });
 }
 
-async function saveFormDataOffline(pathname, formData) {
-  // Esta función se expandirá para guardar en IndexedDB
-  console.log('Guardando datos offline para:', pathname);
-  // Implementación de IndexedDB aquí
-}
+// Evento para escuchar mensajes del cliente
+self.addEventListener('message', event => {
+  if (event.data && event.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
+  
+  if (event.data && event.data.action === 'prefetchRoutes') {
+    // Precargar rutas importantes
+    caches.open(CACHE_NAME).then(cache => {
+      const urls = [
+        '/dashboard',
+        '/clientes',
+        '/clientes/crear',
+        '/productos',
+        '/ventas',
+        '/abonos',
+        '/creditos'
+      ];
+      cache.addAll(urls).then(() => {
+        console.log('Rutas precargadas con éxito');
+      });
+    });
+  }
+});
 
 // Sincronización en segundo plano
 self.addEventListener('sync', event => {
@@ -306,8 +448,27 @@ async function syncPendingChanges() {
   try {
     console.log('Ejecutando sincronización en segundo plano...');
     
-    // Obtener datos de IndexedDB y enviar al servidor
-    // Esta función se expandirá según la implementación específica
+    // Notificar a todos los clientes que comience la sincronización
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'SYNC_STARTED'
+        });
+      });
+    });
+    
+    // Esperamos 2 segundos para dar tiempo a los clientes
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Notificar a los clientes que la sincronización ha terminado
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'SYNC_COMPLETED',
+          timestamp: new Date().getTime()
+        });
+      });
+    });
     
     return true;
   } catch (error) {
