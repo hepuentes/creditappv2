@@ -1,9 +1,11 @@
-// app/static/js/sw.js
-const CACHE_NAME = 'creditapp-v2';
+// Ruta: app/static/js/sw.js
+
+// Actualizar la versión de la caché para forzar la actualización
+const CACHE_NAME = 'creditapp-v3';
 const OFFLINE_URL = '/test/offline';
 const API_CACHE_NAME = 'creditapp-api-v1';
 
-// Recursos que se almacenarán en caché durante la instalación
+// Ampliar recursos en caché para navegación offline
 const CACHE_ASSETS = [
   '/',
   '/test/offline',
@@ -13,15 +15,6 @@ const CACHE_ASSETS = [
   '/static/js/db.js',
   '/static/js/sync.js',
   '/auth/login',
-  // Recursos estáticos básicos
-  '/static/img/logo.png',
-  '/static/favicon.ico'
-];
-
-// Conjunto más amplio de rutas de la aplicación para caché
-const APP_ROUTES = [
-  '/',
-  '/auth/login',
   '/dashboard',
   '/clientes',
   '/productos',
@@ -30,33 +23,25 @@ const APP_ROUTES = [
   '/creditos',
   '/cajas',
   '/usuarios',
+  '/reportes',
   '/config',
-  '/reportes'
+  // Recursos estáticos críticos
+  '/static/img/logo.png',
+  '/static/favicon.ico',
+  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css',
+  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js',
+  'https://code.jquery.com/jquery-3.7.1.min.js'
 ];
 
 // Evento de instalación - almacena recursos en caché
 self.addEventListener('install', event => {
+  console.log('Service Worker: Instalando...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('Service Worker: Caching files');
-        // Primero cachear los assets básicos
-        return cache.addAll(CACHE_ASSETS)
-          .then(() => {
-            // Luego intentar cachear rutas de la aplicación
-            return Promise.allSettled(
-              APP_ROUTES.map(route => 
-                fetch(route, { credentials: 'same-origin' })
-                  .then(response => {
-                    if (response.ok) {
-                      return cache.put(route, response);
-                    }
-                    return Promise.resolve();
-                  })
-                  .catch(err => console.warn(`No se pudo cachear ${route}:`, err))
-              )
-            );
-          });
+        return cache.addAll(CACHE_ASSETS);
       })
       .then(() => self.skipWaiting())
       .catch(error => console.error('Error en cache initial:', error))
@@ -65,12 +50,13 @@ self.addEventListener('install', event => {
 
 // Evento de activación - limpia cachés antiguos
 self.addEventListener('activate', event => {
+  console.log('Service Worker: Activando...');
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cache => {
           if (cache !== CACHE_NAME && cache !== API_CACHE_NAME) {
-            console.log('Service Worker: Clearing old cache', cache);
+            console.log('Service Worker: Eliminando caché antigua', cache);
             return caches.delete(cache);
           }
         })
@@ -84,17 +70,12 @@ self.addEventListener('activate', event => {
 
 // Evento fetch mejorado - maneja peticiones de red
 self.addEventListener('fetch', event => {
-  // Solo manejar solicitudes GET
+  // Ignorar solicitudes a API y solicitudes no GET
   if (event.request.method !== 'GET') return;
+  if (event.request.url.includes('/api/')) return;
 
   // URL de la solicitud para análisis
   const requestUrl = new URL(event.request.url);
-
-  // Estrategia diferente para API
-  if (requestUrl.pathname.startsWith('/api/')) {
-    // Para API: intentar la red primero, sin caché
-    return;
-  }
   
   // Para assets estáticos: Cache First
   if (
@@ -103,7 +84,10 @@ self.addEventListener('fetch', event => {
     requestUrl.pathname.endsWith('.js') || 
     requestUrl.pathname.endsWith('.png') || 
     requestUrl.pathname.endsWith('.jpg') || 
-    requestUrl.pathname.endsWith('.ico')
+    requestUrl.pathname.endsWith('.ico') ||
+    event.request.url.includes('bootstrap') ||
+    event.request.url.includes('jquery') ||
+    event.request.url.includes('fontawesome')
   ) {
     event.respondWith(
       caches.match(event.request)
@@ -112,9 +96,15 @@ self.addEventListener('fetch', event => {
             // Devolver de la caché inmediatamente
             return cachedResponse;
           }
+          
           // Si no está en caché, ir a la red
           return fetch(event.request)
             .then(response => {
+              // Asegurarse de que la respuesta es válida
+              if (!response || response.status !== 200) {
+                return response;
+              }
+              
               // Hacer una copia para guardar en caché
               const responseToCache = response.clone();
               caches.open(CACHE_NAME)
@@ -122,29 +112,54 @@ self.addEventListener('fetch', event => {
                   cache.put(event.request, responseToCache);
                 });
               return response;
+            })
+            .catch(error => {
+              console.error('Error al obtener recurso:', error);
+              // Para CSS/JS/imágenes, no tenemos fallback específico
+              return new Response('Error al cargar recurso', {
+                status: 503,
+                statusText: 'Service Unavailable'
+              });
             });
         })
     );
     return;
   }
   
-  // Para HTML y navegación: Network First
-  if (
-    requestUrl.pathname === '/' || 
-    requestUrl.pathname.includes('/auth/') ||
-    requestUrl.pathname.includes('/dashboard') ||
-    requestUrl.pathname.includes('/clientes') ||
-    requestUrl.pathname.includes('/productos') ||
-    requestUrl.pathname.includes('/ventas') ||
-    requestUrl.pathname.includes('/abonos') ||
-    requestUrl.pathname.includes('/creditos') ||
-    requestUrl.pathname.includes('/cajas') ||
-    requestUrl.pathname.includes('/usuarios') ||
-    requestUrl.pathname.includes('/config') ||
-    requestUrl.pathname.includes('/reportes') ||
-    event.request.headers.get('accept').includes('text/html')
-  ) {
+  // Para rutas de navegación principales
+  const mainRoutes = [
+    '/',
+    '/auth/login',
+    '/dashboard',
+    '/clientes',
+    '/productos',
+    '/ventas',
+    '/abonos',
+    '/creditos',
+    '/cajas',
+    '/usuarios',
+    '/config',
+    '/reportes'
+  ];
+  
+  // Mejorar la detección de rutas de navegación
+  const isNavigationRoute = 
+    mainRoutes.includes(requestUrl.pathname) || 
+    requestUrl.pathname.startsWith('/auth/') ||
+    requestUrl.pathname.startsWith('/clientes/') ||
+    requestUrl.pathname.startsWith('/productos/') ||
+    requestUrl.pathname.startsWith('/ventas/') ||
+    requestUrl.pathname.startsWith('/abonos/') ||
+    requestUrl.pathname.startsWith('/creditos/') ||
+    requestUrl.pathname.startsWith('/cajas/') ||
+    requestUrl.pathname.startsWith('/usuarios/') ||
+    requestUrl.pathname.startsWith('/config/') ||
+    requestUrl.pathname.startsWith('/reportes/') ||
+    event.request.headers.get('accept').includes('text/html');
+  
+  if (isNavigationRoute) {
     event.respondWith(
+      // Estrategia: Primero intentar en la red, luego caché, finalmente offline
       fetch(event.request)
         .then(response => {
           // Clonar la respuesta para almacenarla
@@ -156,13 +171,28 @@ self.addEventListener('fetch', event => {
           return response;
         })
         .catch(err => {
-          // Si falla la red, intentar desde caché
+          console.log('Error en navegación, buscando en caché:', err);
+          
           return caches.match(event.request)
             .then(cachedResponse => {
+              // Si tenemos respuesta en caché, usarla
               if (cachedResponse) {
                 return cachedResponse;
               }
-              // Si no hay caché, mostrar página offline
+              
+              // Si no hay caché para esta URL específica, intentar con el dashboard como fallback
+              if (requestUrl.pathname !== '/' && requestUrl.pathname !== '/dashboard') {
+                return caches.match('/dashboard')
+                  .then(dashboardResponse => {
+                    if (dashboardResponse) {
+                      return dashboardResponse;
+                    }
+                    // Si ni siquiera tenemos dashboard, mostrar página offline
+                    return caches.match(OFFLINE_URL);
+                  });
+              }
+              
+              // Como último recurso, mostrar página offline
               return caches.match(OFFLINE_URL);
             });
         })
@@ -170,38 +200,21 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Para cualquier otra solicitud: intentar de caché, luego red
+  // Para cualquier otra solicitud
   event.respondWith(
-    caches.match(event.request)
-      .then(cachedResponse => {
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        
-        return fetch(event.request)
-          .then(response => {
-            // No cachear respuestas erróneas
-            if (!response || response.status !== 200) {
-              return response;
+    fetch(event.request)
+      .catch(() => {
+        return caches.match(event.request)
+          .then(cachedResponse => {
+            if (cachedResponse) {
+              return cachedResponse;
             }
-            
-            // Hacer una copia para guardar en caché
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                cache.put(event.request, responseToCache);
-              });
-              
-            return response;
-          })
-          .catch(() => {
-            // Si es una solicitud de HTML, mostrar página offline
+            // Si no podemos servir nada, al menos no rompemos la app
             if (event.request.headers.get('accept').includes('text/html')) {
               return caches.match(OFFLINE_URL);
             }
             
-            // Para otros recursos fallidos, devolver error básico
-            return new Response('Sin conexión', {
+            return new Response('Recurso no disponible sin conexión', {
               status: 503,
               statusText: 'Service Unavailable'
             });
