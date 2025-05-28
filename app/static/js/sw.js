@@ -1,5 +1,5 @@
 // app/static/js/sw.js
-const CACHE_NAME = 'creditapp-v1';
+const CACHE_NAME = 'creditapp-v2';
 const OFFLINE_URL = '/test/offline';
 const API_CACHE_NAME = 'creditapp-api-v1';
 
@@ -13,7 +13,25 @@ const CACHE_ASSETS = [
   '/static/js/db.js',
   '/static/js/sync.js',
   '/auth/login',
-  // Agrega más recursos según sea necesario
+  // Recursos estáticos básicos
+  '/static/img/logo.png',
+  '/static/favicon.ico'
+];
+
+// Conjunto más amplio de rutas de la aplicación para caché
+const APP_ROUTES = [
+  '/',
+  '/auth/login',
+  '/dashboard',
+  '/clientes',
+  '/productos',
+  '/ventas',
+  '/abonos',
+  '/creditos',
+  '/cajas',
+  '/usuarios',
+  '/config',
+  '/reportes'
 ];
 
 // Evento de instalación - almacena recursos en caché
@@ -22,7 +40,23 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('Service Worker: Caching files');
-        return cache.addAll(CACHE_ASSETS);
+        // Primero cachear los assets básicos
+        return cache.addAll(CACHE_ASSETS)
+          .then(() => {
+            // Luego intentar cachear rutas de la aplicación
+            return Promise.allSettled(
+              APP_ROUTES.map(route => 
+                fetch(route, { credentials: 'same-origin' })
+                  .then(response => {
+                    if (response.ok) {
+                      return cache.put(route, response);
+                    }
+                    return Promise.resolve();
+                  })
+                  .catch(err => console.warn(`No se pudo cachear ${route}:`, err))
+              )
+            );
+          });
       })
       .then(() => self.skipWaiting())
       .catch(error => console.error('Error en cache initial:', error))
@@ -41,43 +75,132 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    }).then(() => self.clients.claim())
+    }).then(() => {
+      // Tomar control inmediatamente
+      return self.clients.claim();
+    })
   );
 });
 
-// Evento fetch - maneja peticiones de red
+// Evento fetch mejorado - maneja peticiones de red
 self.addEventListener('fetch', event => {
-  // Ignoramos solicitudes a la API para manejo específico
-  if (event.request.url.includes('/api/v1/')) {
+  // Solo manejar solicitudes GET
+  if (event.request.method !== 'GET') return;
+
+  // URL de la solicitud para análisis
+  const requestUrl = new URL(event.request.url);
+
+  // Estrategia diferente para API
+  if (requestUrl.pathname.startsWith('/api/')) {
+    // Para API: intentar la red primero, sin caché
     return;
   }
-
+  
+  // Para assets estáticos: Cache First
+  if (
+    requestUrl.pathname.startsWith('/static/') || 
+    requestUrl.pathname.endsWith('.css') || 
+    requestUrl.pathname.endsWith('.js') || 
+    requestUrl.pathname.endsWith('.png') || 
+    requestUrl.pathname.endsWith('.jpg') || 
+    requestUrl.pathname.endsWith('.ico')
+  ) {
+    event.respondWith(
+      caches.match(event.request)
+        .then(cachedResponse => {
+          if (cachedResponse) {
+            // Devolver de la caché inmediatamente
+            return cachedResponse;
+          }
+          // Si no está en caché, ir a la red
+          return fetch(event.request)
+            .then(response => {
+              // Hacer una copia para guardar en caché
+              const responseToCache = response.clone();
+              caches.open(CACHE_NAME)
+                .then(cache => {
+                  cache.put(event.request, responseToCache);
+                });
+              return response;
+            });
+        })
+    );
+    return;
+  }
+  
+  // Para HTML y navegación: Network First
+  if (
+    requestUrl.pathname === '/' || 
+    requestUrl.pathname.includes('/auth/') ||
+    requestUrl.pathname.includes('/dashboard') ||
+    requestUrl.pathname.includes('/clientes') ||
+    requestUrl.pathname.includes('/productos') ||
+    requestUrl.pathname.includes('/ventas') ||
+    requestUrl.pathname.includes('/abonos') ||
+    requestUrl.pathname.includes('/creditos') ||
+    requestUrl.pathname.includes('/cajas') ||
+    requestUrl.pathname.includes('/usuarios') ||
+    requestUrl.pathname.includes('/config') ||
+    requestUrl.pathname.includes('/reportes') ||
+    event.request.headers.get('accept').includes('text/html')
+  ) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Clonar la respuesta para almacenarla
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME)
+            .then(cache => {
+              cache.put(event.request, responseToCache);
+            });
+          return response;
+        })
+        .catch(err => {
+          // Si falla la red, intentar desde caché
+          return caches.match(event.request)
+            .then(cachedResponse => {
+              if (cachedResponse) {
+                return cachedResponse;
+              }
+              // Si no hay caché, mostrar página offline
+              return caches.match(OFFLINE_URL);
+            });
+        })
+    );
+    return;
+  }
+  
+  // Para cualquier otra solicitud: intentar de caché, luego red
   event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        // Si es una solicitud exitosa, clonamos la respuesta para almacenarla
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME)
-          .then(cache => {
-            // Solo almacenamos en caché las solicitudes GET
-            if (event.request.method === 'GET') {
-              cache.put(event.request, responseClone);
+    caches.match(event.request)
+      .then(cachedResponse => {
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        
+        return fetch(event.request)
+          .then(response => {
+            // No cachear respuestas erróneas
+            if (!response || response.status !== 200) {
+              return response;
             }
-          });
-        return response;
-      })
-      .catch(() => {
-        // Si hay un error de red, intentamos devolver de la caché
-        return caches.match(event.request)
-          .then(cachedResponse => {
-            if (cachedResponse) {
-              return cachedResponse;
-            }
-            // Si no está en caché, devolvemos la página offline
+            
+            // Hacer una copia para guardar en caché
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME)
+              .then(cache => {
+                cache.put(event.request, responseToCache);
+              });
+              
+            return response;
+          })
+          .catch(() => {
+            // Si es una solicitud de HTML, mostrar página offline
             if (event.request.headers.get('accept').includes('text/html')) {
               return caches.match(OFFLINE_URL);
             }
-            // Para otros recursos, devolvemos un error básico
+            
+            // Para otros recursos fallidos, devolver error básico
             return new Response('Sin conexión', {
               status: 503,
               statusText: 'Service Unavailable'
