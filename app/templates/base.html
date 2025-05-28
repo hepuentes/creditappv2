@@ -167,7 +167,7 @@
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
                                     <a class="dropdown-item" href="{{ url_for('auth.logout') }}">
-                                        <i class="fas fa-sign-out-alt me-2"></i> Cerrar Sesión
+                                        <i class="fas fa-sign-out-alt me-2"></i> Cerrar Sessión
                                     </a>
                                 </li>
                             </ul>
@@ -207,5 +207,31 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     {% block extra_js %}{% endblock %}
+
+    <!-- Service Worker para soporte offline -->
+    <script>
+        // Registrar Service Worker para soporte offline
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/static/js/sw.js')
+                    .then(function(registration) {
+                        console.log('Service Worker registrado con éxito:', registration.scope);
+                        
+                        // Registrar para sincronización periódica si está disponible
+                        if ('sync' in registration) {
+                            navigator.serviceWorker.ready.then(function(registration) {
+                                registration.sync.register('sync-pending-changes')
+                                    .catch(function(error) {
+                                        console.error('Error al registrar sync:', error);
+                                    });
+                            });
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Error al registrar Service Worker:', error);
+                    });
+            });
+        }
+    </script>
 </body>
 </html>
