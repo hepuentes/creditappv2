@@ -14,6 +14,14 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
+    <!-- PWA meta y manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#007bff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="CreditApp">
+    <link rel="apple-touch-icon" href="/static/icon-192x192.png">
+
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -197,254 +205,50 @@
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- jQuery -->
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-
-    <!-- Custom JS -->
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-
+    <!-- Scripts PWA y personalizados -->
+    <script src="{{ url_for('static', filename='js/pwa-helper.js') }}"></script>
+    <script>
+      // Verificar estado de conexión mejorado
+      function updateNetworkStatus() {
+        const status = document.getElementById('network-status');
+        if (status) {
+          if (navigator.onLine) {
+            status.innerHTML = '<span class="badge bg-success">En línea</span>';
+            
+            // Si volvemos a estar online, intentar sincronizar
+            if (window.formSync) {
+              setTimeout(() => window.formSync.syncAll(), 2000);
+            }
+          } else {
+            status.innerHTML = '<span class="badge bg-warning">Sin conexión</span>';
+          }
+        }
+        
+        // Actualizar el estado del menú lateral en modo offline
+        if (!navigator.onLine) {
+          const sidebar = document.getElementById('sidebar');
+          if (sidebar) {
+            sidebar.classList.add('show');
+            sidebar.style.marginLeft = '0';
+          }
+        }
+      }
+      
+      // Eventos de conexión
+      window.addEventListener('online', updateNetworkStatus);
+      window.addEventListener('offline', updateNetworkStatus);
+      document.addEventListener('DOMContentLoaded', updateNetworkStatus);
+      
+      // Comprobar periódicamente el estado del menú en modo offline
+      setInterval(() => {
+        if (!navigator.onLine) {
+          const sidebar = document.getElementById('sidebar');
+          if (sidebar && !sidebar.classList.contains('show')) {
+            sidebar.classList.add('show');
+          }
+        }
+      }, 2000);
+    </script>
     {% block extra_js %}{% endblock %}
-
-    <!-- Service Worker para soporte offline -->
-    <script>
-        // Registrar Service Worker para soporte offline
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('/static/js/sw.js')
-                    .then(function(registration) {
-                        console.log('Service Worker registrado con éxito:', registration.scope);
-                        
-                        // Registrar para sincronización periódica si está disponible
-                        if ('sync' in registration) {
-                            navigator.serviceWorker.ready.then(function(registration) {
-                                registration.sync.register('sync-pending-changes')
-                                    .catch(function(error) {
-                                        console.error('Error al registrar sync:', error);
-                                    });
-                            });
-                        }
-                    })
-                    .catch(function(error) {
-                        console.error('Error al registrar Service Worker:', error);
-                    });
-            });
-        }
-
-        // Monitor de conexión mejorado
-        function updateOnlineStatus() {
-            const indicator = document.createElement('div');
-            indicator.id = 'offline-indicator';
-            
-            if (navigator.onLine) {
-                // Si estamos online, remover indicador si existe
-                const existingIndicator = document.getElementById('offline-indicator');
-                if (existingIndicator) {
-                    existingIndicator.remove();
-                }
-            } else {
-                // Si estamos offline, mostrar indicador
-                if (!document.getElementById('offline-indicator')) {
-                    indicator.style.position = 'fixed';
-                    indicator.style.bottom = '10px';
-                    indicator.style.right = '10px';
-                    indicator.style.backgroundColor = '#ffab00';
-                    indicator.style.color = 'white';
-                    indicator.style.padding = '10px 15px';
-                    indicator.style.borderRadius = '5px';
-                    indicator.style.zIndex = '9999';
-                    indicator.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
-                    indicator.innerHTML = '<i class="fas fa-wifi-slash"></i> Modo Offline';
-                    document.body.appendChild(indicator);
-                }
-            }
-        }
-
-        // Inicializar y configurar eventos
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-        document.addEventListener('DOMContentLoaded', updateOnlineStatus);
-    </script>
-
-    <!-- Scripts para el soporte offline -->
-    <script src="{{ url_for('static', filename='js/offline-forms.js') }}"></script>
-    
-    <!-- Service Worker para soporte offline -->
-    <script>
-        // Registrar Service Worker para soporte offline
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('/static/js/sw.js')
-                    .then(function(registration) {
-                        console.log('Service Worker registrado con éxito:', registration.scope);
-                        
-                        // Verificar si hay una nueva versión y actualizar
-                        if (registration.waiting) {
-                            registration.waiting.postMessage({action: 'skipWaiting'});
-                        }
-                        
-                        // Registrar para sincronización periódica
-                        if ('sync' in registration) {
-                            navigator.serviceWorker.ready.then(function(registration) {
-                                registration.sync.register('sync-pending-changes')
-                                    .catch(function(error) {
-                                        console.error('Error al registrar sync:', error);
-                                    });
-                            });
-                        }
-                    })
-                    .catch(function(error) {
-                        console.error('Error al registrar Service Worker:', error);
-                    });
-            });
-        }
-
-        // Monitor de conexión mejorado
-        function updateOnlineStatus() {
-            const indicator = document.createElement('div');
-            indicator.id = 'offline-indicator';
-            
-            if (navigator.onLine) {
-                // Si estamos online, remover indicador si existe
-                const existingIndicator = document.getElementById('offline-indicator');
-                if (existingIndicator) {
-                    existingIndicator.remove();
-                }
-                
-                // Asegurar que el sidebar esté visible en modo online si estaba oculto
-                const content = document.getElementById('content');
-                if (content) {
-                    content.style.width = '';
-                    content.style.marginLeft = '';
-                }
-            } else {
-                // Si estamos offline, mostrar indicador
-                if (!document.getElementById('offline-indicator')) {
-                    indicator.style.position = 'fixed';
-                    indicator.style.bottom = '10px';
-                    indicator.style.right = '10px';
-                    indicator.style.backgroundColor = '#ffab00';
-                    indicator.style.color = 'white';
-                    indicator.style.padding = '10px 15px';
-                    indicator.style.borderRadius = '5px';
-                    indicator.style.zIndex = '9999';
-                    indicator.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
-                    indicator.innerHTML = '<i class="fas fa-wifi-slash"></i> Modo Offline';
-                    document.body.appendChild(indicator);
-                }
-                
-                // Asegurar que el sidebar sea visible en modo offline
-                const sidebar = document.getElementById('sidebar');
-                if (sidebar && !sidebar.classList.contains('show')) {
-                    sidebar.classList.add('show');
-                }
-            }
-        }
-
-        // Inicializar y configurar eventos
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-        document.addEventListener('DOMContentLoaded', updateOnlineStatus);
-        
-        // Mantener visible el menú en modo offline
-        function ensureSidebarVisibility() {
-            if (!navigator.onLine) {
-                const sidebar = document.getElementById('sidebar');
-                if (sidebar) {
-                    sidebar.classList.add('show');
-                    sidebar.style.marginLeft = '0';
-                    
-                    // Forzar el sidebar a ser visible
-                    sidebar.style.position = 'fixed';
-                    sidebar.style.left = '0';
-                    sidebar.style.visibility = 'visible';
-                    sidebar.style.opacity = '1';
-                    
-                    // Ajustar el contenido
-                    const content = document.getElementById('content');
-                    if (content) {
-                        content.style.marginLeft = '250px';
-                    }
-                }
-            }
-        }
-        
-        // Comprobar visibilidad del sidebar periódicamente en modo offline
-        setInterval(function() {
-            if (!navigator.onLine) {
-                ensureSidebarVisibility();
-            }
-        }, 1000);
-    </script>
-    <script>
-// Navegación offline mejorada
-(function() {
-  // Interceptar clicks en enlaces cuando estamos offline
-  document.addEventListener('click', function(event) {
-    const target = event.target.closest('a');
-    if (!target) return;
-    
-    // Si estamos offline y es un enlace interno
-    if (!navigator.onLine && target.href && target.href.startsWith(window.location.origin)) {
-      event.preventDefault();
-      
-      const url = new URL(target.href);
-      const path = url.pathname;
-      
-      // Lista de rutas que funcionan offline
-      const offlineRoutes = [
-        '/dashboard', '/clientes', '/productos', '/ventas', 
-        '/abonos', '/creditos', '/cajas', '/usuarios', '/config',
-        '/reportes/comisiones', '/clientes/crear', '/productos/crear',
-        '/ventas/crear', '/abonos/crear'
-      ];
-      
-      // Verificar si la ruta es accesible offline
-      const isOfflineRoute = offlineRoutes.some(route => 
-        path === route || path.startsWith(route + '/')
-      );
-      
-      if (isOfflineRoute) {
-        // Navegar usando historia del navegador
-        history.pushState(null, '', target.href);
-        
-        // Recargar la página para que el Service Worker la maneje
-        window.location.reload();
-      } else {
-        // Mostrar mensaje de que la ruta no está disponible offline
-        showOfflineMessage();
-      }
-    }
-  });
-  
-  // Función para mostrar mensaje offline
-  function showOfflineMessage() {
-    const message = document.createElement('div');
-    message.className = 'alert alert-warning position-fixed top-0 start-50 translate-middle-x mt-3';
-    message.style.zIndex = '9999';
-    message.innerHTML = `
-      <i class="fas fa-wifi-slash"></i> Esta página no está disponible sin conexión
-      <button type="button" class="btn-close ms-2" onclick="this.parentElement.remove()"></button>
-    `;
-    document.body.appendChild(message);
-    
-    setTimeout(() => {
-      if (message.parentElement) {
-        message.remove();
-      }
-    }, 5000);
-  }
-  
-  // Manejar el botón atrás del navegador
-  window.addEventListener('popstate', function(event) {
-    if (!navigator.onLine) {
-      // Si estamos offline, recargar para que el SW maneje la ruta
-      window.location.reload();
-    }
-  });
-})();
-</script>
 </body>
 </html>
