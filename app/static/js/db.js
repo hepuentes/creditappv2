@@ -331,3 +331,93 @@ window.db = {
   countPendingChanges,
   saveVentas
 };
+
+// Función para guardar ventas localmente (para modo offline)
+async function saveLocalVenta(ventaData) {
+  try {
+    if (!ventaData || typeof ventaData !== 'object') {
+      console.warn("Datos de venta inválidos para guardar localmente");
+      return false;
+    }
+    
+    const db = await openDB();
+    const tx = db.transaction('ventas', 'readwrite');
+    const store = tx.objectStore('ventas');
+    
+    // Generar ID local temporal (negativo para evitar conflictos)
+    const tempId = -Math.floor(Math.random() * 1000000);
+    
+    // Asegurar estructura mínima para una venta
+    const venta = {
+      id: tempId,
+      tempId: true,
+      ...ventaData,
+      pendiente_sync: true,
+      offline_created: true,
+      timestamp: new Date().toISOString()
+    };
+    
+    await store.put(venta);
+    console.log("Venta guardada localmente:", venta);
+    
+    return tx.complete.then(() => tempId);
+  } catch (error) {
+    console.error("Error guardando venta localmente:", error);
+    throw error;
+  }
+}
+
+// Función para guardar cliente localmente
+async function saveLocalCliente(clienteData) {
+  try {
+    if (!clienteData || typeof clienteData !== 'object') {
+      console.warn("Datos de cliente inválidos");
+      return false;
+    }
+    
+    const db = await openDB();
+    const tx = db.transaction('clientes', 'readwrite');
+    const store = tx.objectStore('clientes');
+    
+    // Generar ID local temporal (negativo para evitar conflictos)
+    const tempId = -Math.floor(Math.random() * 1000000);
+    
+    // Estructura básica de cliente
+    const cliente = {
+      id: tempId,
+      tempId: true,
+      ...clienteData,
+      pendiente_sync: true,
+      offline_created: true,
+      timestamp: new Date().toISOString()
+    };
+    
+    await store.put(cliente);
+    console.log("Cliente guardado localmente:", cliente);
+    
+    return tx.complete.then(() => tempId);
+  } catch (error) {
+    console.error("Error guardando cliente localmente:", error);
+    throw error;
+  }
+}
+
+// Añadir estas funciones al objeto exportado
+window.db = {
+  openDB,
+  saveAuthData,
+  getAuthData,
+  savePendingChange,
+  getPendingChanges,
+  deletePendingChanges,
+  saveClientes,
+  getClientes,
+  searchClientes,
+  saveProductos,
+  getProductos,
+  searchProductos,
+  countPendingChanges,
+  saveVentas,
+  saveLocalVenta,
+  saveLocalCliente
+};
