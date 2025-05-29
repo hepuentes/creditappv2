@@ -291,6 +291,8 @@
         window.addEventListener('offline', updateOfflineIndicator);
         updateOfflineIndicator();
     </script>
+    
+    <script src="{{ url_for('static', filename='js/precache-urls.js') }}"></script>
 
     {% block extra_js %}{% endblock %}
 </body>
