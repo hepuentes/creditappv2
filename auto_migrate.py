@@ -429,3 +429,11 @@ with app.app_context():
     except Exception as e:
         logger.error(f"ERROR CRÍTICO en la migración: {e}")
         raise
+
+# PASO FINAL: Generar archivo de pre-cacheo
+logger.info("\n=== GENERANDO ARCHIVO DE PRE-CACHEO ===")
+try:
+    from precache_pages import precache_all_pages
+    precache_all_pages()
+except Exception as e:
+    logger.warning(f"No se pudo generar archivo de pre-cacheo: {e}")
