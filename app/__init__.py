@@ -52,6 +52,7 @@ def create_app():
             'favicon.ico',
             mimetype='image/vnd.microsoft.icon')
 
+    # Ruta para servir el service worker desde la raíz
     @app.route('/service-worker.js')
     def service_worker():
         return send_from_directory(app.static_folder, 'service-worker.js', mimetype='application/javascript')
