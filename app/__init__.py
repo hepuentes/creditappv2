@@ -51,6 +51,10 @@ def create_app():
             os.path.join(app.root_path, 'static'),
             'favicon.ico',
             mimetype='image/vnd.microsoft.icon')
+
+@app.route('/service-worker.js')
+    def service_worker():
+        return send_from_directory(app.static_folder, 'service-worker.js', mimetype='application/javascript')
     
     # Importar y registrar los blueprints
     from app.controllers.auth import auth_bp
