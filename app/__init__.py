@@ -52,7 +52,7 @@ def create_app():
             'favicon.ico',
             mimetype='image/vnd.microsoft.icon')
 
-@app.route('/service-worker.js')
+    @app.route('/service-worker.js')
     def service_worker():
         return send_from_directory(app.static_folder, 'service-worker.js', mimetype='application/javascript')
     
