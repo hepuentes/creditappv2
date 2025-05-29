@@ -1,50 +1,246 @@
 # app/api/sync_data.py
 from flask import jsonify, request, current_app
 from app import db
-from app.models import Cliente, Producto, Venta, DetalleVenta
+from app.models import Cliente, Producto, Venta, DetalleVenta, Usuario
 from app.api import api
-from flask_login import current_user
 from datetime import datetime
 import json
 import uuid
+import hashlib
+
+# Token simple para testing
+TEST_TOKEN = 'test-token-creditapp-2025'
 
 def require_api_auth(f):
-    """Versión simplificada del decorador para pruebas"""
+    """Decorador mejorado para autenticación API"""
     from functools import wraps
     
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        from flask import request
         token = request.headers.get('Authorization', '').replace('Bearer ', '')
         
         if not token:
             return jsonify({'error': 'Token no proporcionado'}), 401
         
-        # Simplificado para testing - asumimos token válido
-        # En producción debe verificar con la base de datos
-        dispositivo = type('obj', (object,), {
-            'usuario': current_user,
-            'usuario_id': current_user.id if current_user.is_authenticated else None
-        })
+        # Para desarrollo, aceptar token de prueba
+        if token == TEST_TOKEN:
+            # Crear objeto dispositivo simulado
+            dispositivo = type('obj', (object,), {
+                'id': 1,
+                'usuario_id': 1,
+                'usuario': Usuario.query.get(1)  # Usuario admin por defecto
+            })
+            kwargs['dispositivo'] = dispositivo
+            return f(*args, **kwargs)
         
-        # Pasar dispositivo a la función
-        kwargs['dispositivo'] = dispositivo
-        return f(*args, **kwargs)
+        # En producción, validar token real aquí
+        return jsonify({'error': 'Token inválido'}), 401
     
     return decorated_function
 
+@api.route('/sync/test-auth', methods=['GET'])
+@require_api_auth
+def test_auth(dispositivo=None):
+    """Endpoint para probar autenticación"""
+    return jsonify({
+        'success': True,
+        'message': 'Autenticación exitosa',
+        'usuario': dispositivo.usuario.nombre if dispositivo.usuario else 'Unknown'
+    }), 200
+
+@api.route('/sync/push', methods=['POST'])
+@require_api_auth
+def sync_push_improved(dispositivo=None):
+    """
+    Recibe cambios desde el cliente y los aplica
+    """
+    try:
+        data = request.get_json()
+        changes = data.get('changes', [])
+        
+        results = []
+        errors = []
+        
+        # Iniciar transacción
+        for change in changes:
+            try:
+                result = aplicar_cambio_mejorado(change, dispositivo)
+                results.append(result)
+            except Exception as e:
+                current_app.logger.error(f"Error aplicando cambio {change.get('uuid')}: {str(e)}")
+                errors.append({
+                    'uuid': change.get('uuid'),
+                    'error': str(e)
+                })
+                # No hacer rollback aquí para permitir cambios parciales
+        
+        # Solo hacer commit si hay cambios exitosos
+        if results and not all(r.get('status') == 'error' for r in results):
+            db.session.commit()
+            current_app.logger.info(f"Sincronizados {len(results)} cambios")
+        else:
+            db.session.rollback()
+        
+        return jsonify({
+            'success': True,
+            'results': results,
+            'errors': errors,
+            'message': f'{len(results)} cambios procesados, {len(errors)} errores'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error en sync push: {str(e)}")
+        return jsonify({'error': f'Error en sincronización: {str(e)}'}), 500
+
+def aplicar_cambio_mejorado(change, dispositivo):
+    """Aplica un cambio individual con mejor manejo de errores"""
+    tabla = change.get('tabla')
+    operacion = change.get('operacion')
+    datos = change.get('datos', {})
+    registro_uuid = change.get('registro_uuid')
+    
+    current_app.logger.info(f"Aplicando cambio: {operacion} en {tabla}")
+    
+    try:
+        if tabla == 'clientes' and operacion == 'INSERT':
+            # Verificar si ya existe por cédula
+            cedula = datos.get('cedula')
+            if cedula:
+                existe = Cliente.query.filter_by(cedula=cedula).first()
+                if existe:
+                    return {
+                        'uuid': change.get('uuid'),
+                        'status': 'duplicate',
+                        'message': f'Cliente con cédula {cedula} ya existe',
+                        'id': existe.id
+                    }
+            
+            # Crear nuevo cliente
+            cliente = Cliente(
+                nombre=datos.get('nombre'),
+                cedula=datos.get('cedula'),
+                telefono=datos.get('telefono'),
+                email=datos.get('email'),
+                direccion=datos.get('direccion')
+            )
+            
+            # Asignar UUID si viene en los datos
+            if registro_uuid and hasattr(cliente, 'uuid'):
+                cliente.uuid = registro_uuid
+            
+            db.session.add(cliente)
+            db.session.flush()  # Para obtener el ID
+            
+            return {
+                'uuid': change.get('uuid'),
+                'status': 'success',
+                'id': cliente.id,
+                'message': 'Cliente creado exitosamente'
+            }
+        
+        elif tabla == 'productos' and operacion == 'INSERT':
+            # Verificar si ya existe por código
+            codigo = datos.get('codigo')
+            if codigo:
+                existe = Producto.query.filter_by(codigo=codigo).first()
+                if existe:
+                    return {
+                        'uuid': change.get('uuid'),
+                        'status': 'duplicate',
+                        'message': f'Producto con código {codigo} ya existe',
+                        'id': existe.id
+                    }
+            
+            # Crear nuevo producto
+            producto = Producto(
+                codigo=datos.get('codigo'),
+                nombre=datos.get('nombre'),
+                descripcion=datos.get('descripcion'),
+                precio_compra=float(datos.get('precio_compra', 0)),
+                precio_venta=float(datos.get('precio_venta', 0)),
+                stock=int(datos.get('stock', 0)),
+                stock_minimo=int(datos.get('stock_minimo', 0)),
+                unidad=datos.get('unidad', 'UND')
+            )
+            
+            if registro_uuid and hasattr(producto, 'uuid'):
+                producto.uuid = registro_uuid
+            
+            db.session.add(producto)
+            db.session.flush()
+            
+            return {
+                'uuid': change.get('uuid'),
+                'status': 'success',
+                'id': producto.id,
+                'message': 'Producto creado exitosamente'
+            }
+        
+        elif tabla == 'ventas' and operacion == 'INSERT':
+            # Crear venta
+            venta = Venta(
+                cliente_id=int(datos.get('cliente_id')),
+                vendedor_id=dispositivo.usuario_id,
+                total=float(datos.get('total', 0)),
+                tipo=datos.get('tipo', 'contado'),
+                saldo_pendiente=float(datos.get('saldo_pendiente', 0)),
+                estado=datos.get('estado', 'pendiente')
+            )
+            
+            if registro_uuid and hasattr(venta, 'uuid'):
+                venta.uuid = registro_uuid
+            
+            db.session.add(venta)
+            db.session.flush()
+            
+            # Agregar detalles si vienen
+            detalles = datos.get('detalles', [])
+            for detalle in detalles:
+                detalle_venta = DetalleVenta(
+                    venta_id=venta.id,
+                    producto_id=int(detalle.get('producto_id')),
+                    cantidad=int(detalle.get('cantidad')),
+                    precio_unitario=float(detalle.get('precio_unitario')),
+                    subtotal=float(detalle.get('subtotal'))
+                )
+                db.session.add(detalle_venta)
+            
+            return {
+                'uuid': change.get('uuid'),
+                'status': 'success',
+                'id': venta.id,
+                'message': 'Venta creada exitosamente'
+            }
+        
+        else:
+            return {
+                'uuid': change.get('uuid'),
+                'status': 'not_implemented',
+                'message': f'Operación {operacion} en tabla {tabla} no implementada'
+            }
+            
+    except Exception as e:
+        current_app.logger.error(f"Error procesando cambio: {str(e)}")
+        return {
+            'uuid': change.get('uuid'),
+            'status': 'error',
+            'message': str(e)
+        }
+
+# Endpoints para obtener datos (para caché inicial)
 @api.route('/sync/clientes', methods=['GET'])
 @require_api_auth
 def sync_get_clientes(dispositivo=None):
-    """Obtiene lista de clientes para sincronización inicial"""
+    """Obtiene lista de clientes"""
     try:
-        # Obtener todos los clientes (simplificado para testing)
         clientes = Cliente.query.all()
         
         clientes_data = []
         for cliente in clientes:
             clientes_data.append({
                 'id': cliente.id,
+                'uuid': getattr(cliente, 'uuid', None),
                 'nombre': cliente.nombre,
                 'cedula': cliente.cedula,
                 'telefono': cliente.telefono or '',
@@ -61,27 +257,28 @@ def sync_get_clientes(dispositivo=None):
         
     except Exception as e:
         current_app.logger.error(f"Error obteniendo clientes: {str(e)}")
-        return jsonify({'error': f'Error obteniendo clientes: {str(e)}'}), 500
+        return jsonify({'error': str(e)}), 500
 
 @api.route('/sync/productos', methods=['GET'])
 @require_api_auth
 def sync_get_productos(dispositivo=None):
-    """Obtiene lista de productos para sincronización inicial"""
+    """Obtiene lista de productos"""
     try:
-        # Obtener productos con stock positivo
         productos = Producto.query.filter(Producto.stock > 0).all()
         
         productos_data = []
         for producto in productos:
             productos_data.append({
                 'id': producto.id,
+                'uuid': getattr(producto, 'uuid', None),
                 'codigo': producto.codigo,
                 'nombre': producto.nombre,
                 'descripcion': producto.descripcion or '',
                 'precio_compra': float(producto.precio_compra) if producto.precio_compra else 0,
                 'precio_venta': float(producto.precio_venta),
                 'stock': producto.stock,
-                'unidad': producto.unidad or ''
+                'stock_minimo': producto.stock_minimo,
+                'unidad': producto.unidad or 'UND'
             })
         
         return jsonify({
@@ -92,158 +289,4 @@ def sync_get_productos(dispositivo=None):
         
     except Exception as e:
         current_app.logger.error(f"Error obteniendo productos: {str(e)}")
-        return jsonify({'error': f'Error obteniendo productos: {str(e)}'}), 500
-
-@api.route('/sync/ventas', methods=['GET'])
-@require_api_auth
-def sync_get_ventas(dispositivo=None):
-    """Obtiene ventas del usuario para sincronización"""
-    try:
-        # Obtener ventas (limitar a 100 para evitar timeout)
-        ventas = Venta.query.order_by(Venta.fecha.desc()).limit(100).all()
-        
-        ventas_data = []
-        for venta in ventas:
-            # Incluir detalles de la venta
-            detalles = []
-            for detalle in venta.detalles:
-                detalles.append({
-                    'producto_id': detalle.producto_id,
-                    'cantidad': detalle.cantidad,
-                    'precio_unitario': float(detalle.precio_unitario),
-                    'subtotal': float(detalle.subtotal)
-                })
-            
-            ventas_data.append({
-                'id': venta.id,
-                'cliente_id': venta.cliente_id,
-                'vendedor_id': venta.vendedor_id,
-                'total': float(venta.total),
-                'tipo': venta.tipo,
-                'saldo_pendiente': float(venta.saldo_pendiente) if venta.saldo_pendiente else 0,
-                'estado': venta.estado,
-                'fecha': venta.fecha.isoformat(),
-                'detalles': detalles
-            })
-        
-        return jsonify({
-            'success': True,
-            'data': ventas_data,
-            'count': len(ventas_data)
-        }), 200
-        
-    except Exception as e:
-        current_app.logger.error(f"Error obteniendo ventas: {str(e)}")
-        return jsonify({'error': f'Error obteniendo ventas: {str(e)}'}), 500
-
-@api.route('/sync/push', methods=['POST'])
-@require_api_auth
-def sync_push_simple(dispositivo=None):
-    """Versión simplificada de sync/push que no requiere campos UUID ni triggers"""
-    try:
-        data = request.get_json()
-        changes = data.get('changes', [])
-        
-        response_status = []
-        
-        for change in changes:
-            try:
-                if change.get('tabla') == 'clientes' and change.get('operacion') == 'INSERT':
-                    cliente_data = change.get('datos', {})
-                    
-                    # Verificar si el cliente ya existe
-                    existing_cliente = Cliente.query.filter_by(cedula=cliente_data.get('cedula')).first()
-                    if existing_cliente:
-                        response_status.append({
-                            'uuid': change.get('uuid'),
-                            'status': 'error',
-                            'message': 'Cliente con esta cédula ya existe'
-                        })
-                        continue
-                    
-                    # Crear cliente manualmente sin depender de uuid
-                    nuevo_cliente = Cliente(
-                        nombre=cliente_data.get('nombre'),
-                        cedula=cliente_data.get('cedula'),
-                        telefono=cliente_data.get('telefono'),
-                        email=cliente_data.get('email'),
-                        direccion=cliente_data.get('direccion')
-                    )
-                    
-                    # Usar with session.no_autoflush para evitar errores de flush
-                    with db.session.no_autoflush:
-                        db.session.add(nuevo_cliente)
-                        db.session.flush()  # Asignar ID
-                    
-                    response_status.append({
-                        'uuid': change.get('uuid'),
-                        'status': 'success',
-                        'id': nuevo_cliente.id
-                    })
-                # Agregar más tipos de operaciones según necesidad
-                elif change.get('tabla') == 'clientes' and change.get('operacion') == 'UPDATE':
-                    cliente_data = change.get('datos', {})
-                    cliente_id = cliente_data.get('id')
-                    
-                    if cliente_id:
-                        cliente = Cliente.query.get(cliente_id)
-                        if cliente:
-                            # Actualizar campos
-                            if 'nombre' in cliente_data:
-                                cliente.nombre = cliente_data['nombre']
-                            if 'telefono' in cliente_data:
-                                cliente.telefono = cliente_data['telefono']
-                            if 'email' in cliente_data:
-                                cliente.email = cliente_data['email']
-                            if 'direccion' in cliente_data:
-                                cliente.direccion = cliente_data['direccion']
-                            
-                            response_status.append({
-                                'uuid': change.get('uuid'),
-                                'status': 'success',
-                                'id': cliente.id
-                            })
-                        else:
-                            response_status.append({
-                                'uuid': change.get('uuid'),
-                                'status': 'error',
-                                'message': 'Cliente no encontrado'
-                            })
-                    else:
-                        response_status.append({
-                            'uuid': change.get('uuid'),
-                            'status': 'error',
-                            'message': 'ID de cliente no especificado'
-                        })
-            except Exception as inner_e:
-                current_app.logger.error(f"Error procesando cambio: {str(inner_e)}")
-                response_status.append({
-                    'uuid': change.get('uuid'),
-                    'status': 'error',
-                    'message': str(inner_e)
-                })
-                db.session.rollback()
-        
-        # Commit después de procesar todos los cambios
-        try:
-            db.session.commit()
-        except Exception as commit_error:
-            current_app.logger.error(f"Error en commit: {str(commit_error)}")
-            db.session.rollback()
-            return jsonify({
-                'success': False,
-                'error': str(commit_error),
-                'results': response_status
-            }), 500
-        
-        return jsonify({
-            'success': True,
-            'message': 'Cambios procesados',
-            'results': response_status
-        }), 200
-        
-    except Exception as e:
-        current_app.logger.error(f"Error en sync push: {str(e)}")
-        # Asegurar rollback en caso de error
-        db.session.rollback()
-        return jsonify({'error': f'Error en sincronización: {str(e)}'}), 500
+        return jsonify({'error': str(e)}), 500
