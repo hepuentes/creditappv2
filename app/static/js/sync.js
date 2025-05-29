@@ -1,181 +1,114 @@
-// Gestor de sincronización para CreditApp
+// app/static/js/sync.js
 class SyncManager {
   constructor() {
     this.syncInProgress = false;
-    this.authToken = null;
-    this.baseURL = window.location.origin + '/api/v1';
   }
 
   async init() {
-    // Recuperar token de autenticación si existe
-    const authData = await window.db.getAuthData();
-    if (authData && authData.token) {
-      this.authToken = authData.token;
-    }
-
     // Escuchar mensajes del Service Worker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', event => {
-        if (event.data.type === 'OFFLINE_FORM_SAVED') {
-          // Guardar cambio en IndexedDB
-          window.db.savePendingChange(event.data.change);
-          this.updatePendingCount();
-        } else if (event.data.type === 'SYNC_REQUIRED') {
-          this.performSync();
+      navigator.serviceWorker.addEventListener('message', async (event) => {
+        if (event.data.type === 'SAVE_OFFLINE') {
+          await this.saveOfflineData(event.data.url, event.data.data);
+        } else if (event.data.type === 'SYNC_NOW') {
+          await this.syncAll();
         }
       });
     }
 
     // Sincronizar cuando volvemos online
     window.addEventListener('online', () => {
-      console.log('Conexión restaurada - iniciando sincronización');
-      setTimeout(() => this.performSync(), 2000);
+      console.log('Conexión restaurada');
+      setTimeout(() => this.syncAll(), 2000);
     });
 
-    // Actualizar contador inicial
-    this.updatePendingCount();
+    // Actualizar contador al iniciar
+    await this.updatePendingCount();
   }
 
-  async updatePendingCount() {
-    try {
-      const count = await window.db.countPendingChanges();
-      // Actualizar todos los elementos con el contador
-      document.querySelectorAll('#pending-count, .pending-count').forEach(el => {
-        el.textContent = count;
-      });
-      
-      // Mostrar/ocultar indicador
-      const indicators = document.querySelectorAll('.offline-indicator');
-      indicators.forEach(indicator => {
-        if (count > 0) {
-          indicator.style.display = 'block';
-        }
-      });
-    } catch (error) {
-      console.error('Error actualizando contador:', error);
-    }
+  async saveOfflineData(url, data) {
+    // Determinar tipo basado en la URL
+    let type = 'unknown';
+    if (url.includes('/clientes/crear')) type = 'cliente';
+    else if (url.includes('/productos/crear')) type = 'producto';
+    else if (url.includes('/ventas/crear')) type = 'venta';
+    else if (url.includes('/abonos/crear')) type = 'abono';
+
+    await window.db.saveOfflineData(type, url, data);
+    await this.updatePendingCount();
+    
+    // Mostrar notificación
+    this.showNotification(`${type} guardado localmente. Se sincronizará cuando haya conexión.`);
   }
 
-  async performSync() {
-    if (this.syncInProgress || !navigator.onLine) {
+  async syncAll() {
+    if (this.syncInProgress || !navigator.onLine) return;
+    
+    this.syncInProgress = true;
+    const pending = await window.db.getPendingChanges();
+    
+    if (pending.length === 0) {
+      this.syncInProgress = false;
       return;
     }
 
-    this.syncInProgress = true;
-    console.log('Iniciando sincronización...');
+    console.log(`Sincronizando ${pending.length} cambios...`);
+    let successCount = 0;
 
-    try {
-      // Obtener cambios pendientes
-      const pendingChanges = await window.db.getPendingChanges();
-      
-      if (pendingChanges.length === 0) {
-        console.log('No hay cambios pendientes');
-        this.syncInProgress = false;
-        return;
-      }
+    for (const item of pending) {
+      try {
+        // Enviar al servidor usando la ruta original
+        const response = await fetch(item.url, {
+          method: 'POST',
+          body: new URLSearchParams(item.data),
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          credentials: 'same-origin'
+        });
 
-      console.log(`Sincronizando ${pendingChanges.length} cambios...`);
-
-      // Verificar autenticación
-      if (!this.authToken) {
-        const authData = await window.db.getAuthData();
-        if (authData && authData.token) {
-          this.authToken = authData.token;
-        } else {
-          console.error('No hay token de autenticación');
-          this.showSyncError('No está autenticado. Inicie sesión para sincronizar.');
-          this.syncInProgress = false;
-          return;
+        if (response.ok) {
+          await window.db.markAsSynced(item.id);
+          successCount++;
         }
+      } catch (error) {
+        console.error('Error sincronizando:', error);
       }
+    }
 
-      // Enviar cambios al servidor
-      const response = await fetch(`${this.baseURL}/sync/push`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.authToken}`
-        },
-        body: JSON.stringify({
-          changes: pendingChanges,
-          device_timestamp: new Date().toISOString()
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        // Eliminar cambios sincronizados
-        const syncedUUIDs = pendingChanges.map(c => c.uuid);
-        await window.db.deletePendingChanges(syncedUUIDs);
-        
-        // Mostrar notificación de éxito
-        this.showSyncSuccess(pendingChanges.length);
-        
-        // Actualizar contador
-        this.updatePendingCount();
-        
-        // Recargar datos si estamos en una página de lista
-        if (window.location.pathname.includes('/clientes') ||
-            window.location.pathname.includes('/productos') ||
-            window.location.pathname.includes('/ventas')) {
-          setTimeout(() => window.location.reload(), 1500);
-        }
-      } else {
-        throw new Error(result.error || 'Error desconocido');
-      }
-
-    } catch (error) {
-      console.error('Error en sincronización:', error);
-      this.showSyncError(error.message);
-    } finally {
-      this.syncInProgress = false;
+    this.syncInProgress = false;
+    await this.updatePendingCount();
+    
+    if (successCount > 0) {
+      this.showNotification(`✅ ${successCount} cambios sincronizados exitosamente`);
+      // Recargar la página después de sincronizar
+      setTimeout(() => window.location.reload(), 1500);
     }
   }
 
-  showSyncSuccess(count) {
-    const alert = document.createElement('div');
-    alert.className = 'alert alert-success alert-dismissible fade show position-fixed';
-    alert.style.cssText = 'top: 70px; right: 20px; z-index: 9999; min-width: 300px;';
-    alert.innerHTML = `
-      <strong><i class="fas fa-check-circle"></i> Sincronización exitosa</strong>
-      <p class="mb-0">${count} registro(s) sincronizados correctamente.</p>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(alert);
-    
-    // Auto-cerrar después de 5 segundos
-    setTimeout(() => {
-      alert.remove();
-    }, 5000);
+  async updatePendingCount() {
+    const count = await window.db.countPendingChanges();
+    document.querySelectorAll('.pending-count').forEach(el => {
+      el.textContent = count;
+      el.style.display = count > 0 ? 'inline-block' : 'none';
+    });
   }
 
-  showSyncError(message) {
-    const alert = document.createElement('div');
-    alert.className = 'alert alert-danger alert-dismissible fade show position-fixed';
-    alert.style.cssText = 'top: 70px; right: 20px; z-index: 9999; min-width: 300px;';
-    alert.innerHTML = `
-      <strong><i class="fas fa-exclamation-circle"></i> Error de sincronización</strong>
-      <p class="mb-0">${message}</p>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  showNotification(message) {
+    const notification = document.createElement('div');
+    notification.className = 'alert alert-info position-fixed';
+    notification.style.cssText = 'top: 70px; right: 20px; z-index: 9999;';
+    notification.innerHTML = `
+      ${message}
+      <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
     `;
-    
-    document.body.appendChild(alert);
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 5000);
   }
 }
 
 // Inicializar cuando DOM esté listo
 document.addEventListener('DOMContentLoaded', async () => {
-  // Asegurar que db.js esté cargado
-  if (window.db) {
-    window.syncManager = new SyncManager();
-    await window.syncManager.init();
-  } else {
-    console.error('db.js no está cargado correctamente');
-  }
+  window.syncManager = new SyncManager();
+  await window.syncManager.init();
 });
