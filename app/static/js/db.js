@@ -1,215 +1,109 @@
-// Base de datos IndexedDB unificada para CreditApp
+// app/static/js/db.js
 class CreditAppDB {
   constructor() {
     this.dbName = 'CreditAppOffline';
-    this.version = 3;
+    this.version = 2;
     this.db = null;
   }
 
-  async openDB() {
-    return new Promise((resolve, reject) => {
-      if (this.db) {
-        resolve(this.db);
-        return;
-      }
+  async open() {
+    if (this.db) return this.db;
 
+    return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.version);
       
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         this.db = request.result;
-        console.log('IndexedDB abierta correctamente');
         resolve(this.db);
       };
       
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
         
-        // Store para cambios pendientes
-        if (!db.objectStoreNames.contains('pendingChanges')) {
-          const store = db.createObjectStore('pendingChanges', { 
-            keyPath: 'uuid',
-            autoIncrement: false 
-          });
-          store.createIndex('synced', 'synced', { unique: false });
-          store.createIndex('tabla', 'tabla', { unique: false });
+        // Eliminar stores antiguos si existen
+        if (db.objectStoreNames.contains('pendingChanges')) {
+          db.deleteObjectStore('pendingChanges');
         }
         
-        // Store para datos de autenticación
-        if (!db.objectStoreNames.contains('authData')) {
-          db.createObjectStore('authData', { keyPath: 'id' });
-        }
+        // Crear store para cambios pendientes
+        const pendingStore = db.createObjectStore('pendingChanges', { 
+          keyPath: 'id',
+          autoIncrement: true 
+        });
+        pendingStore.createIndex('synced', 'synced', { unique: false });
+        pendingStore.createIndex('type', 'type', { unique: false });
         
-        // Stores para cache de datos
-        const cacheStores = ['clientes', 'productos', 'ventas', 'abonos'];
-        cacheStores.forEach(storeName => {
-          if (!db.objectStoreNames.contains(storeName)) {
-            const store = db.createObjectStore(storeName, { keyPath: 'id' });
-            store.createIndex('uuid', 'uuid', { unique: true });
+        // Stores para caché
+        ['clientes', 'productos', 'ventas', 'abonos'].forEach(name => {
+          if (!db.objectStoreNames.contains(name)) {
+            db.createObjectStore(name, { keyPath: 'id' });
           }
         });
       };
     });
   }
 
-  generateUUID() {
-    return 'xxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  }
-
-  // Guardar cambio pendiente
-  async savePendingChange(change) {
-    const db = await this.openDB();
+  async saveOfflineData(type, url, data) {
+    const db = await this.open();
     const transaction = db.transaction(['pendingChanges'], 'readwrite');
     const store = transaction.objectStore('pendingChanges');
     
-    // Asegurar que tenga UUID
-    if (!change.uuid) {
-      change.uuid = this.generateUUID();
-    }
-    
-    change.synced = false;
-    change.createdAt = new Date().toISOString();
+    const record = {
+      type: type,
+      url: url,
+      data: data,
+      timestamp: new Date().toISOString(),
+      synced: 0  // Usar 0 en lugar de false
+    };
     
     return new Promise((resolve, reject) => {
-      const request = store.put(change);
-      request.onsuccess = () => resolve(change.uuid);
+      const request = store.add(record);
+      request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
   }
 
-  // Obtener cambios pendientes
   async getPendingChanges() {
-    const db = await this.openDB();
+    const db = await this.open();
     const transaction = db.transaction(['pendingChanges'], 'readonly');
     const store = transaction.objectStore('pendingChanges');
     const index = store.index('synced');
     
     return new Promise((resolve, reject) => {
-      const request = index.getAll(false);
+      const request = index.getAll(0);  // Buscar donde synced = 0
       request.onsuccess = () => resolve(request.result || []);
       request.onerror = () => reject(request.error);
     });
   }
 
-  // Contar cambios pendientes
   async countPendingChanges() {
-    const db = await this.openDB();
+    const db = await this.open();
     const transaction = db.transaction(['pendingChanges'], 'readonly');
     const store = transaction.objectStore('pendingChanges');
     const index = store.index('synced');
     
     return new Promise((resolve, reject) => {
-      const request = index.count(false);
+      const request = index.count(0);  // Contar donde synced = 0
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
   }
 
-  // Eliminar cambios sincronizados
-  async deletePendingChanges(uuids) {
-    const db = await this.openDB();
+  async markAsSynced(id) {
+    const db = await this.open();
     const transaction = db.transaction(['pendingChanges'], 'readwrite');
     const store = transaction.objectStore('pendingChanges');
     
-    const promises = uuids.map(uuid => {
-      return new Promise((resolve, reject) => {
-        const request = store.delete(uuid);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-    });
-    
-    return Promise.all(promises);
-  }
-
-  // Guardar datos de autenticación
-  async saveAuthData(authData) {
-    const db = await this.openDB();
-    const transaction = db.transaction(['authData'], 'readwrite');
-    const store = transaction.objectStore('authData');
-    
-    authData.id = 'current';
-    
-    return new Promise((resolve, reject) => {
-      const request = store.put(authData);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  // Obtener datos de autenticación
-  async getAuthData() {
-    const db = await this.openDB();
-    const transaction = db.transaction(['authData'], 'readonly');
-    const store = transaction.objectStore('authData');
-    
-    return new Promise((resolve, reject) => {
-      const request = store.get('current');
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  // Guardar datos en cache
-  async saveToCache(storeName, data) {
-    const db = await this.openDB();
-    
-    if (!db.objectStoreNames.contains(storeName)) {
-      console.warn(`Store ${storeName} no existe`);
-      return;
-    }
-    
-    const transaction = db.transaction([storeName], 'readwrite');
-    const store = transaction.objectStore(storeName);
-    
-    const promises = (Array.isArray(data) ? data : [data]).map(item => {
-      return new Promise((resolve, reject) => {
-        const request = store.put(item);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-    });
-    
-    return Promise.all(promises);
-  }
-
-  // Obtener datos del cache
-  async getFromCache(storeName) {
-    const db = await this.openDB();
-    
-    if (!db.objectStoreNames.contains(storeName)) {
-      return [];
-    }
-    
-    const transaction = db.transaction([storeName], 'readonly');
-    const store = transaction.objectStore(storeName);
-    
-    return new Promise((resolve, reject) => {
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  // Guardar clientes
-  async saveClientes(clientes) {
-    return this.saveToCache('clientes', clientes);
-  }
-
-  // Guardar productos
-  async saveProductos(productos) {
-    return this.saveToCache('productos', productos);
-  }
-
-  // Guardar ventas
-  async saveVentas(ventas) {
-    return this.saveToCache('ventas', ventas);
+    const request = store.get(id);
+    request.onsuccess = () => {
+      const data = request.result;
+      if (data) {
+        data.synced = 1;  // Usar 1 en lugar de true
+        store.put(data);
+      }
+    };
   }
 }
 
-// Instancia global
 window.db = new CreditAppDB();
