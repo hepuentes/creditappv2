@@ -222,67 +222,39 @@
     <script src="{{ url_for('static', filename='js/sync.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     
-    <script>
-        // Inicialización PWA y Service Worker
-        (function() {
-            // Detección de modo PWA
-            if (window.matchMedia('(display-mode: standalone)').matches || 
-                window.navigator.standalone === true) {
-                document.documentElement.classList.add('pwa-mode');
-            }
-            
-            // Registrar Service Worker
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', async () => {
-                    try {
-                        const reg = await navigator.serviceWorker.register('/static/js/sw.js', {
-                            scope: '/'
-                        });
-                        console.log('Service Worker registrado:', reg.scope);
-                        
-                        // Forzar actualización si hay nueva versión
-                        reg.update();
-                        
-                        // Escuchar actualizaciones
-                        reg.addEventListener('updatefound', () => {
-                            const newWorker = reg.installing;
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // Nueva versión disponible
-                                    console.log('Nueva versión del Service Worker disponible');
-                                    if (confirm('Hay una nueva versión disponible. ¿Desea actualizar?')) {
-                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
-                                        window.location.reload();
-                                    }
-                                }
-                            });
-                        });
-                    } catch (err) {
-                        console.error('Error registrando Service Worker:', err);
-                    }
-                });
-            }
-            
-            // Detectar estado offline inicial
-            function updateOfflineUI() {
-                document.body.classList.toggle('offline-mode', !navigator.onLine);
-            }
-            
-            updateOfflineUI();
-            window.addEventListener('online', updateOfflineUI);
-            window.addEventListener('offline', updateOfflineUI);
-            
-            // Intentar sincronizar al cargar si hay conexión
-            window.addEventListener('load', async () => {
-                if (navigator.onLine && window.syncManager) {
-                    // Esperar un poco para que todo se inicialice
-                    setTimeout(() => {
-                        window.syncManager.updatePendingCount();
-                    }, 1000);
-                }
+<script>
+// Registrar Service Worker
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', async () => {
+        try {
+            const registration = await navigator.serviceWorker.register('/service-worker.js', {
+                scope: '/'
             });
-        })();
-    </script>
+            console.log('Service Worker registrado exitosamente');
+            
+            // Registrar sync si está disponible
+            if ('sync' in registration) {
+                await registration.sync.register('sync-data');
+            }
+        } catch (error) {
+            console.error('Error registrando Service Worker:', error);
+        }
+    });
+}
+
+// Indicador de modo offline
+function updateOfflineIndicator() {
+    document.body.classList.toggle('offline-mode', !navigator.onLine);
+    const indicator = document.querySelector('.offline-indicator');
+    if (indicator) {
+        indicator.style.display = navigator.onLine ? 'none' : 'block';
+    }
+}
+
+window.addEventListener('online', updateOfflineIndicator);
+window.addEventListener('offline', updateOfflineIndicator);
+updateOfflineIndicator();
+</script>
     
     {% block extra_js %}{% endblock %}</body>
 </html>
