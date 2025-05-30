@@ -230,67 +230,81 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     <script>
-        // Registrar Service Worker con manejo mejorado
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', async () => {
-                try {
-                    // Primero registrar el Service Worker
-                    const registration = await navigator.serviceWorker.register('/static/service-worker.js', {
-                        scope: '/'
-                    });
-                    console.log('Service Worker registrado exitosamente:', registration.scope);
-
-                    // Esperar a que el SW esté activo antes de registrar sync
-                    if (registration.active) {
-                        console.log('Service Worker ya está activo');
-                        registerBackgroundSync(registration);
-                    } else {
-                        // Escuchar cuando se active
-                        navigator.serviceWorker.addEventListener('controllerchange', () => {
-                            console.log('Service Worker activado');
-                            registerBackgroundSync(registration);
-                        });
-                    }
-                } catch (error) {
-                    console.error('Error registrando Service Worker:', error);
-                }
+// Registrar Service Worker con manejo mejorado
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', async () => {
+        try {
+            // Registrar con la configuración correcta
+            const registration = await navigator.serviceWorker.register('/service-worker.js', {
+                scope: '/'
             });
-        }
-
-        // Función para registrar background sync
-        async function registerBackgroundSync(registration) {
+            
+            console.log('Service Worker registrado:', registration.scope);
+            
+            // Manejar actualizaciones
+            registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                console.log('Nuevo Service Worker encontrado');
+                
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        // Nuevo SW instalado, mostrar notificación
+                        if (confirm('Nueva versión disponible. ¿Actualizar ahora?')) {
+                            newWorker.postMessage({ type: 'SKIP_WAITING' });
+                            window.location.reload();
+                        }
+                    }
+                });
+            });
+            
+            // Registrar sync si está disponible
             if ('sync' in registration) {
                 try {
                     await registration.sync.register('sync-data');
                     console.log('Background sync registrado');
                 } catch (error) {
-                    console.error('Error registrando background sync:', error);
+                    console.log('Background sync no disponible:', error);
                 }
             }
-        }
-
-        // Indicador de modo offline mejorado
-        function updateOfflineIndicator() {
-            const isOffline = !navigator.onLine;
-            document.body.classList.toggle('offline-mode', isOffline);
             
-            const indicators = document.querySelectorAll('.offline-indicator');
-            indicators.forEach(indicator => {
-                indicator.style.display = isOffline ? 'block' : 'none';
-            });
-            
-            // Si volvemos online, intentar sincronizar
-            if (!isOffline && window.syncManager) {
-                setTimeout(() => {
-                    window.syncManager.syncAll();
-                }, 2000);
-            }
+        } catch (error) {
+            console.error('Error registrando Service Worker:', error);
         }
+    });
+}
 
-        window.addEventListener('online', updateOfflineIndicator);
-        window.addEventListener('offline', updateOfflineIndicator);
-        updateOfflineIndicator();
-    </script>
+// Mejorar indicador offline
+function updateOfflineIndicator() {
+    const isOffline = !navigator.onLine;
+    document.body.classList.toggle('offline-mode', isOffline);
+    
+    const indicators = document.querySelectorAll('.offline-indicator');
+    indicators.forEach(indicator => {
+        indicator.style.display = isOffline ? 'flex' : 'none';
+    });
+    
+    // Si volvemos online, sincronizar
+    if (!isOffline && window.syncManager) {
+        console.log('Conexión restaurada - sincronizando...');
+        setTimeout(() => {
+            window.syncManager.syncAll();
+        }, 2000);
+    }
+}
+
+window.addEventListener('online', () => {
+    console.log('Evento: online');
+    updateOfflineIndicator();
+});
+
+window.addEventListener('offline', () => {
+    console.log('Evento: offline');
+    updateOfflineIndicator();
+});
+
+// Verificar estado inicial
+document.addEventListener('DOMContentLoaded', updateOfflineIndicator);
+</script>
     
     <script src="{{ url_for('static', filename='js/precache-urls.js') }}"></script>
 
