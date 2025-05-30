@@ -218,8 +218,16 @@ class SyncManager {
     console.log('Iniciando caché de datos...');
     
     try {
-      // Cachear páginas HTML principales
-      const pagesToCache = ['/dashboard', '/clientes', '/productos', '/ventas', '/abonos'];
+      // Cachear páginas HTML principales - CORREGIDO
+      const pagesToCache = [
+        '/',  // Cambiar /dashboard por / que es la ruta real
+        '/clientes', 
+        '/productos', 
+        '/ventas', 
+        '/abonos',
+        '/creditos',
+        '/cajas'
+      ];
       
       for (const page of pagesToCache) {
         try {
@@ -231,7 +239,7 @@ class SyncManager {
           });
           
           if (response.ok) {
-            const cache = await caches.open('creditapp-v2');
+            const cache = await caches.open('creditapp-v3');  // Actualizar versión
             await cache.put(page, response);
             console.log(`Página cacheada: ${page}`);
           }
@@ -241,8 +249,7 @@ class SyncManager {
       }
       
       // Cachear datos de API si está disponible
-      if (window.location.pathname === '/dashboard') {
-        // Solo intentar si estamos en el dashboard para evitar múltiples requests
+      if (window.location.pathname === '/' || window.location.pathname === '/dashboard') {
         this.cacheAPIData();
       }
     } catch (error) {
