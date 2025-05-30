@@ -2,7 +2,7 @@
 class CreditAppDB {
   constructor() {
     this.dbName = 'CreditAppOffline';
-    this.version = 4; // Incrementado a 4 para superar la versión 3 existente
+    this.version = 4;
     this.db = null;
   }
 
@@ -44,6 +44,7 @@ class CreditAppDB {
           if (!db.objectStoreNames.contains(name)) {
             const store = db.createObjectStore(name, { keyPath: 'id' });
             store.createIndex('uuid', 'uuid', { unique: false });
+            store.createIndex('synced', 'synced', { unique: false });
           }
         });
       };
@@ -68,8 +69,9 @@ class CreditAppDB {
       return new Promise((resolve, reject) => {
         const request = store.add(record);
         request.onsuccess = () => {
-          console.log('Datos guardados offline:', record);
-          resolve(request.result);
+          console.log('Datos guardados offline con ID:', request.result);
+          record.id = request.result; // Guardar el ID generado
+          resolve(record);
         };
         request.onerror = () => {
           console.error('Error guardando datos offline:', request.error);
@@ -91,7 +93,11 @@ class CreditAppDB {
       
       return new Promise((resolve, reject) => {
         const request = index.getAll(0);
-        request.onsuccess = () => resolve(request.result || []);
+        request.onsuccess = () => {
+          const results = request.result || [];
+          console.log('Cambios pendientes encontrados:', results.length);
+          resolve(results);
+        };
         request.onerror = () => reject(request.error);
       });
     } catch (error) {
@@ -119,22 +125,67 @@ class CreditAppDB {
   }
 
   async markAsSynced(id) {
+    if (!id) {
+      console.error('Error: ID no válido para marcar como sincronizado');
+      return;
+    }
+    
     try {
       const db = await this.open();
       const transaction = db.transaction(['pendingChanges'], 'readwrite');
       const store = transaction.objectStore('pendingChanges');
       
-      const request = store.get(id);
-      request.onsuccess = () => {
-        const data = request.result;
-        if (data) {
-          data.synced = 1;
-          data.syncedAt = new Date().toISOString();
-          store.put(data);
+      return new Promise((resolve, reject) => {
+        const request = store.get(id);
+        request.onsuccess = () => {
+          const data = request.result;
+          if (data) {
+            data.synced = 1;
+            data.syncedAt = new Date().toISOString();
+            
+            const updateRequest = store.put(data);
+            updateRequest.onsuccess = () => {
+              console.log('Registro marcado como sincronizado:', id);
+              resolve();
+            };
+            updateRequest.onerror = () => reject(updateRequest.error);
+          } else {
+            console.warn('No se encontró registro con ID:', id);
+            resolve();
+          }
+        };
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      console.error('Error marcando como sincronizado:', error);
+    }
+  }
+
+  // Limpiar registros sincronizados antiguos
+  async cleanSyncedRecords() {
+    try {
+      const db = await this.open();
+      const transaction = db.transaction(['pendingChanges'], 'readwrite');
+      const store = transaction.objectStore('pendingChanges');
+      const index = store.index('synced');
+      
+      const request = index.openCursor(1);
+      request.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (cursor) {
+          const record = cursor.value;
+          // Eliminar registros sincronizados hace más de 24 horas
+          const syncedDate = new Date(record.syncedAt);
+          const hoursSinceSync = (Date.now() - syncedDate) / (1000 * 60 * 60);
+          
+          if (hoursSinceSync > 24) {
+            cursor.delete();
+          }
+          cursor.continue();
         }
       };
     } catch (error) {
-      console.error('Error marcando como sincronizado:', error);
+      console.error('Error limpiando registros sincronizados:', error);
     }
   }
 
@@ -142,7 +193,7 @@ class CreditAppDB {
     return 'offline-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
   }
 
-  // Métodos para cachear datos del servidor
+  // Métodos mejorados para cachear datos del servidor
   async cacheServerData(storeName, data) {
     try {
       const db = await this.open();
@@ -159,10 +210,10 @@ class CreditAppDB {
       // Agregar nuevos datos
       if (Array.isArray(data)) {
         for (const item of data) {
-          store.put(item);
+          store.put({ ...item, synced: 1 });
         }
       } else {
-        store.put(data);
+        store.put({ ...data, synced: 1 });
       }
       
       console.log(`${data.length || 1} registros cacheados en ${storeName}`);
@@ -191,3 +242,10 @@ class CreditAppDB {
 
 // Instancia global
 window.db = new CreditAppDB();
+
+// Limpiar registros antiguos al cargar
+document.addEventListener('DOMContentLoaded', async () => {
+  if (window.db) {
+    await window.db.cleanSyncedRecords();
+  }
+});
