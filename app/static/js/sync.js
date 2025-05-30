@@ -1,109 +1,213 @@
-// app/static/js/sync.js
+// Gestor de sincronización mejorado
 class SyncManager {
   constructor() {
     this.syncInProgress = false;
     this.db = null;
-    this.csrfToken = null;
   }
 
   async init() {
-    // Esperar a que la DB esté lista
+    // Esperar a que DB esté lista
     this.db = window.db;
     if (!this.db) {
       console.error('Base de datos no disponible');
       return;
     }
 
-    // Obtener CSRF token inicial
-    this.updateCSRFToken();
+    // Registrar service worker sync
+    if ('serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.sync.register('sync-offline-data');
+        console.log('Background sync registrado');
+      } catch (error) {
+        console.log('Background sync no disponible:', error);
+      }
+    }
 
     // Escuchar mensajes del Service Worker
-    if ('serviceWorker' in navigator && navigator.serviceWorker) {
+    if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', async (event) => {
-        console.log('Mensaje del SW:', event.data);
-        if (event.data.type === 'SAVE_OFFLINE') {
-          await this.saveOfflineData(event.data.url, event.data.data);
-        } else if (event.data.type === 'SYNC_NOW') {
-          await this.syncAll();
+        const { type, url, data, timestamp } = event.data;
+        
+        if (type === 'SAVE_OFFLINE_FORM') {
+          await this.saveOfflineForm(url, data);
+          this.showOfflineConfirmation();
+        } else if (type === 'SYNC_OFFLINE_DATA') {
+          await this.syncAllData();
         }
       });
     }
 
-    // Sincronizar cuando volvemos online
-    window.addEventListener('online', () => {
-      console.log('Conexión restaurada - iniciando sincronización');
-      this.updateCSRFToken(); // Actualizar token al volver online
-      setTimeout(() => this.syncAll(), 2000);
-    });
-
-    // Interceptar formularios cuando estamos offline
+    // Interceptar formularios para modo offline
     document.addEventListener('submit', async (e) => {
-      if (!navigator.onLine) {
-        const form = e.target;
-        const formAction = form.action;
-        
-        // Solo interceptar formularios de creación
-        if (formAction.includes('/crear') || formAction.includes('/nuevo')) {
-          e.preventDefault();
-          console.log('Interceptando formulario offline:', formAction);
-          
-          const formData = new FormData(form);
-          const data = {};
-          for (let [key, value] of formData.entries()) {
-            // Excluir CSRF token viejo
-            if (key !== 'csrf_token') {
-              data[key] = value;
-            }
-          }
-          
-          // Agregar timestamp
-          data._timestamp = new Date().toISOString();
-          
-          const savedData = await this.saveOfflineData(formAction, data);
-          
-          // Mostrar mensaje y redirigir
-          this.showOfflineNotification();
-          setTimeout(() => {
-            // Determinar a dónde redirigir
-            let redirectUrl = '/';
-            if (formAction.includes('/clientes/')) redirectUrl = '/clientes';
-            else if (formAction.includes('/productos/')) redirectUrl = '/productos';
-            else if (formAction.includes('/ventas/')) redirectUrl = '/ventas';
-            else if (formAction.includes('/abonos/')) redirectUrl = '/abonos';
-            
-            window.location.href = redirectUrl;
-          }, 2000);
-        }
+      if (!navigator.onLine && this.shouldInterceptForm(e.target)) {
+        e.preventDefault();
+        await this.handleOfflineForm(e.target);
       }
     });
 
-    // Actualizar contador al iniciar
+    // Sincronizar al volver online
+    window.addEventListener('online', () => {
+      console.log('Conexión restaurada - sincronizando datos');
+      setTimeout(() => this.syncAllData(), 2000);
+    });
+
+    // Actualizar contador inicial
+    await this.updatePendingCount();
+  }
+
+  shouldInterceptForm(form) {
+    const action = form.action;
+    return action.includes('/crear') || action.includes('/nuevo') || action.includes('/registrar');
+  }
+
+  async handleOfflineForm(form) {
+    try {
+      const formData = new FormData(form);
+      const data = {};
+      
+      for (let [key, value] of formData.entries()) {
+        if (key !== 'csrf_token') {
+          data[key] = value;
+        }
+      }
+
+      await this.saveOfflineForm(form.action, data);
+      this.showOfflineConfirmation();
+      
+      // Redirigir después de mostrar confirmación
+      setTimeout(() => {
+        const section = this.getSectionFromUrl(form.action);
+        window.location.href = `/${section}`;
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Error manejando formulario offline:', error);
+      this.showError('Error guardando datos offline');
+    }
+  }
+
+  async saveOfflineForm(url, data) {
+    const type = this.getTypeFromUrl(url);
+    
+    const record = {
+      type: type,
+      url: url,
+      data: data,
+      timestamp: new Date().toISOString(),
+      synced: false,
+      id: Date.now() + Math.random()
+    };
+
+    await this.db.saveOfflineData(type, url, data);
     await this.updatePendingCount();
     
-    // Intentar cachear datos iniciales si estamos online
-    if (navigator.onLine) {
-      this.cacheInitialData();
+    console.log(`Formulario ${type} guardado offline`);
+  }
+
+  getTypeFromUrl(url) {
+    if (url.includes('/clientes/')) return 'cliente';
+    if (url.includes('/productos/')) return 'producto';
+    if (url.includes('/ventas/')) return 'venta';
+    if (url.includes('/abonos/')) return 'abono';
+    return 'unknown';
+  }
+
+  getSectionFromUrl(url) {
+    if (url.includes('/clientes/')) return 'clientes';
+    if (url.includes('/productos/')) return 'productos';
+    if (url.includes('/ventas/')) return 'ventas';
+    if (url.includes('/abonos/')) return 'abonos';
+    return '';
+  }
+
+  async syncAllData() {
+    if (this.syncInProgress || !navigator.onLine) {
+      console.log('Sincronización no disponible');
+      return;
+    }
+
+    this.syncInProgress = true;
+    console.log('Iniciando sincronización...');
+
+    try {
+      const pending = await this.db.getPendingChanges();
+      
+      if (pending.length === 0) {
+        console.log('No hay datos para sincronizar');
+        this.syncInProgress = false;
+        return;
+      }
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const item of pending) {
+        try {
+          const success = await this.syncSingleItem(item);
+          if (success) {
+            await this.db.markAsSynced(item.id);
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          console.error('Error sincronizando item:', error);
+          errorCount++;
+        }
+      }
+
+      await this.updatePendingCount();
+      this.showSyncResult(successCount, errorCount);
+
+      // Recargar página si hubo sincronizaciones exitosas
+      if (successCount > 0) {
+        setTimeout(() => window.location.reload(), 2000);
+      }
+
+    } catch (error) {
+      console.error('Error en sincronización general:', error);
+    } finally {
+      this.syncInProgress = false;
     }
   }
 
-  updateCSRFToken() {
-    // Buscar token CSRF en la página
-    const metaToken = document.querySelector('meta[name="csrf-token"]');
-    const inputToken = document.querySelector('input[name="csrf_token"]');
-    
-    if (metaToken) {
-      this.csrfToken = metaToken.content;
-    } else if (inputToken) {
-      this.csrfToken = inputToken.value;
-    }
-    
-    // Si no encontramos token y estamos online, obtener uno nuevo
-    if (!this.csrfToken && navigator.onLine) {
-      this.fetchNewCSRFToken();
+  async syncSingleItem(item) {
+    try {
+      // Obtener CSRF token fresco
+      const csrfToken = await this.getCSRFToken();
+      
+      const formData = new URLSearchParams();
+      
+      // Agregar datos del formulario
+      for (const [key, value] of Object.entries(item.data)) {
+        formData.append(key, value);
+      }
+      
+      // Agregar CSRF token
+      if (csrfToken) {
+        formData.append('csrf_token', csrfToken);
+      }
+
+      const response = await fetch(item.url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin'
+      });
+
+      return response.ok || response.status === 302;
+      
+    } catch (error) {
+      console.error('Error en syncSingleItem:', error);
+      return false;
     }
   }
 
-  async fetchNewCSRFToken() {
+  async getCSRFToken() {
     try {
       const response = await fetch('/', {
         method: 'GET',
@@ -113,149 +217,56 @@ class SyncManager {
       if (response.ok) {
         const text = await response.text();
         const match = text.match(/name="csrf_token".*?value="([^"]+)"/);
-        if (match) {
-          this.csrfToken = match[1];
-          console.log('Nuevo CSRF token obtenido');
-        }
+        return match ? match[1] : null;
       }
     } catch (error) {
       console.error('Error obteniendo CSRF token:', error);
     }
-  }
-
-  async saveOfflineData(url, data) {
-    // Determinar tipo basado en la URL
-    let type = 'unknown';
-    if (url.includes('/clientes/crear')) type = 'cliente';
-    else if (url.includes('/productos/crear')) type = 'producto';
-    else if (url.includes('/ventas/crear')) type = 'venta';
-    else if (url.includes('/abonos/crear')) type = 'abono';
-
-    try {
-      const savedRecord = await this.db.saveOfflineData(type, url, data);
-      await this.updatePendingCount();
-      console.log(`${type} guardado para sincronización offline con ID:`, savedRecord.id);
-      return savedRecord;
-    } catch (error) {
-      console.error('Error guardando datos offline:', error);
-      throw error;
-    }
-  }
-
-  async syncAll() {
-    if (this.syncInProgress || !navigator.onLine) {
-      console.log('Sincronización no disponible:', { syncInProgress: this.syncInProgress, online: navigator.onLine });
-      return;
-    }
-    
-    this.syncInProgress = true;
-    
-    try {
-      // Actualizar token CSRF antes de sincronizar
-      await this.fetchNewCSRFToken();
-      
-      const pending = await this.db.getPendingChanges();
-      
-      if (pending.length === 0) {
-        console.log('No hay cambios pendientes para sincronizar');
-        this.syncInProgress = false;
-        return;
-      }
-
-      console.log(`Sincronizando ${pending.length} cambios...`);
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const item of pending) {
-        if (!item.id) {
-          console.error('Item sin ID válido:', item);
-          errorCount++;
-          continue;
-        }
-        
-        try {
-          // Reconstruir FormData
-          const formData = new URLSearchParams();
-          for (const [key, value] of Object.entries(item.data)) {
-            if (key !== '_timestamp') {
-              formData.append(key, value);
-            }
-          }
-          
-          // Agregar CSRF token actual
-          if (this.csrfToken) {
-            formData.append('csrf_token', this.csrfToken);
-          }
-
-          // Enviar al servidor
-          const response = await fetch(item.url, {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'X-Requested-With': 'XMLHttpRequest'
-            },
-            credentials: 'same-origin',
-            redirect: 'manual' // No seguir redirecciones automáticamente
-          });
-
-          // Considerar exitoso si es 200, 201, 302 (redirect)
-          if (response.ok || response.status === 302 || response.redirected) {
-            await this.db.markAsSynced(item.id);
-            successCount++;
-            console.log(`Sincronizado: ${item.type} (ID: ${item.id})`);
-          } else {
-            errorCount++;
-            const responseText = await response.text();
-            console.error(`Error sincronizando ${item.type}:`, response.status, responseText);
-            
-            // Si es error de CSRF, intentar obtener nuevo token
-            if (responseText.includes('CSRF') || response.status === 400) {
-              await this.fetchNewCSRFToken();
-            }
-          }
-        } catch (error) {
-          console.error('Error sincronizando item:', error);
-          errorCount++;
-        }
-      }
-
-      this.syncInProgress = false;
-      await this.updatePendingCount();
-      
-      if (successCount > 0) {
-        this.showNotification(`✅ ${successCount} cambios sincronizados exitosamente`, 'success');
-        // Recargar si estamos en una página de lista
-        if (window.location.pathname.match(/\/(clientes|productos|ventas|abonos)$/)) {
-          setTimeout(() => window.location.reload(), 1500);
-        }
-      }
-      
-      if (errorCount > 0) {
-        this.showNotification(`⚠️ ${errorCount} cambios no pudieron sincronizarse`, 'warning');
-      }
-    } catch (error) {
-      console.error('Error en sincronización:', error);
-      this.syncInProgress = false;
-    }
+    return null;
   }
 
   async updatePendingCount() {
     try {
       const count = await this.db.countPendingChanges();
-      document.querySelectorAll('.pending-count, #pending-count').forEach(el => {
+      document.querySelectorAll('#pending-count').forEach(el => {
         el.textContent = count;
-        if (el.classList.contains('pending-count')) {
-          el.style.display = count > 0 ? 'inline-block' : 'none';
-        }
       });
+      
+      // Mostrar/ocultar indicador
+      const indicator = document.querySelector('.offline-indicator');
+      if (indicator && !navigator.onLine) {
+        indicator.style.display = count > 0 ? 'flex' : 'none';
+      }
     } catch (error) {
       console.error('Error actualizando contador:', error);
     }
   }
 
-  showNotification(message, type = 'info') {
-    const alertClass = type === 'warning' ? 'alert-warning' : 'alert-success';
+  showOfflineConfirmation() {
+    this.showNotification('📱 Datos guardados offline. Se sincronizarán al reconectar.', 'warning', 3000);
+  }
+
+  showSyncResult(success, errors) {
+    if (success > 0) {
+      this.showNotification(`✅ ${success} registros sincronizados`, 'success');
+    }
+    if (errors > 0) {
+      this.showNotification(`⚠️ ${errors} errores en sincronización`, 'warning');
+    }
+  }
+
+  showError(message) {
+    this.showNotification(`❌ ${message}`, 'danger');
+  }
+
+  showNotification(message, type = 'info', duration = 5000) {
+    const alertClass = {
+      'success': 'alert-success',
+      'warning': 'alert-warning', 
+      'danger': 'alert-danger',
+      'info': 'alert-info'
+    }[type] || 'alert-info';
+
     const notification = document.createElement('div');
     notification.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
     notification.style.cssText = 'top: 70px; right: 20px; z-index: 9999; max-width: 350px;';
@@ -263,68 +274,13 @@ class SyncManager {
       ${message}
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
+    
     document.body.appendChild(notification);
     
-    // Auto-cerrar después de 5 segundos
     setTimeout(() => {
       notification.classList.remove('show');
       setTimeout(() => notification.remove(), 150);
-    }, 5000);
-  }
-
-  showOfflineNotification() {
-    const notification = document.createElement('div');
-    notification.className = 'alert alert-warning alert-dismissible fade show position-fixed';
-    notification.style.cssText = 'top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; min-width: 300px;';
-    notification.innerHTML = `
-      <h5><i class="fas fa-wifi-slash"></i> Guardado Offline</h5>
-      <p>Los datos se han guardado localmente y se sincronizarán cuando haya conexión.</p>
-      <div class="progress">
-        <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
-      </div>
-    `;
-    document.body.appendChild(notification);
-    
-    // No auto-cerrar, se cerrará con la redirección
-  }
-
-  async cacheInitialData() {
-    console.log('Iniciando caché de datos...');
-    
-    try {
-      // Cachear páginas HTML principales
-      const pagesToCache = [
-        '/',
-        '/clientes', 
-        '/productos', 
-        '/ventas', 
-        '/abonos',
-        '/creditos',
-        '/cajas',
-        '/offline'
-      ];
-      
-      for (const page of pagesToCache) {
-        try {
-          const response = await fetch(page, {
-            credentials: 'same-origin',
-            headers: {
-              'X-Requested-With': 'XMLHttpRequest'
-            }
-          });
-          
-          if (response.ok) {
-            const cache = await caches.open('creditapp-v3');
-            await cache.put(page, response);
-            console.log(`Página cacheada: ${page}`);
-          }
-        } catch (error) {
-          console.log(`No se pudo cachear ${page}:`, error.message);
-        }
-      }
-    } catch (error) {
-      console.error('Error cacheando datos:', error);
-    }
+    }, duration);
   }
 }
 
@@ -332,7 +288,7 @@ class SyncManager {
 document.addEventListener('DOMContentLoaded', async () => {
   // Esperar a que window.db esté disponible
   let attempts = 0;
-  const maxAttempts = 10;
+  const maxAttempts = 20;
   
   const waitForDB = setInterval(async () => {
     attempts++;
@@ -343,9 +299,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (window.db) {
         window.syncManager = new SyncManager();
         await window.syncManager.init();
-        console.log('SyncManager inicializado');
+        console.log('SyncManager inicializado exitosamente');
       } else {
-        console.error('No se pudo inicializar SyncManager: DB no disponible');
+        console.error('No se pudo inicializar SyncManager: DB no disponible después de', maxAttempts, 'intentos');
       }
     }
   }, 100);
