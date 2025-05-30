@@ -149,6 +149,12 @@ def index():
                                mensaje="Lo sentimos, hubo un problema al cargar el dashboard. Estamos trabajando para solucionarlo.",
                                error=str(e))
 
+@dashboard_bp.route('/dashboard')
+@login_required 
+def dashboard_redirect():
+    """Redirige /dashboard a / para compatibilidad"""
+    return redirect(url_for('dashboard.index'))
+
 @dashboard_bp.route('/offline')
 def offline():
     """Página que se muestra cuando no hay conexión"""
