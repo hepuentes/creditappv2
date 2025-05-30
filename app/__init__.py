@@ -53,11 +53,11 @@ def create_app():
             mimetype='image/vnd.microsoft.icon')
 
     # Ruta para servir el service worker desde la raíz
-@app.route('/service-worker.js')
-def service_worker():
-    from flask import make_response
-    response = make_response(
-        send_from_directory(app.static_folder, 'service-worker.js')
+    @app.route('/service-worker.js')
+    def service_worker():
+        from flask import make_response
+        response = make_response(
+            send_from_directory(app.static_folder, 'service-worker.js')
     )
     response.headers['Content-Type'] = 'application/javascript'
     response.headers['Service-Worker-Allowed'] = '/'
