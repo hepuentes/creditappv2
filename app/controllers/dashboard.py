@@ -148,3 +148,8 @@ def index():
         return render_template('error.html', 
                                mensaje="Lo sentimos, hubo un problema al cargar el dashboard. Estamos trabajando para solucionarlo.",
                                error=str(e))
+
+@dashboard_bp.route('/offline')
+def offline():
+    """Página que se muestra cuando no hay conexión"""
+    return render_template('offline.html')
