@@ -1,8 +1,9 @@
-// app/static/js/sync.js - Versión corregida
+// app/static/js/sync.js
 class SyncManager {
   constructor() {
     this.syncInProgress = false;
     this.db = null;
+    this.csrfToken = null;
   }
 
   async init() {
@@ -12,6 +13,9 @@ class SyncManager {
       console.error('Base de datos no disponible');
       return;
     }
+
+    // Obtener CSRF token inicial
+    this.updateCSRFToken();
 
     // Escuchar mensajes del Service Worker
     if ('serviceWorker' in navigator && navigator.serviceWorker) {
@@ -28,6 +32,7 @@ class SyncManager {
     // Sincronizar cuando volvemos online
     window.addEventListener('online', () => {
       console.log('Conexión restaurada - iniciando sincronización');
+      this.updateCSRFToken(); // Actualizar token al volver online
       setTimeout(() => this.syncAll(), 2000);
     });
 
@@ -45,15 +50,28 @@ class SyncManager {
           const formData = new FormData(form);
           const data = {};
           for (let [key, value] of formData.entries()) {
-            data[key] = value;
+            // Excluir CSRF token viejo
+            if (key !== 'csrf_token') {
+              data[key] = value;
+            }
           }
           
-          await this.saveOfflineData(formAction, data);
+          // Agregar timestamp
+          data._timestamp = new Date().toISOString();
+          
+          const savedData = await this.saveOfflineData(formAction, data);
           
           // Mostrar mensaje y redirigir
           this.showOfflineNotification();
           setTimeout(() => {
-            window.location.href = formAction.replace('/crear', '').replace('/nuevo', '');
+            // Determinar a dónde redirigir
+            let redirectUrl = '/';
+            if (formAction.includes('/clientes/')) redirectUrl = '/clientes';
+            else if (formAction.includes('/productos/')) redirectUrl = '/productos';
+            else if (formAction.includes('/ventas/')) redirectUrl = '/ventas';
+            else if (formAction.includes('/abonos/')) redirectUrl = '/abonos';
+            
+            window.location.href = redirectUrl;
           }, 2000);
         }
       }
@@ -68,6 +86,43 @@ class SyncManager {
     }
   }
 
+  updateCSRFToken() {
+    // Buscar token CSRF en la página
+    const metaToken = document.querySelector('meta[name="csrf-token"]');
+    const inputToken = document.querySelector('input[name="csrf_token"]');
+    
+    if (metaToken) {
+      this.csrfToken = metaToken.content;
+    } else if (inputToken) {
+      this.csrfToken = inputToken.value;
+    }
+    
+    // Si no encontramos token y estamos online, obtener uno nuevo
+    if (!this.csrfToken && navigator.onLine) {
+      this.fetchNewCSRFToken();
+    }
+  }
+
+  async fetchNewCSRFToken() {
+    try {
+      const response = await fetch('/', {
+        method: 'GET',
+        credentials: 'same-origin'
+      });
+      
+      if (response.ok) {
+        const text = await response.text();
+        const match = text.match(/name="csrf_token".*?value="([^"]+)"/);
+        if (match) {
+          this.csrfToken = match[1];
+          console.log('Nuevo CSRF token obtenido');
+        }
+      }
+    } catch (error) {
+      console.error('Error obteniendo CSRF token:', error);
+    }
+  }
+
   async saveOfflineData(url, data) {
     // Determinar tipo basado en la URL
     let type = 'unknown';
@@ -77,11 +132,13 @@ class SyncManager {
     else if (url.includes('/abonos/crear')) type = 'abono';
 
     try {
-      await this.db.saveOfflineData(type, url, data);
+      const savedRecord = await this.db.saveOfflineData(type, url, data);
       await this.updatePendingCount();
-      console.log(`${type} guardado para sincronización offline`);
+      console.log(`${type} guardado para sincronización offline con ID:`, savedRecord.id);
+      return savedRecord;
     } catch (error) {
       console.error('Error guardando datos offline:', error);
+      throw error;
     }
   }
 
@@ -94,6 +151,9 @@ class SyncManager {
     this.syncInProgress = true;
     
     try {
+      // Actualizar token CSRF antes de sincronizar
+      await this.fetchNewCSRFToken();
+      
       const pending = await this.db.getPendingChanges();
       
       if (pending.length === 0) {
@@ -107,20 +167,24 @@ class SyncManager {
       let errorCount = 0;
 
       for (const item of pending) {
+        if (!item.id) {
+          console.error('Item sin ID válido:', item);
+          errorCount++;
+          continue;
+        }
+        
         try {
           // Reconstruir FormData
           const formData = new URLSearchParams();
           for (const [key, value] of Object.entries(item.data)) {
-            if (key !== 'csrf_token') { // Excluir CSRF token viejo
+            if (key !== '_timestamp') {
               formData.append(key, value);
             }
           }
           
-          // Obtener nuevo CSRF token
-          const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || 
-                          document.querySelector('input[name="csrf_token"]')?.value;
-          if (csrfToken) {
-            formData.append('csrf_token', csrfToken);
+          // Agregar CSRF token actual
+          if (this.csrfToken) {
+            formData.append('csrf_token', this.csrfToken);
           }
 
           // Enviar al servidor
@@ -131,16 +195,24 @@ class SyncManager {
               'Content-Type': 'application/x-www-form-urlencoded',
               'X-Requested-With': 'XMLHttpRequest'
             },
-            credentials: 'same-origin'
+            credentials: 'same-origin',
+            redirect: 'manual' // No seguir redirecciones automáticamente
           });
 
-          if (response.ok || response.redirected) {
+          // Considerar exitoso si es 200, 201, 302 (redirect)
+          if (response.ok || response.status === 302 || response.redirected) {
             await this.db.markAsSynced(item.id);
             successCount++;
-            console.log(`Sincronizado: ${item.type} (${item.id})`);
+            console.log(`Sincronizado: ${item.type} (ID: ${item.id})`);
           } else {
             errorCount++;
-            console.error(`Error sincronizando ${item.type}:`, response.statusText);
+            const responseText = await response.text();
+            console.error(`Error sincronizando ${item.type}:`, response.status, responseText);
+            
+            // Si es error de CSRF, intentar obtener nuevo token
+            if (responseText.includes('CSRF') || response.status === 400) {
+              await this.fetchNewCSRFToken();
+            }
           }
         } catch (error) {
           console.error('Error sincronizando item:', error);
@@ -152,7 +224,7 @@ class SyncManager {
       await this.updatePendingCount();
       
       if (successCount > 0) {
-        this.showNotification(`✅ ${successCount} cambios sincronizados exitosamente`);
+        this.showNotification(`✅ ${successCount} cambios sincronizados exitosamente`, 'success');
         // Recargar si estamos en una página de lista
         if (window.location.pathname.match(/\/(clientes|productos|ventas|abonos)$/)) {
           setTimeout(() => window.location.reload(), 1500);
@@ -212,21 +284,24 @@ class SyncManager {
       </div>
     `;
     document.body.appendChild(notification);
+    
+    // No auto-cerrar, se cerrará con la redirección
   }
 
   async cacheInitialData() {
     console.log('Iniciando caché de datos...');
     
     try {
-      // Cachear páginas HTML principales - CORREGIDO
+      // Cachear páginas HTML principales
       const pagesToCache = [
-        '/',  // Cambiar /dashboard por / que es la ruta real
+        '/',
         '/clientes', 
         '/productos', 
         '/ventas', 
         '/abonos',
         '/creditos',
-        '/cajas'
+        '/cajas',
+        '/offline'
       ];
       
       for (const page of pagesToCache) {
@@ -239,7 +314,7 @@ class SyncManager {
           });
           
           if (response.ok) {
-            const cache = await caches.open('creditapp-v3');  // Actualizar versión
+            const cache = await caches.open('creditapp-v3');
             await cache.put(page, response);
             console.log(`Página cacheada: ${page}`);
           }
@@ -247,45 +322,8 @@ class SyncManager {
           console.log(`No se pudo cachear ${page}:`, error.message);
         }
       }
-      
-      // Cachear datos de API si está disponible
-      if (window.location.pathname === '/' || window.location.pathname === '/dashboard') {
-        this.cacheAPIData();
-      }
     } catch (error) {
       console.error('Error cacheando datos:', error);
-    }
-  }
-
-  async cacheAPIData() {
-    // Intentar cachear datos de clientes y productos
-    try {
-      const endpoints = [
-        { url: '/api/v1/sync/clientes', store: 'clientes' },
-        { url: '/api/v1/sync/productos', store: 'productos' }
-      ];
-
-      for (const endpoint of endpoints) {
-        try {
-          const response = await fetch(endpoint.url, {
-            headers: {
-              'Authorization': 'Bearer test-token-creditapp-2025'
-            }
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.data) {
-              await this.db.cacheServerData(endpoint.store, data.data);
-              console.log(`Datos API cacheados: ${endpoint.store}`);
-            }
-          }
-        } catch (error) {
-          console.log(`No se pudieron cachear datos de ${endpoint.store}`);
-        }
-      }
-    } catch (error) {
-      console.error('Error cacheando datos de API:', error);
     }
   }
 }
