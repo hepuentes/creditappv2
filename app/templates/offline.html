@@ -22,6 +22,7 @@
             border-radius: 10px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.1);
             overflow: hidden;
+            position: relative;
         }
         .offline-header {
             background-color: #ffab00;
@@ -49,6 +50,12 @@
             padding: 10px;
             font-weight: bold;
             border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-reconnect:hover {
+            background-color: #0069d9;
+            transform: translateY(-2px);
         }
         .link-card {
             display: block;
@@ -59,6 +66,7 @@
             text-decoration: none;
             color: #333;
             transition: all 0.2s ease;
+            position: relative;
         }
         .link-card:hover {
             background: #e9ecef;
@@ -80,6 +88,39 @@
             color: #212529;
         }
         .pending-count {
+            font-weight: bold;
+        }
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .spinner.active {
+            display: inline-block;
+        }
+        .network-error {
+            color: #dc3545;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+        .form-pending {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #ffc107;
+            color: #000;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
             font-weight: bold;
         }
     </style>
@@ -109,33 +150,36 @@
                             <span>Estado de red</span>
                         </div>
                         <div>
-                            Cambios pendientes: <span class="pending-count">0</span>
+                            Cambios pendientes: <span id="pending-count" class="pending-count">0</span>
                         </div>
                     </div>
                 </div>
                 
                 <button id="try-reconnect" class="btn-reconnect mt-3">
+                    <span id="spinner" class="spinner"></span>
                     <i class="fas fa-sync-alt"></i> Intentar Reconectar
                 </button>
                 
+                <div id="network-error" class="network-error text-center"></div>
+                
                 <h4 class="mt-4 mb-3">Navegación Disponible Sin Conexión</h4>
                 <div class="navigation-links">
-                    <a href="/dashboard" class="link-card">
+                    <a href="/dashboard" class="link-card" id="dashboard-link">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a>
-                    <a href="/clientes" class="link-card">
+                    <a href="/clientes" class="link-card" id="clientes-link">
                         <i class="fas fa-users"></i> Clientes
                     </a>
-                    <a href="/productos" class="link-card">
+                    <a href="/productos" class="link-card" id="productos-link">
                         <i class="fas fa-box"></i> Productos
                     </a>
-                    <a href="/ventas" class="link-card">
+                    <a href="/ventas" class="link-card" id="ventas-link">
                         <i class="fas fa-shopping-cart"></i> Ventas
                     </a>
-                    <a href="/creditos" class="link-card">
+                    <a href="/creditos" class="link-card" id="creditos-link">
                         <i class="fas fa-credit-card"></i> Créditos
                     </a>
-                    <a href="/abonos" class="link-card">
+                    <a href="/abonos" class="link-card" id="abonos-link">
                         <i class="fas fa-money-bill-wave"></i> Abonos
                     </a>
                 </div>
@@ -143,59 +187,170 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/pwa-helper.js') }}"></script>
+    <script src="/static/js/db.js"></script>
     <script>
-        // Manejar reconexión
-        document.getElementById('try-reconnect').addEventListener('click', function() {
-            const statusElement = document.getElementById('connection-indicator');
-            statusElement.textContent = 'Verificando...';
+        // Variables
+        let reconnectTimer = null;
+        let pendingCountTimer = null;
+        const statusElement = document.getElementById('connection-indicator');
+        const pendingCountElement = document.getElementById('pending-count');
+        const reconnectButton = document.getElementById('try-reconnect');
+        const spinner = document.getElementById('spinner');
+        const networkError = document.getElementById('network-error');
+        
+        // Inicializar contador de pendientes
+        async function updatePendingCount() {
+            try {
+                if (window.db) {
+                    const count = await window.db.countPendingChanges();
+                    pendingCountElement.textContent = count.toString();
+                    
+                    // Actualizar tarjetas con indicadores
+                    updatePendingIndicators(count);
+                }
+            } catch (error) {
+                console.error('Error al actualizar contador:', error);
+            }
+        }
+        
+        // Actualizar indicadores de pendientes
+        function updatePendingIndicators(totalCount) {
+            if (!window.db) return;
             
-            // Comprobar conexión
-            if (navigator.onLine) {
-                statusElement.className = 'status-badge badge-online';
-                statusElement.textContent = 'En línea';
+            // Obtener cambios pendientes para cada tipo
+            window.db.getPendingChanges().then(pendingChanges => {
+                // Contar pendientes por tipo
+                const countByType = {
+                    'cliente': 0,
+                    'producto': 0,
+                    'venta': 0,
+                    'abono': 0,
+                    'credito': 0
+                };
                 
+                pendingChanges.forEach(change => {
+                    if (countByType[change.type] !== undefined) {
+                        countByType[change.type]++;
+                    }
+                });
+                
+                // Actualizar indicadores
+                Object.keys(countByType).forEach(type => {
+                    const count = countByType[type];
+                    const link = document.getElementById(`${type}s-link`);
+                    
+                    // Remover indicador existente
+                    const existingIndicator = link?.querySelector('.form-pending');
+                    if (existingIndicator) {
+                        existingIndicator.remove();
+                    }
+                    
+                    // Añadir nuevo indicador si hay pendientes
+                    if (count > 0 && link) {
+                        const indicator = document.createElement('span');
+                        indicator.className = 'form-pending';
+                        indicator.textContent = count;
+                        link.appendChild(indicator);
+                    }
+                });
+            });
+        }
+        
+        // Comprobar estado de conexión
+        function checkConnectionStatus() {
+            const isOnline = navigator.onLine;
+            
+            statusElement.className = isOnline 
+                ? 'status-badge badge-online' 
+                : 'status-badge badge-offline';
+                
+            statusElement.textContent = isOnline 
+                ? 'En línea' 
+                : 'Sin conexión';
+                
+            if (isOnline) {
                 // Mostrar mensaje de redirección
-                alert('¡Conexión restablecida! Redireccionando al dashboard...');
-                
-                // Redireccionar
-                setTimeout(() => {
-                    window.location.href = '/dashboard';
-                }, 1000);
+                networkError.style.display = 'none';
+                networkError.textContent = '';
+                reconnectButton.innerHTML = '<i class="fas fa-arrow-right"></i> Continuar a la aplicación';
             } else {
-                statusElement.className = 'status-badge badge-offline';
-                statusElement.textContent = 'Sin conexión';
-                alert('Todavía sin conexión. Activa tus datos móviles o conéctate a una red WiFi.');
+                reconnectButton.innerHTML = '<i class="fas fa-sync-alt"></i> Intentar Reconectar';
+            }
+        }
+        
+        // Manejar reconexión
+        reconnectButton.addEventListener('click', function() {
+            if (navigator.onLine) {
+                // Si estamos online, redirigir
+                window.location.href = '/dashboard';
+            } else {
+                // Intentar reconexión
+                spinner.classList.add('active');
+                networkError.style.display = 'none';
+                reconnectButton.disabled = true;
+                
+                // Simular comprobación de red
+                setTimeout(function() {
+                    spinner.classList.remove('active');
+                    reconnectButton.disabled = false;
+                    
+                    if (navigator.onLine) {
+                        checkConnectionStatus();
+                        // Redirigir después de 1 segundo
+                        setTimeout(() => {
+                            window.location.href = '/dashboard';
+                        }, 1000);
+                    } else {
+                        networkError.style.display = 'block';
+                        networkError.textContent = 'No se detecta conexión a internet. Activa tus datos móviles o conéctate a una red WiFi.';
+                    }
+                }, 1500);
             }
         });
         
         // Detectar cambios en la conexión
         window.addEventListener('online', function() {
-            const statusElement = document.getElementById('connection-indicator');
-            statusElement.className = 'status-badge badge-online';
-            statusElement.textContent = 'En línea';
-            
-            // Mostrar mensaje de redirección
-            alert('¡Conexión restablecida! Redireccionando al dashboard...');
-            
-            // Redireccionar
-            setTimeout(() => {
-                window.location.href = '/dashboard';
-            }, 1000);
+            checkConnectionStatus();
         });
         
-        // Actualizar contador de formularios pendientes
-        document.addEventListener('DOMContentLoaded', async function() {
-            if (window.offlineDB) {
-                try {
-                    const count = await window.offlineDB.countPendingForms();
-                    document.querySelectorAll('.pending-count').forEach(el => {
-                        el.textContent = count.toString();
+        window.addEventListener('offline', function() {
+            checkConnectionStatus();
+        });
+        
+        // Inicializar al cargar la página
+        document.addEventListener('DOMContentLoaded', function() {
+            checkConnectionStatus();
+            
+            // Actualizar contador cada 3 segundos
+            pendingCountTimer = setInterval(updatePendingCount, 3000);
+            
+            // Primera actualización
+            updatePendingCount();
+            
+            // Si estamos online, comprobar periódicamente la conexión real
+            if (navigator.onLine) {
+                reconnectTimer = setInterval(function() {
+                    fetch('/ping', { 
+                        method: 'GET',
+                        headers: { 'Cache-Control': 'no-cache' }
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            // Confirmación de conectividad real
+                            checkConnectionStatus();
+                        }
+                    })
+                    .catch(() => {
+                        // Posible falso positivo, pero no hacer nada
                     });
-                } catch (error) {
-                    console.error('Error al cargar contador de formularios pendientes:', error);
-                }
+                }, 5000);
             }
+        });
+        
+        // Limpiar timers al salir
+        window.addEventListener('beforeunload', function() {
+            if (reconnectTimer) clearInterval(reconnectTimer);
+            if (pendingCountTimer) clearInterval(pendingCountTimer);
         });
     </script>
 </body>
