@@ -1,11 +1,13 @@
+// app/static/manifest.json
+
 {
   "name": "CreditApp",
   "short_name": "CreditApp",
+  "description": "Sistema de gestión de créditos y ventas",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#007bff",
-  "description": "Sistema de gestión de créditos y ventas",
   "icons": [
     {
       "src": "/static/icon-192x192.png",
@@ -20,13 +22,25 @@
       "purpose": "any maskable"
     }
   ],
-  "screenshots": [
+  "orientation": "portrait",
+  "categories": ["business", "finance", "productivity"],
+  "shortcuts": [
     {
-      "src": "/static/screenshot1.png",
-      "sizes": "1280x720",
-      "type": "image/png"
+      "name": "Dashboard",
+      "url": "/dashboard",
+      "icons": [{ "src": "/static/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Clientes",
+      "url": "/clientes",
+      "icons": [{ "src": "/static/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Ventas",
+      "url": "/ventas",
+      "icons": [{ "src": "/static/icon-192x192.png", "sizes": "192x192" }]
     }
   ],
-  "orientation": "portrait",
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "related_applications": []
 }
