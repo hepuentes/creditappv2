@@ -1,250 +1,270 @@
-// Service Worker v6 - Corregido para evitar actualizaciones constantes
-const CACHE_NAME = 'creditapp-v6';
-const CACHE_VERSION = '2025-05-30-v1'; // Versión fija para evitar actualizaciones constantes
+// app/static/service-worker.js
 
-const urlsToCache = [
+// Versión del cache - incrementar cuando se actualice el código
+const CACHE_VERSION = 'v5';
+const CACHE_NAME = `creditapp-${CACHE_VERSION}`;
+const OFFLINE_PAGE = '/offline';
+const CSRF_HEADER = 'X-CSRFToken';
+
+// Recursos a cachear inicialmente
+const INITIAL_CACHED_RESOURCES = [
   '/',
+  '/dashboard',
   '/offline',
   '/static/css/style.css',
   '/static/js/main.js',
   '/static/js/db.js',
   '/static/js/sync.js',
   '/static/js/pwa-helper.js',
+  '/static/js/offline-handler.js',
   '/static/manifest.json',
   '/static/icon-192x192.png',
   '/static/icon-512x512.png',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css',
+  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js',
   'https://code.jquery.com/jquery-3.7.1.min.js'
 ];
 
-// Instalar y cachear
+// Instalación del Service Worker
 self.addEventListener('install', event => {
-  console.log('[SW v6] Instalando Service Worker');
+  console.log('[SW] Instalando Service Worker');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[SW] Cacheando recursos principales');
-        return Promise.allSettled(
-          urlsToCache.map(url => {
-            return cache.add(new Request(url, { credentials: 'same-origin' }))
-              .catch(err => console.warn('[SW] No se pudo cachear:', url, err.message));
-          })
-        );
+        console.log('[SW] Cacheando recursos iniciales');
+        return cache.addAll(INITIAL_CACHED_RESOURCES)
+          .catch(error => {
+            console.error('[SW] Error al cachear recursos iniciales:', error);
+            // Continuar incluso si algunos recursos fallan
+            return Promise.resolve();
+          });
       })
       .then(() => {
-        console.log('[SW] Instalación completada, saltando espera');
+        console.log('[SW] Instalación completada');
         return self.skipWaiting();
       })
   );
 });
 
-// Activar y limpiar caché antiguo
+// Activación del Service Worker
 self.addEventListener('activate', event => {
-  console.log('[SW v6] Activando Service Worker');
+  console.log('[SW] Activando nuevo Service Worker');
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('[SW] Eliminando caché antiguo:', cacheName);
+    caches.keys()
+      .then(cacheNames => {
+        return Promise.all(
+          cacheNames.filter(cacheName => {
+            return cacheName.startsWith('creditapp-') && cacheName !== CACHE_NAME;
+          }).map(cacheName => {
+            console.log('[SW] Eliminando cache antiguo:', cacheName);
             return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => {
-      console.log('[SW] Reclamando clientes');
-      return self.clients.claim();
-    })
+          })
+        );
+      })
+      .then(() => {
+        console.log('[SW] Service Worker activado');
+        return self.clients.claim();
+      })
   );
 });
 
-// Manejo optimizado de requests
+// Función para determinar si una respuesta es válida
+function isValidResponse(response) {
+  return response && response.status >= 200 && response.status < 400;
+}
+
+// Función para determinar si una solicitud debe ser cacheada
+function shouldCache(url) {
+  const urlObj = new URL(url);
+  
+  // No cachear solicitudes API o solicitudes POST
+  if (urlObj.pathname.includes('/api/') || urlObj.pathname.includes('/auth/')) {
+    return false;
+  }
+  
+  // Cachear recursos estáticos y algunas páginas principales
+  return urlObj.pathname.startsWith('/static/') || 
+         ['/dashboard', '/', '/clientes', '/productos', '/ventas', '/abonos', '/creditos'].includes(urlObj.pathname);
+}
+
+// Función para obtener página de offline cuando falla la navegación
+async function getOfflinePage() {
+  const cache = await caches.open(CACHE_NAME);
+  return cache.match(OFFLINE_PAGE) || Response.error();
+}
+
+// Función para extraer token CSRF de una respuesta HTML
+function extractCSRFToken(text) {
+  const match = text.match(/name="csrf_token".*?value="([^"]+)"/);
+  return match && match[1] ? match[1] : null;
+}
+
+// Interceptar solicitudes de red
 self.addEventListener('fetch', event => {
-  const { request } = event;
+  const request = event.request;
   const url = new URL(request.url);
   
-  // Ignorar requests problemáticos
-  if (url.protocol === 'chrome-extension:' || 
-      url.pathname.includes('hot-update') ||
-      (url.origin !== location.origin && 
-       !url.href.includes('cdn.jsdelivr.net') && 
-       !url.href.includes('cdnjs.cloudflare.com') &&
-       !url.href.includes('code.jquery.com'))) {
+  // No interceptar solicitudes a otros dominios
+  if (url.origin !== self.location.origin) {
     return;
   }
 
-  // Para POST (formularios offline)
+  // Manejo especial para solicitudes POST
   if (request.method === 'POST') {
-    event.respondWith(handleOfflineForm(request));
+    // Si estamos offline, guardar la solicitud para sincronización posterior
+    if (!navigator.onLine) {
+      console.log('[SW] Solicitud POST en modo offline:', url.pathname);
+      
+      // Solo interceptar solicitudes específicas (creación de entidades)
+      if (url.pathname.includes('/crear') || 
+          url.pathname.includes('/nuevo') || 
+          url.pathname.includes('/registrar')) {
+        
+        event.respondWith(
+          (async () => {
+            try {
+              // Clonar la solicitud porque solo se puede leer una vez
+              const requestClone = request.clone();
+              const formData = await requestClone.formData();
+              
+              const data = {};
+              for (const [key, value] of formData.entries()) {
+                data[key] = value;
+              }
+              
+              // Enviar mensaje al cliente para guardar los datos
+              const client = await self.clients.get(event.clientId);
+              if (client) {
+                client.postMessage({
+                  type: 'SAVE_OFFLINE_FORM',
+                  url: request.url,
+                  data: data
+                });
+              }
+              
+              // Responder con la página offline
+              const offlinePage = await getOfflinePage();
+              return offlinePage;
+              
+            } catch (error) {
+              console.error('[SW] Error procesando solicitud offline:', error);
+              return Response.error();
+            }
+          })()
+        );
+        return;
+      }
+    }
+    
+    // Si estamos online, continuar normalmente
     return;
   }
-
-  // Para GET - estrategia optimizada
-  event.respondWith(handleGetRequest(request));
+  
+  // Estrategia para solicitudes GET
+  event.respondWith(
+    (async () => {
+      try {
+        // Primero intentar desde la red
+        if (navigator.onLine) {
+          try {
+            const networkResponse = await fetch(request);
+            
+            // Si la respuesta es válida y debe ser cacheada, guárdala en cache
+            if (isValidResponse(networkResponse) && shouldCache(request.url)) {
+              const responseToCache = networkResponse.clone();
+              caches.open(CACHE_NAME).then(cache => {
+                cache.put(request, responseToCache);
+              });
+              
+              // Si es una página HTML, extraer el token CSRF
+              if (responseToCache.headers.get('content-type')?.includes('text/html')) {
+                const text = await responseToCache.clone().text();
+                const csrfToken = extractCSRFToken(text);
+                if (csrfToken) {
+                  console.log('[SW] Nuevo CSRF token extraído');
+                  // Enviar mensaje al cliente con el nuevo token
+                  self.clients.matchAll().then(clients => {
+                    clients.forEach(client => {
+                      client.postMessage({
+                        type: 'UPDATE_CSRF_TOKEN',
+                        token: csrfToken
+                      });
+                    });
+                  });
+                }
+              }
+            }
+            
+            return networkResponse;
+          } catch (error) {
+            console.log('[SW] Error de red, buscando en cache:', error);
+            // Si falla la red, buscar en cache
+            const cachedResponse = await caches.match(request);
+            return cachedResponse || getOfflinePage();
+          }
+        } else {
+          // Estamos offline, buscar en cache
+          console.log('[SW] Offline - Buscando en cache:', request.url);
+          const cachedResponse = await caches.match(request);
+          
+          // Si no está en cache y es una navegación, devolver página offline
+          if (!cachedResponse && request.mode === 'navigate') {
+            console.log('[SW] Página no encontrada en cache, mostrando offline');
+            return getOfflinePage();
+          }
+          
+          return cachedResponse || Response.error();
+        }
+      } catch (error) {
+        console.error('[SW] Error crítico en fetch:', error);
+        return getOfflinePage();
+      }
+    })()
+  );
 });
 
-async function handleOfflineForm(request) {
-  try {
-    // Intentar envío online primero
-    const response = await fetch(request.clone());
-    return response;
-  } catch (error) {
-    console.log('[SW] POST offline detectado:', request.url);
-    
-    // Solo interceptar formularios de creación
-    if (request.url.includes('/crear') || request.url.includes('/nuevo')) {
-      try {
-        const formData = await request.formData();
-        const data = {};
-        
-        // Procesar datos del formulario
-        for (let [key, value] of formData.entries()) {
-          if (key !== 'csrf_token') { // Omitir CSRF token
-            data[key] = value;
-          }
-        }
-        
-        // Notificar a clientes activos
-        const clients = await self.clients.matchAll();
-        clients.forEach(client => {
-          client.postMessage({
-            type: 'SAVE_OFFLINE_FORM',
-            url: request.url,
-            data: data,
-            timestamp: new Date().toISOString()
-          });
-        });
-        
-        // Respuesta de confirmación mejorada
-        return new Response(`
-          <!DOCTYPE html>
-          <html><head>
-            <meta charset="UTF-8">
-            <title>Guardado Offline - CreditApp</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-          </head>
-          <body class="bg-light d-flex align-items-center justify-content-center min-vh-100">
-            <div class="card text-center" style="max-width: 400px;">
-              <div class="card-body">
-                <div class="text-warning mb-3">
-                  <i class="fas fa-wifi-slash fa-3x"></i>
-                </div>
-                <h4 class="card-title">Datos Guardados</h4>
-                <p class="card-text">Se guardaron localmente y se sincronizarán cuando tengas conexión.</p>
-                <div class="spinner-border spinner-border-sm text-primary" role="status">
-                  <span class="visually-hidden">Redirigiendo...</span>
-                </div>
-              </div>
-            </div>
-            <script>
-              setTimeout(() => {
-                const pathParts = window.location.pathname.split('/');
-                const section = pathParts[1] || '';
-                window.location.href = '/' + (section === 'crear' ? '' : section);
-              }, 2500);
-            </script>
-          </body></html>
-        `, { 
-          headers: { 
-            'Content-Type': 'text/html',
-            'Cache-Control': 'no-cache'
-          } 
-        });
-        
-      } catch (error) {
-        console.error('[SW] Error procesando formulario offline:', error);
-      }
-    }
-    
-    return new Response('Sin conexión', { 
-      status: 503,
-      headers: { 'Content-Type': 'text/plain' }
-    });
-  }
-}
-
-async function handleGetRequest(request) {
-  try {
-    // Para recursos estáticos, cache first
-    if (request.url.includes('/static/') || 
-        !request.url.includes(location.origin)) {
-      const cachedResponse = await caches.match(request);
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-    }
-    
-    // Para páginas, network first con timeout
-    const networkPromise = fetch(request);
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('timeout')), 3000)
-    );
-    
-    const response = await Promise.race([networkPromise, timeoutPromise]);
-    
-    // Cachear respuesta exitosa
-    if (response.status === 200) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
-    }
-    
-    return response;
-    
-  } catch (error) {
-    console.log('[SW] Network failed, trying cache:', request.url);
-    
-    // Intentar desde caché
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    
-    // Para páginas HTML, mostrar offline
-    if (request.headers.get('accept')?.includes('text/html')) {
-      return caches.match('/offline') || new Response(`
-        <!DOCTYPE html>
-        <html><head>
-          <meta charset="UTF-8">
-          <title>Sin Conexión - CreditApp</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-        </head>
-        <body class="bg-light d-flex align-items-center justify-content-center min-vh-100">
-          <div class="text-center">
-            <h2 class="text-muted mb-3"><i class="fas fa-wifi-slash"></i> Sin Conexión</h2>
-            <p>No hay conexión disponible.</p>
-            <button class="btn btn-primary" onclick="window.location.reload()">
-              <i class="fas fa-redo"></i> Reintentar
-            </button>
-          </div>
-        </body></html>
-      `, { headers: { 'Content-Type': 'text/html' } });
-    }
-    
-    return new Response('', { status: 404 });
-  }
-}
-
-// Background sync mejorado
+// Manejar evento de sincronización
 self.addEventListener('sync', event => {
   console.log('[SW] Background sync activado:', event.tag);
+  
   if (event.tag === 'sync-offline-data') {
-    event.waitUntil(notifyClientsToSync());
+    event.waitUntil(
+      self.clients.matchAll().then(clients => {
+        if (clients && clients.length > 0) {
+          // Notificar a todos los clientes que deben sincronizar
+          clients.forEach(client => {
+            client.postMessage({
+              type: 'SYNC_OFFLINE_DATA'
+            });
+          });
+          return Promise.resolve();
+        } else {
+          console.log('[SW] No hay clientes disponibles para sincronizar');
+          return Promise.resolve();
+        }
+      })
+    );
   }
 });
 
-async function notifyClientsToSync() {
-  const clients = await self.clients.matchAll();
-  clients.forEach(client => {
-    client.postMessage({ type: 'SYNC_OFFLINE_DATA' });
-  });
-}
-
-// Control de mensajes
+// Manejar mensajes desde clientes
 self.addEventListener('message', event => {
-  if (event.data?.type === 'SKIP_WAITING') {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+});
+
+// Manejar notificaciones push
+self.addEventListener('push', event => {
+  const data = event.data.json();
+  const options = {
+    body: data.body || 'Notificación de CreditApp',
+    icon: '/static/icon-192x192.png',
+    badge: '/static/icon-192x192.png'
+  };
+  
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'CreditApp', options)
+  );
 });
