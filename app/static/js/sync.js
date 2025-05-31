@@ -1,22 +1,27 @@
-// Gestor de sincronización mejorado v2
+// Gestor de sincronización corregido v3
 class SyncManager {
   constructor() {
     this.syncInProgress = false;
     this.db = null;
     this.maxRetries = 3;
     this.retryDelay = 2000;
+    this.csrfToken = null;
+    this.csrfTokenExpiry = null;
   }
 
   async init() {
     this.db = window.db;
     if (!this.db) {
-      console.error('Base de datos no disponible');
+      console.error('❌ Base de datos no disponible');
       return;
     }
 
     await this.setupServiceWorker();
     this.setupEventListeners();
     await this.updatePendingCount();
+    
+    // Obtener CSRF token inicial
+    await this.refreshCSRFToken();
   }
 
   async setupServiceWorker() {
@@ -24,9 +29,9 @@ class SyncManager {
       try {
         const registration = await navigator.serviceWorker.ready;
         await registration.sync.register('sync-offline-data');
-        console.log('Background sync registrado exitosamente');
+        console.log('✅ Background sync registrado exitosamente');
       } catch (error) {
-        console.log('Background sync no disponible:', error.message);
+        console.log('⚠️ Background sync no disponible:', error.message);
       }
     }
 
@@ -56,14 +61,18 @@ class SyncManager {
 
     // Sincronizar al volver online
     window.addEventListener('online', () => {
-      console.log('Conexión restaurada - iniciando sincronización');
+      console.log('🌐 Conexión restaurada - iniciando sincronización');
       this.showNotification('🌐 Conexión restaurada. Sincronizando datos...', 'info', 2000);
-      setTimeout(() => this.syncAllData(), 3000);
+      // Refrescar CSRF token y sincronizar
+      setTimeout(async () => {
+        await this.refreshCSRFToken();
+        await this.syncAllData();
+      }, 2000);
     });
 
     // Mostrar indicador offline
     window.addEventListener('offline', () => {
-      console.log('Sin conexión - activando modo offline');
+      console.log('📱 Sin conexión - activando modo offline');
       this.showNotification('📱 Modo offline activado', 'warning', 2000);
     });
   }
@@ -86,7 +95,7 @@ class SyncManager {
         }
       }
 
-      await this.saveOfflineForm(form.action, data);
+      const savedRecord = await this.saveOfflineForm(form.action, data);
       this.showOfflineConfirmation();
       
       // Redirigir después de mostrar confirmación
@@ -95,8 +104,10 @@ class SyncManager {
         window.location.href = `/${section}`;
       }, 2500);
       
+      return savedRecord;
+      
     } catch (error) {
-      console.error('Error manejando formulario offline:', error);
+      console.error('❌ Error manejando formulario offline:', error);
       this.showError('Error guardando datos offline');
     }
   }
@@ -104,20 +115,16 @@ class SyncManager {
   async saveOfflineForm(url, data) {
     const type = this.getTypeFromUrl(url);
     
-    // Agregar timestamp y UUID único
-    const record = {
-      type: type,
-      url: url,
-      data: data,
-      timestamp: new Date().toISOString(),
-      uuid: this.generateUUID(),
-      synced: false
-    };
-
-    await this.db.saveOfflineData(type, url, data);
-    await this.updatePendingCount();
-    
-    console.log(`📱 Formulario ${type} guardado offline con UUID:`, record.uuid);
+    try {
+      const savedRecord = await this.db.saveOfflineData(type, url, data);
+      await this.updatePendingCount();
+      
+      console.log(`📱 Formulario ${type} guardado offline - ID: ${savedRecord.id}, UUID: ${savedRecord.uuid}`);
+      return savedRecord;
+    } catch (error) {
+      console.error('❌ Error guardando formulario offline:', error);
+      throw error;
+    }
   }
 
   getTypeFromUrl(url) {
@@ -134,6 +141,43 @@ class SyncManager {
     if (url.includes('/ventas/')) return 'ventas';
     if (url.includes('/abonos/')) return 'abonos';
     return '';
+  }
+
+  async refreshCSRFToken() {
+    try {
+      const response = await fetch('/', {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-cache'
+      });
+      
+      if (response.ok) {
+        const text = await response.text();
+        const match = text.match(/name="csrf_token".*?value="([^"]+)"/);
+        if (match && match[1]) {
+          this.csrfToken = match[1];
+          this.csrfTokenExpiry = Date.now() + (30 * 60 * 1000); // 30 minutos
+          console.log('🔑 CSRF token actualizado exitosamente');
+          return this.csrfToken;
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error obteniendo CSRF token:', error);
+    }
+    
+    this.csrfToken = null;
+    this.csrfTokenExpiry = null;
+    return null;
+  }
+
+  async getValidCSRFToken() {
+    // Verificar si el token actual es válido
+    if (this.csrfToken && this.csrfTokenExpiry && Date.now() < this.csrfTokenExpiry) {
+      return this.csrfToken;
+    }
+    
+    // Refrescar token si es necesario
+    return await this.refreshCSRFToken();
   }
 
   async syncAllData() {
@@ -160,26 +204,39 @@ class SyncManager {
       let errorCount = 0;
       const errors = [];
 
-      // Obtener CSRF token fresco antes de sincronizar
-      const csrfToken = await this.getCSRFToken();
+      // Asegurar CSRF token fresco
+      const csrfToken = await this.getValidCSRFToken();
       if (!csrfToken) {
-        console.warn('⚠️ No se pudo obtener CSRF token');
+        console.warn('⚠️ No se pudo obtener CSRF token válido');
       }
 
       // Sincronizar cada item
       for (const item of pending) {
         try {
+          if (!item.id || item.id === undefined) {
+            console.error(`❌ Item sin ID válido:`, item);
+            errorCount++;
+            continue;
+          }
+
           const success = await this.syncSingleItem(item, csrfToken);
           if (success) {
-            await this.db.markAsSynced(item.id);
-            successCount++;
-            console.log(`✅ Sincronizado: ${item.type} #${item.id}`);
+            const marked = await this.db.markAsSynced(item.id);
+            if (marked) {
+              successCount++;
+              console.log(`✅ Sincronizado: ${item.type} #${item.id} UUID: ${item.uuid}`);
+            } else {
+              console.error(`❌ No se pudo marcar como sincronizado: ${item.type} #${item.id}`);
+              errorCount++;
+            }
           } else {
+            await this.db.updateRetryCount(item.id, 'Falló sincronización');
             errorCount++;
             errors.push(`${item.type} #${item.id}`);
           }
         } catch (error) {
           console.error(`❌ Error sincronizando ${item.type} #${item.id}:`, error);
+          await this.db.updateRetryCount(item.id, error.message);
           errorCount++;
           errors.push(`${item.type} #${item.id}: ${error.message}`);
         }
@@ -191,12 +248,14 @@ class SyncManager {
       await this.updatePendingCount();
       this.showSyncResult(successCount, errorCount, errors);
 
-      // Solo recargar si hubo sincronizaciones exitosas y sin errores críticos
+      // Solo recargar si hubo sincronizaciones exitosas y no hay errores
       if (successCount > 0 && errorCount === 0) {
         setTimeout(() => {
           console.log('🔄 Recargando página tras sincronización exitosa...');
           window.location.reload();
         }, 2000);
+      } else if (errorCount > 0) {
+        console.log(`⚠️ Sincronización parcial: ${successCount} exitosos, ${errorCount} errores`);
       }
 
     } catch (error) {
@@ -209,6 +268,7 @@ class SyncManager {
 
   async syncSingleItem(item, csrfToken) {
     let retries = 0;
+    let currentToken = csrfToken;
     
     while (retries < this.maxRetries) {
       try {
@@ -220,8 +280,8 @@ class SyncManager {
         }
         
         // Agregar CSRF token si está disponible
-        if (csrfToken) {
-          formData.append('csrf_token', csrfToken);
+        if (currentToken) {
+          formData.append('csrf_token', currentToken);
         }
 
         const response = await fetch(item.url, {
@@ -241,11 +301,17 @@ class SyncManager {
         
         // Si es error de CSRF, intentar obtener nuevo token
         if (response.status === 400 || response.status === 403) {
-          console.warn(`⚠️ Error ${response.status} en ${item.type}, obteniendo nuevo CSRF token...`);
-          csrfToken = await this.getCSRFToken();
-          retries++;
-          await new Promise(resolve => setTimeout(resolve, this.retryDelay * retries));
-          continue;
+          const responseText = await response.text();
+          if (responseText.includes('CSRF') || responseText.includes('expired')) {
+            console.warn(`⚠️ Error CSRF en ${item.type}, obteniendo nuevo token...`);
+            currentToken = await this.refreshCSRFToken();
+            
+            if (currentToken) {
+              retries++;
+              await new Promise(resolve => setTimeout(resolve, this.retryDelay * retries));
+              continue;
+            }
+          }
         }
         
         // Para otros errores, no reintentar
@@ -267,24 +333,6 @@ class SyncManager {
     return false;
   }
 
-  async getCSRFToken() {
-    try {
-      const response = await fetch('/', {
-        method: 'GET',
-        credentials: 'same-origin'
-      });
-      
-      if (response.ok) {
-        const text = await response.text();
-        const match = text.match(/name="csrf_token".*?value="([^"]+)"/);
-        return match ? match[1] : null;
-      }
-    } catch (error) {
-      console.error('Error obteniendo CSRF token:', error);
-    }
-    return null;
-  }
-
   async updatePendingCount() {
     try {
       const count = await this.db.countPendingChanges();
@@ -300,7 +348,7 @@ class SyncManager {
       
       return count;
     } catch (error) {
-      console.error('Error actualizando contador:', error);
+      console.error('❌ Error actualizando contador:', error);
       return 0;
     }
   }
@@ -352,6 +400,19 @@ class SyncManager {
       setTimeout(() => notification.remove(), 300);
     }, duration);
   }
+
+  // Método para depuración
+  async debugSync() {
+    console.log('🔍 DEBUG SYNC - Estado actual:');
+    console.log('En progreso:', this.syncInProgress);
+    console.log('Online:', navigator.onLine);
+    console.log('CSRF Token:', this.csrfToken ? 'Disponible' : 'No disponible');
+    
+    if (this.db) {
+      const pending = await this.db.debugPendingRecords();
+      console.log('Registros pendientes:', pending.length);
+    }
+  }
 }
 
 // Inicializar cuando DOM esté listo
@@ -370,6 +431,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.syncManager = new SyncManager();
         await window.syncManager.init();
         console.log('✅ SyncManager inicializado exitosamente');
+        
+        // Agregar método debug global
+        window.debugSync = () => window.syncManager.debugSync();
       } else {
         console.error('❌ No se pudo inicializar SyncManager: DB no disponible');
       }
