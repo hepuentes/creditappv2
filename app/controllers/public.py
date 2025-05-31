@@ -165,3 +165,8 @@ def share_page(tipo, id):
     except Exception as e:
         current_app.logger.error(f"Error en página de compartir: {str(e)}")
         abort(500, description="Error al cargar la página de compartir")
+
+@public_bp.route('/ping')
+def ping():
+    """Endpoint simple para verificar conexión"""
+    return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()}), 200
