@@ -4,6 +4,7 @@ from app.pdf.venta import generar_pdf_venta
 from app.pdf.abono import generar_pdf_abono
 import hashlib
 import base64
+from datetime import datetime
 
 public_bp = Blueprint('public', __name__, url_prefix='/public')
 
