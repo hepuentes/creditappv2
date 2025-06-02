@@ -219,6 +219,7 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
     <!-- Scripts de la aplicación -->
+<script src="{{ url_for('static', filename='js/sw-unregister.js') }}"></script>
 <script src="{{ url_for('static', filename='js/db.js') }}"></script>
 <script src="{{ url_for('static', filename='js/sync.js') }}"></script>
 <script src="{{ url_for('static', filename='js/offline-handler.js') }}"></script>
@@ -287,6 +288,15 @@ function updateOfflineIndicator() {
         indicator.style.display = isOffline ? 'flex' : 'none';
         
         if (isOffline) {
+            // Verificar si el botón de centro offline ya existe
+            if (!indicator.querySelector('a[href="/offline"]')) {
+                const offlinePageBtn = document.createElement('a');
+                offlinePageBtn.href = '/offline';
+                offlinePageBtn.className = 'ms-2 btn btn-sm btn-dark';
+                offlinePageBtn.innerHTML = 'Centro Offline';
+                indicator.appendChild(offlinePageBtn);
+            }
+            
             // Mostrar notificación
             const notification = document.createElement('div');
             notification.className = 'alert alert-warning position-fixed top-0 start-50 translate-middle-x mt-3';
