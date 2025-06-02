@@ -1,281 +1,260 @@
-// app/static/service-worker.js
+// CreditApp Service Worker v7 - Offline First
+// ===================================
 
-// -----------------------------
-// 1. CONSTANTES DE CONFIGURACIÓN
-// -----------------------------
-
-// Incrementar esta versión cada vez que despliegues para forzar actualización de caché
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const CACHE_NAME = `creditapp-${CACHE_VERSION}`;
+const API_CACHE = `creditapp-api-${CACHE_VERSION}`;
 const OFFLINE_PAGE = '/offline';
-const CSRF_HEADER = 'X-CSRFToken';
 
-// Recursos a cachear inicialmente
-const INITIAL_CACHED_RESOURCES = [
+// Recursos esenciales para offline
+const ESSENTIAL_RESOURCES = [
   '/',
   '/dashboard',
+  '/clientes',
+  '/clientes/crear',
+  '/productos',
+  '/productos/crear',
+  '/ventas',
+  '/ventas/crear',
+  '/abonos',
+  '/abonos/crear',
+  '/creditos',
+  '/cajas',
   OFFLINE_PAGE,
   '/static/css/style.css',
   '/static/js/main.js',
   '/static/js/db.js',
   '/static/js/sync.js',
-  '/static/js/pwa-helper.js',
   '/static/js/offline-handler.js',
   '/static/manifest.json',
   '/static/icon-192x192.png',
   '/static/icon-512x512.png',
+  '/static/favicon.ico',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js',
   'https://code.jquery.com/jquery-3.7.1.min.js'
 ];
 
-// -----------------------------
-// 2. EVENTO INSTALL
-// -----------------------------
-
+// Instalar y cachear recursos
 self.addEventListener('install', event => {
-  console.log('[SW] Instalando Service Worker, versión:', CACHE_VERSION);
+  console.log('[SW] Instalando Service Worker v7');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[SW] Cacheando recursos iniciales');
-        return cache.addAll(INITIAL_CACHED_RESOURCES)
-          .catch(error => {
-            console.error('[SW] Error al cachear recursos iniciales:', error);
-            // Continuar incluso si falla algún recurso
-            return Promise.resolve();
-          });
+        return Promise.all(
+          ESSENTIAL_RESOURCES.map(url => {
+            return cache.add(url).catch(err => {
+              console.warn(`[SW] No se pudo cachear: ${url}`, err);
+              return Promise.resolve();
+            });
+          })
+        );
       })
       .then(() => {
-        console.log('[SW] Instalación completada');
-        return self.skipWaiting(); // Pasa directamente a 'activate'
+        console.log('[SW] Recursos esenciales cacheados');
+        return self.skipWaiting();
       })
   );
 });
 
-// -----------------------------
-// 3. EVENTO ACTIVATE
-// -----------------------------
-
+// Activar y limpiar cachés viejos
 self.addEventListener('activate', event => {
-  console.log('[SW] Activando Service Worker, limpiando cachés antiguas');
+  console.log('[SW] Activando Service Worker v7');
   event.waitUntil(
     caches.keys()
       .then(cacheNames => {
         return Promise.all(
           cacheNames
-            // Filtrar solo cachés que empiecen con 'creditapp-' y no sean la versión actual
-            .filter(name => name.startsWith('creditapp-') && name !== CACHE_NAME)
-            .map(oldName => {
-              console.log('[SW] Eliminando caché antiguo:', oldName);
-              return caches.delete(oldName);
+            .filter(name => name.startsWith('creditapp-') && name !== CACHE_NAME && name !== API_CACHE)
+            .map(name => {
+              console.log('[SW] Eliminando caché viejo:', name);
+              return caches.delete(name);
             })
         );
       })
-      .then(() => {
-        console.log('[SW] Cachés obsoletos eliminados');
-        return self.clients.claim(); // Toma el control inmediato de las páginas abiertas
-      })
+      .then(() => self.clients.claim())
   );
 });
 
-// -----------------------------
-// 4. FUNCIONES AUXILIARES
-// -----------------------------
-
-// Verifica si la respuesta es válida y cacheable
-function isValidResponse(response) {
-  return response && response.status >= 200 && response.status < 400;
-}
-
-// Decide si una URL debe ser cacheada
-function shouldCache(url) {
-  const urlObj = new URL(url);
-  
-  // No cachear endpoints de API o autenticación
-  if (urlObj.pathname.includes('/api/') || urlObj.pathname.includes('/auth/')) {
-    return false;
-  }
-
-  // Cachear recursos estáticos y rutas clave
-  return urlObj.pathname.startsWith('/static/') ||
-         ['/', '/dashboard', '/clientes', '/productos', '/ventas', '/abonos', '/creditos'].includes(urlObj.pathname);
-}
-
-// Devuelve la página offline desde el caché o Response.error()
-async function getOfflinePage() {
-  const cache = await caches.open(CACHE_NAME);
-  const match = await cache.match(OFFLINE_PAGE);
-  return match || Response.error();
-}
-
-// Extrae token CSRF de una respuesta HTML
-function extractCSRFToken(htmlText) {
-  const match = htmlText.match(/name="csrf_token".*?value="([^"]+)"/);
-  return match && match[1] ? match[1] : null;
-}
-
-// -----------------------------
-// 5. EVENTO FETCH
-// -----------------------------
-
+// Estrategia de fetch mejorada
 self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Solo gestionar peticiones a nuestro propio dominio
+  // Solo manejar requests del mismo origen
   if (url.origin !== self.location.origin) {
     return;
   }
 
-  // Manejo de solicitudes POST en modo offline
-  if (request.method === 'POST') {
-    if (!navigator.onLine) {
-      // Solo interceptar POSTs a rutas de creación/registro
-      if (
-        url.pathname.includes('/crear') ||
-        url.pathname.includes('/nuevo') ||
-        url.pathname.includes('/registrar')
-      ) {
-        event.respondWith(
-          (async () => {
-            try {
-              // Clonar la petición para leer formData
-              const requestClone = request.clone();
-              const formData = await requestClone.formData();
-              const data = {};
-              for (const [key, value] of formData.entries()) {
-                data[key] = value;
-              }
-
-              // Enviar mensaje al cliente para almacenar datos localmente
-              const client = await self.clients.get(event.clientId);
-              if (client) {
-                client.postMessage({
-                  type: 'SAVE_OFFLINE_FORM',
-                  url: request.url,
-                  data: data
-                });
-              }
-
-              // Mostrar página offline
-              return await getOfflinePage();
-            } catch (error) {
-              console.error('[SW] Error procesando POST offline:', error);
-              return Response.error();
-            }
-          })()
-        );
-        return;
-      }
+  // Manejo especial para POST offline
+  if (request.method === 'POST' && !navigator.onLine) {
+    if (url.pathname.includes('/crear') || 
+        url.pathname.includes('/nuevo') || 
+        url.pathname.includes('/registrar')) {
+      event.respondWith(handleOfflinePost(request, event.clientId));
+      return;
     }
-    // Si está online, dejar pasar la petición normalmente
-    return;
   }
 
-  // Estrategia de cache para GETs
-  event.respondWith(
-    (async () => {
-      try {
-        if (navigator.onLine) {
-          try {
-            // Intentar primero desde la red
-            const networkResponse = await fetch(request);
+  // Para GET requests
+  if (request.method === 'GET') {
+    // API requests - Network first, cache fallback
+    if (url.pathname.includes('/api/')) {
+      event.respondWith(networkFirstStrategy(request));
+      return;
+    }
 
-            // Si la respuesta es válida y debe cachearse, guardarla
-            if (isValidResponse(networkResponse) && shouldCache(request.url)) {
-              const responseClone = networkResponse.clone();
-              const cache = await caches.open(CACHE_NAME);
-              cache.put(request, responseClone);
-
-              // Si es HTML, extraer token CSRF y enviar al cliente
-              const contentType = responseClone.headers.get('content-type');
-              if (contentType && contentType.includes('text/html')) {
-                const htmlText = await responseClone.clone().text();
-                const csrfToken = extractCSRFToken(htmlText);
-                if (csrfToken) {
-                  self.clients.matchAll().then(clients => {
-                    clients.forEach(client => {
-                      client.postMessage({
-                        type: 'UPDATE_CSRF_TOKEN',
-                        token: csrfToken
-                      });
-                    });
-                  });
-                }
-              }
-            }
-
-            return networkResponse;
-          } catch (error) {
-            console.log('[SW] Error de red, buscando en caché:', error);
-            const cached = await caches.match(request);
-            return cached || getOfflinePage();
-          }
-        } else {
-          // Offline: devolver desde caché
-          const cached = await caches.match(request);
-          if (!cached && request.mode === 'navigate') {
-            // Si no está en caché y es navegación, mostrar offline
-            return await getOfflinePage();
-          }
-          return cached || Response.error();
-        }
-      } catch (error) {
-        console.error('[SW] Error crítico en fetch:', error);
-        return await getOfflinePage();
-      }
-    })()
-  );
+    // Navegación y recursos - Cache first, network fallback
+    event.respondWith(cacheFirstStrategy(request));
+  }
 });
 
-// -----------------------------
-// 6. EVENTO SYNC (Background Sync)
-// -----------------------------
+// Estrategia Cache First
+async function cacheFirstStrategy(request) {
+  try {
+    // Buscar en caché primero
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      // Si está en caché y estamos online, actualizar en background
+      if (navigator.onLine) {
+        updateCache(request);
+      }
+      return cachedResponse;
+    }
 
+    // Si no está en caché, intentar red
+    if (navigator.onLine) {
+      const networkResponse = await fetch(request);
+      if (networkResponse.ok) {
+        // Clonar ANTES de usar la respuesta
+        const responseToCache = networkResponse.clone();
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(request, responseToCache);
+      }
+      return networkResponse;
+    }
+
+    // Si estamos offline y no hay caché, devolver página offline
+    if (request.mode === 'navigate') {
+      return caches.match(OFFLINE_PAGE);
+    }
+
+    // Para otros recursos, devolver error
+    return new Response('Recurso no disponible offline', { status: 503 });
+  } catch (error) {
+    console.error('[SW] Error en cacheFirstStrategy:', error);
+    return caches.match(OFFLINE_PAGE) || new Response('Error', { status: 500 });
+  }
+}
+
+// Estrategia Network First para API
+async function networkFirstStrategy(request) {
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse.ok) {
+      const responseToCache = networkResponse.clone();
+      const cache = await caches.open(API_CACHE);
+      cache.put(request, responseToCache);
+    }
+    return networkResponse;
+  } catch (error) {
+    // Si falla la red, buscar en caché
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    return new Response(JSON.stringify({ error: 'Sin conexión' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+// Actualizar caché en background
+async function updateCache(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+  } catch (error) {
+    // Ignorar errores de actualización en background
+  }
+}
+
+// Manejar POST offline
+async function handleOfflinePost(request, clientId) {
+  try {
+    const formData = await request.formData();
+    const data = {};
+    for (const [key, value] of formData.entries()) {
+      data[key] = value;
+    }
+
+    // Notificar al cliente para guardar en IndexedDB
+    const client = await self.clients.get(clientId);
+    if (client) {
+      client.postMessage({
+        type: 'SAVE_OFFLINE_FORM',
+        url: request.url,
+        data: data
+      });
+    }
+
+    // Devolver respuesta HTML indicando que se guardó offline
+    return new Response(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Guardado Offline</title>
+        <meta http-equiv="refresh" content="2;url=${new URL(request.url).pathname.split('/').slice(0, -1).join('/')}">
+      </head>
+      <body>
+        <p>Datos guardados localmente. Redirigiendo...</p>
+      </body>
+      </html>
+    `, {
+      headers: { 'Content-Type': 'text/html' }
+    });
+  } catch (error) {
+    console.error('[SW] Error manejando POST offline:', error);
+    return new Response('Error al guardar offline', { status: 500 });
+  }
+}
+
+// Background sync
 self.addEventListener('sync', event => {
-  console.log('[SW] Evento sync recibido:', event.tag);
+  console.log('[SW] Evento sync:', event.tag);
   if (event.tag === 'sync-offline-data') {
     event.waitUntil(
       self.clients.matchAll().then(clients => {
-        if (clients.length > 0) {
-          // Notificar a todos los clientes para que sincronicen
-          clients.forEach(client => {
-            client.postMessage({ type: 'SYNC_OFFLINE_DATA' });
-          });
-        } else {
-          console.log('[SW] No hay clientes activos para sincronizar');
-        }
-        return Promise.resolve();
+        clients.forEach(client => {
+          client.postMessage({ type: 'SYNC_OFFLINE_DATA' });
+        });
       })
     );
   }
 });
 
-// -----------------------------
-// 7. EVENTO MESSAGE (Comunicación con clientes)
-// -----------------------------
-
+// Mensajes del cliente
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 });
 
-// -----------------------------
-// 8. EVENTO PUSH (Notificaciones Push)
-// -----------------------------
-
+// Notificaciones push
 self.addEventListener('push', event => {
-  const data = event.data.json();
   const options = {
-    body: data.body || 'Notificación de CreditApp',
+    body: event.data ? event.data.text() : 'Nueva notificación',
     icon: '/static/icon-192x192.png',
-    badge: '/static/icon-192x192.png'
+    badge: '/static/icon-192x192.png',
+    vibrate: [200, 100, 200]
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'CreditApp', options)
+    self.registration.showNotification('CreditApp', options)
   );
 });
