@@ -53,7 +53,7 @@ class SyncManager {
   setupEventListeners() {
     // Interceptar formularios para modo offline
     document.addEventListener('submit', async (e) => {
-      if (!navigator.onLine && this.shouldInterceptForm(e.target)) {
+      if (!navigator.onLine && e.target.tagName === 'FORM' && this.shouldInterceptForm(e.target)) {
         e.preventDefault();
         await this.handleOfflineForm(e.target);
       }
