@@ -1,8 +1,9 @@
-// Manejador principal de modo offline - VERSIÓN CORREGIDA
+// app/static/js/offline-handler.js
+// Manejador principal de modo offline - VERSIÓN CORREGIDA V2
 class OfflineHandler {
   constructor() {
     this.isOffline = !navigator.onLine;
-    this.db = null; // Cambiado de window.offlineDB a null
+    this.db = null;
     this.pendingRequests = [];
     this.init();
   }
@@ -30,6 +31,11 @@ class OfflineHandler {
       // Actualizar contador de pendientes
       await this.updatePendingCount();
       
+      // Precachear recursos importantes
+      if (navigator.onLine) {
+        setTimeout(() => this.precacheResources(), 2000);
+      }
+      
     } catch (error) {
       console.error('❌ Error inicializando OfflineHandler:', error);
     }
@@ -51,6 +57,7 @@ class OfflineHandler {
       navigator.serviceWorker.addEventListener('message', async (e) => {
         if (e.data.type === 'SAVE_OFFLINE_FORM') {
           await this.saveFormData(e.data.url, e.data.data);
+          this.showOfflineConfirmation();
         } else if (e.data.type === 'SYNC_OFFLINE_DATA') {
           if (window.syncManager) {
             await window.syncManager.syncAllData();
@@ -111,10 +118,28 @@ class OfflineHandler {
       // Limpiar formulario
       form.reset();
       
+      // Redirigir a la página principal después de guardar
+      const section = this.getSectionFromUrl(formAction);
+      if (section) {
+        setTimeout(() => {
+          window.location.href = `/${section}`;
+        }, 1500);
+      }
+      
     } catch (error) {
       console.error('❌ Error guardando datos offline:', error);
       this.showError('Error al guardar datos offline');
     }
+  }
+
+  getSectionFromUrl(url) {
+    if (url.includes('/clientes')) return 'clientes';
+    if (url.includes('/productos')) return 'productos';
+    if (url.includes('/ventas')) return 'ventas';
+    if (url.includes('/abonos')) return 'abonos';
+    if (url.includes('/creditos')) return 'creditos';
+    if (url.includes('/cajas')) return 'cajas';
+    return '';
   }
 
   async handleLinkClick(event) {
@@ -133,19 +158,38 @@ class OfflineHandler {
       '/abonos', '/creditos', '/cajas', '/offline'
     ];
     
-    if (cachedPages.includes(href)) {
-      // Permitir navegación normal
+    // Si es un enlace relativo a una página principal, permitir la navegación
+    if (cachedPages.some(page => href === page || href.startsWith(page + '/'))) {
+      // No intervenir, permitir navegación normal
+      console.log('📱 Permitiendo navegación offline a:', href);
       return;
     }
     
     // Para otras páginas, prevenir navegación y mostrar mensaje
     event.preventDefault();
     this.showOfflineMessage('Esta página no está disponible offline');
+    
+    // Opcional: redirigir a la página offline si es una sección principal
+    if (href.includes('/clientes') || 
+        href.includes('/productos') || 
+        href.includes('/ventas') || 
+        href.includes('/abonos') || 
+        href.includes('/creditos') || 
+        href.includes('/cajas')) {
+      const section = this.getSectionFromUrl(href);
+      if (section) {
+        window.location.href = `/${section}`;
+      }
+    }
   }
 
   async saveFormData(url, data, type) {
     if (!this.db) {
       throw new Error('Base de datos no disponible');
+    }
+    
+    if (!type) {
+      type = this.getTypeFromUrl(url);
     }
     
     // Guardar en IndexedDB usando el método correcto
@@ -155,6 +199,15 @@ class OfflineHandler {
     await this.updatePendingCount();
     
     return record;
+  }
+
+  getTypeFromUrl(url) {
+    if (url.includes('/clientes/')) return 'cliente';
+    if (url.includes('/productos/')) return 'producto';
+    if (url.includes('/ventas/')) return 'venta';
+    if (url.includes('/abonos/')) return 'abono';
+    if (url.includes('/creditos/')) return 'credito';
+    return 'unknown';
   }
 
   showOfflineSuccess(entityType) {
@@ -272,6 +325,14 @@ class OfflineHandler {
         </span>
       `;
       indicator.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #ffc107; color: #000; padding: 10px 20px; border-radius: 5px; z-index: 9999; display: flex; align-items: center; gap: 10px;';
+      
+      // Agregar botón para ir a página offline
+      const offlinePageBtn = document.createElement('a');
+      offlinePageBtn.href = '/offline';
+      offlinePageBtn.className = 'ms-2 btn btn-sm btn-dark';
+      offlinePageBtn.innerHTML = 'Centro Offline';
+      indicator.appendChild(offlinePageBtn);
+      
       document.body.appendChild(indicator);
     }
     
@@ -289,6 +350,47 @@ class OfflineHandler {
       badges.forEach(badge => badge.textContent = count);
     } catch (error) {
       console.error('❌ Error actualizando contador:', error);
+    }
+  }
+
+  // Pre-cachear recursos importantes
+  async precacheResources() {
+    if (!navigator.onLine) return;
+    
+    try {
+      // Hacer solicitudes para cachear recursos clave
+      const pagesToCache = [
+        '/',
+        '/dashboard',
+        '/clientes',
+        '/productos',
+        '/ventas',
+        '/abonos',
+        '/creditos',
+        '/cajas',
+        '/offline'
+      ];
+      
+      console.log('🔄 Pre-cacheando recursos para uso offline...');
+      
+      for (const page of pagesToCache) {
+        try {
+          const response = await fetch(page, {
+            credentials: 'same-origin',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          });
+          
+          if (response.ok || response.redirected) {
+            console.log(`✅ Cacheado: ${page}`);
+          }
+        } catch (error) {
+          console.warn(`⚠️ Error pre-cacheando ${page}:`, error);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error durante pre-cacheo:', error);
     }
   }
 }
