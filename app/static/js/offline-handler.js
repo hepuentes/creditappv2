@@ -1,24 +1,37 @@
-// Manejador principal de modo offline
+// Manejador principal de modo offline - VERSIÓN CORREGIDA
 class OfflineHandler {
   constructor() {
     this.isOffline = !navigator.onLine;
-    this.db = window.offlineDB;
+    this.db = null; // Cambiado de window.offlineDB a null
+    this.pendingRequests = [];
     this.init();
   }
 
   async init() {
-    // Inicializar DB
-    await this.db.init();
-    
-    // Registrar event listeners
-    this.setupEventListeners();
-    
-    // Actualizar UI
-    this.updateUI();
-    
-    // Cargar datos en caché si estamos online
-    if (navigator.onLine) {
-      this.cacheInitialData();
+    try {
+      // Esperar a que window.db esté disponible
+      if (!window.db) {
+        console.log('⏳ Esperando base de datos...');
+        // Reintentar en 500ms
+        setTimeout(() => this.init(), 500);
+        return;
+      }
+      
+      // Usar la instancia global de db
+      this.db = window.db;
+      console.log('✅ OfflineHandler inicializado con DB');
+      
+      // Registrar event listeners
+      this.setupEventListeners();
+      
+      // Actualizar UI
+      this.updateUI();
+      
+      // Actualizar contador de pendientes
+      await this.updatePendingCount();
+      
+    } catch (error) {
+      console.error('❌ Error inicializando OfflineHandler:', error);
     }
   }
 
@@ -28,15 +41,20 @@ class OfflineHandler {
     window.addEventListener('offline', () => this.handleOffline());
     
     // Interceptar formularios
-    document.addEventListener('submit', (e) => this.handleFormSubmit(e));
+    document.addEventListener('submit', (e) => this.handleFormSubmit(e), true);
+    
+    // Interceptar clicks en links
+    document.addEventListener('click', (e) => this.handleLinkClick(e), true);
     
     // Mensajes del Service Worker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', (e) => {
+      navigator.serviceWorker.addEventListener('message', async (e) => {
         if (e.data.type === 'SAVE_OFFLINE_FORM') {
-          this.saveFormData(e.data.url, e.data.data);
-        } else if (e.data.type === 'SYNC_NOW') {
-          this.syncPendingData();
+          await this.saveFormData(e.data.url, e.data.data);
+        } else if (e.data.type === 'SYNC_OFFLINE_DATA') {
+          if (window.syncManager) {
+            await window.syncManager.syncAllData();
+          }
         }
       });
     }
@@ -47,7 +65,7 @@ class OfflineHandler {
     if (navigator.onLine) return;
     
     const form = event.target;
-    const formAction = form.action;
+    const formAction = form.action || '';
     
     // Solo interceptar formularios de creación
     if (!formAction.includes('/crear') && 
@@ -57,13 +75,23 @@ class OfflineHandler {
     }
     
     event.preventDefault();
+    event.stopPropagation();
+    
+    console.log('📱 Interceptando formulario offline:', formAction);
     
     // Obtener datos del formulario
     const formData = new FormData(form);
     const data = {};
+    
+    // Convertir FormData a objeto
     for (let [key, value] of formData.entries()) {
-      data[key] = value;
+      if (key !== 'csrf_token') {
+        data[key] = value;
+      }
     }
+    
+    // Agregar timestamp
+    data.timestamp = new Date().toISOString();
     
     // Determinar tipo de entidad
     let entityType = 'unknown';
@@ -73,71 +101,159 @@ class OfflineHandler {
     else if (formAction.includes('abonos')) entityType = 'abono';
     
     // Guardar en IndexedDB
-    await this.saveFormData(formAction, data, entityType);
+    try {
+      const savedRecord = await this.saveFormData(formAction, data, entityType);
+      console.log('✅ Datos guardados offline:', savedRecord);
+      
+      // Mostrar feedback
+      this.showOfflineSuccess(entityType);
+      
+      // Limpiar formulario
+      form.reset();
+      
+    } catch (error) {
+      console.error('❌ Error guardando datos offline:', error);
+      this.showError('Error al guardar datos offline');
+    }
+  }
+
+  async handleLinkClick(event) {
+    // Solo interceptar si estamos offline
+    if (navigator.onLine) return;
     
-    // Mostrar feedback
-    this.showOfflineSuccess(entityType);
+    const link = event.target.closest('a');
+    if (!link) return;
+    
+    const href = link.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+    
+    // Permitir navegación a páginas cacheadas
+    const cachedPages = [
+      '/', '/dashboard', '/clientes', '/productos', '/ventas', 
+      '/abonos', '/creditos', '/cajas', '/offline'
+    ];
+    
+    if (cachedPages.includes(href)) {
+      // Permitir navegación normal
+      return;
+    }
+    
+    // Para otras páginas, prevenir navegación y mostrar mensaje
+    event.preventDefault();
+    this.showOfflineMessage('Esta página no está disponible offline');
   }
 
   async saveFormData(url, data, type) {
-    // Agregar UUID para evitar duplicados
-    data.uuid = this.db.generateUUID();
+    if (!this.db) {
+      throw new Error('Base de datos no disponible');
+    }
     
-    // Guardar en IndexedDB
-    await this.db.saveOfflineData(type || this.getTypeFromUrl(url), data);
+    // Guardar en IndexedDB usando el método correcto
+    const record = await this.db.saveOfflineData(type, url, data);
     
     // Actualizar contador
-    this.updatePendingCount();
-  }
-
-  getTypeFromUrl(url) {
-    if (url.includes('clientes')) return 'cliente';
-    if (url.includes('productos')) return 'producto';
-    if (url.includes('ventas')) return 'venta';
-    if (url.includes('abonos')) return 'abono';
-    return 'unknown';
+    await this.updatePendingCount();
+    
+    return record;
   }
 
   showOfflineSuccess(entityType) {
-    const mensaje = `${entityType} guardado localmente. Se sincronizará cuando haya conexión.`;
+    const messages = {
+      'cliente': 'Cliente guardado offline',
+      'producto': 'Producto guardado offline',
+      'venta': 'Venta guardada offline',
+      'abono': 'Abono guardado offline'
+    };
+    
+    const message = messages[entityType] || 'Datos guardados offline';
     
     // Crear notificación
     const alert = document.createElement('div');
     alert.className = 'alert alert-warning alert-dismissible fade show position-fixed';
-    alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 350px;';
+    alert.style.cssText = 'top: 70px; right: 20px; z-index: 9999; max-width: 350px;';
     alert.innerHTML = `
-      <h5><i class="fas fa-wifi-slash"></i> Modo Offline</h5>
-      <p>${mensaje}</p>
+      <div class="d-flex align-items-center">
+        <i class="fas fa-wifi-slash me-2"></i>
+        <div>
+          <strong>Modo Offline</strong><br>
+          <small>${message}. Se sincronizará cuando haya conexión.</small>
+        </div>
+      </div>
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
     
     document.body.appendChild(alert);
     
-    // Redirigir después de 2 segundos
+    // Auto cerrar después de 5 segundos
     setTimeout(() => {
-      const redirectMap = {
-        'cliente': '/clientes',
-        'producto': '/productos',
-        'venta': '/ventas',
-        'abono': '/abonos'
-      };
-      window.location.href = redirectMap[entityType] || '/dashboard';
-    }, 2000);
+      alert.classList.remove('show');
+      setTimeout(() => alert.remove(), 300);
+    }, 5000);
+  }
+
+  showOfflineMessage(message) {
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-info alert-dismissible fade show position-fixed';
+    alert.style.cssText = 'top: 70px; right: 20px; z-index: 9999; max-width: 350px;';
+    alert.innerHTML = `
+      <div class="d-flex align-items-center">
+        <i class="fas fa-info-circle me-2"></i>
+        <span>${message}</span>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alert);
+    
+    setTimeout(() => {
+      alert.classList.remove('show');
+      setTimeout(() => alert.remove(), 300);
+    }, 3000);
+  }
+
+  showError(message) {
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+    alert.style.cssText = 'top: 70px; right: 20px; z-index: 9999; max-width: 350px;';
+    alert.innerHTML = `
+      <div class="d-flex align-items-center">
+        <i class="fas fa-exclamation-circle me-2"></i>
+        <span>${message}</span>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alert);
+    
+    setTimeout(() => {
+      alert.classList.remove('show');
+      setTimeout(() => alert.remove(), 300);
+    }, 5000);
   }
 
   async handleOnline() {
-    console.log('Conexión restaurada');
+    console.log('🌐 Conexión restaurada');
     this.isOffline = false;
     this.updateUI();
     
+    // Notificar al usuario
+    this.showOfflineMessage('Conexión restaurada. Sincronizando datos...');
+    
     // Esperar un momento y sincronizar
-    setTimeout(() => this.syncPendingData(), 2000);
+    setTimeout(async () => {
+      if (window.syncManager) {
+        await window.syncManager.syncAllData();
+      }
+    }, 2000);
   }
 
   handleOffline() {
-    console.log('Sin conexión');
+    console.log('📱 Sin conexión - Modo Offline activado');
     this.isOffline = true;
     this.updateUI();
+    
+    // Notificar al usuario
+    this.showOfflineMessage('Modo offline activado. Puedes seguir trabajando.');
   }
 
   updateUI() {
@@ -150,129 +266,30 @@ class OfflineHandler {
       indicator.className = 'offline-indicator';
       indicator.innerHTML = `
         <i class="fas fa-wifi-slash"></i>
-        <span>Modo sin conexión</span>
-        <span class="badge bg-light text-dark ms-2" id="pending-count">0</span>
+        <span>Modo Offline</span>
+        <span class="badge bg-light text-dark ms-2">
+          <span id="pending-count">0</span> pendientes
+        </span>
       `;
+      indicator.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #ffc107; color: #000; padding: 10px 20px; border-radius: 5px; z-index: 9999; display: flex; align-items: center; gap: 10px;';
       document.body.appendChild(indicator);
     }
     
     if (indicator) {
-      indicator.style.display = this.isOffline ? 'block' : 'none';
+      indicator.style.display = this.isOffline ? 'flex' : 'none';
     }
-    
-    this.updatePendingCount();
   }
 
   async updatePendingCount() {
-    const pending = await this.db.getPendingData();
-    const count = pending.length;
+    if (!this.db) return;
     
-    const badges = document.querySelectorAll('#pending-count');
-    badges.forEach(badge => badge.textContent = count);
-  }
-
-  async cacheInitialData() {
     try {
-      // Cachear clientes
-      const clientesResponse = await fetch('/api/v1/sync/clientes', {
-        headers: { 'Authorization': `Bearer ${this.getAuthToken()}` }
-      });
-      if (clientesResponse.ok) {
-        const data = await clientesResponse.json();
-        await this.db.saveToCache('clientes', data.data);
-      }
-      
-      // Cachear productos
-      const productosResponse = await fetch('/api/v1/sync/productos', {
-        headers: { 'Authorization': `Bearer ${this.getAuthToken()}` }
-      });
-      if (productosResponse.ok) {
-        const data = await productosResponse.json();
-        await this.db.saveToCache('productos', data.data);
-      }
+      const count = await this.db.countPendingChanges();
+      const badges = document.querySelectorAll('#pending-count');
+      badges.forEach(badge => badge.textContent = count);
     } catch (error) {
-      console.log('Error cacheando datos iniciales:', error);
+      console.error('❌ Error actualizando contador:', error);
     }
-  }
-
-  async syncPendingData() {
-    if (!navigator.onLine) return;
-    
-    console.log('Iniciando sincronización...');
-    const pending = await this.db.getPendingData();
-    
-    if (pending.length === 0) {
-      console.log('No hay datos pendientes');
-      return;
-    }
-    
-    let syncedCount = 0;
-    let errors = 0;
-    
-    for (const item of pending) {
-      try {
-        // Preparar datos para API
-        const change = {
-          uuid: item.uuid,
-          tabla: item.type + 's', // cliente -> clientes
-          operacion: 'INSERT',
-          datos: item.data,
-          timestamp: item.timestamp
-        };
-        
-        // Enviar al servidor
-        const response = await fetch('/api/v1/sync/push', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.getAuthToken()}`
-          },
-          body: JSON.stringify({
-            changes: [change],
-            device_timestamp: new Date().toISOString()
-          })
-        });
-        
-        if (response.ok) {
-          await this.db.markAsSynced(item.id);
-          syncedCount++;
-        } else {
-          errors++;
-        }
-      } catch (error) {
-        console.error('Error sincronizando:', error);
-        errors++;
-      }
-    }
-    
-    // Mostrar resultado
-    this.showSyncResult(syncedCount, errors);
-    this.updatePendingCount();
-  }
-
-  showSyncResult(success, errors) {
-    const alert = document.createElement('div');
-    alert.className = `alert ${errors > 0 ? 'alert-warning' : 'alert-success'} alert-dismissible fade show position-fixed`;
-    alert.style.cssText = 'bottom: 20px; right: 20px; z-index: 9999;';
-    
-    let message = `✅ ${success} registros sincronizados`;
-    if (errors > 0) {
-      message += ` ⚠️ ${errors} con errores`;
-    }
-    
-    alert.innerHTML = `
-      ${message}
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(alert);
-    
-    setTimeout(() => alert.remove(), 5000);
-  }
-
-  getAuthToken() {
-    // Obtener token de localStorage o sessionStorage
-    return localStorage.getItem('auth_token') || 'test-token';
   }
 }
 
@@ -280,51 +297,3 @@ class OfflineHandler {
 document.addEventListener('DOMContentLoaded', () => {
   window.offlineHandler = new OfflineHandler();
 });
-
-// Función para pre-cachear páginas críticas
-async function precacheCriticalPages() {
-    if (!navigator.onLine) return;
-    
-    console.log('Pre-cacheando páginas críticas...');
-    const pagesToCache = [
-        '/clientes',
-        '/productos', 
-        '/ventas',
-        '/abonos',
-        '/creditos',
-        '/cajas'
-    ];
-    
-    try {
-        const cache = await caches.open('creditapp-v7');
-        for (const page of pagesToCache) {
-            try {
-                const response = await fetch(page, {
-                    credentials: 'same-origin',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                });
-                
-                if (response.ok) {
-                    await cache.put(page, response);
-                    console.log(`✓ Página cacheada: ${page}`);
-                }
-            } catch (error) {
-                console.warn(`Error cacheando ${page}:`, error);
-            }
-        }
-    } catch (error) {
-        console.error('Error en pre-cacheo:', error);
-    }
-}
-
-// Ejecutar pre-cacheo cuando volvemos online
-window.addEventListener('online', () => {
-    setTimeout(precacheCriticalPages, 2000);
-});
-
-// Pre-cachear al cargar el dashboard
-if (window.location.pathname === '/' || window.location.pathname === '/dashboard') {
-    setTimeout(precacheCriticalPages, 3000);
-}
