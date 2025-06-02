@@ -1,7 +1,8 @@
-// CreditApp Service Worker v8 - Offline First Mejorado
+// app/static/service-worker.js
+// CreditApp Service Worker v9 - Offline First Mejorado con soporte para redirecciones
 // =====================================================
 
-const CACHE_VERSION = 'v8';
+const CACHE_VERSION = 'v9';
 const CACHE_NAME = `creditapp-${CACHE_VERSION}`;
 const API_CACHE = `creditapp-api-${CACHE_VERSION}`;
 const OFFLINE_PAGE = '/offline';
@@ -21,6 +22,7 @@ const ESSENTIAL_RESOURCES = [
   '/creditos',
   '/cajas',
   OFFLINE_PAGE,
+  '/auth/login',
   '/static/css/style.css',
   '/static/js/main.js',
   '/static/js/db.js',
@@ -36,20 +38,44 @@ const ESSENTIAL_RESOURCES = [
   'https://code.jquery.com/jquery-3.7.1.min.js'
 ];
 
+// Páginas accesibles en modo offline
+const OFFLINE_AVAILABLE_PAGES = [
+  '/',
+  '/dashboard',
+  '/clientes',
+  '/productos',
+  '/ventas',
+  '/abonos',
+  '/creditos',
+  '/cajas',
+  OFFLINE_PAGE
+];
+
 // Instalar y cachear recursos
 self.addEventListener('install', event => {
-  console.log('[SW] Instalando Service Worker v8');
+  console.log('[SW] Instalando Service Worker v9');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
         // Cachear recursos uno por uno para mejor control de errores
         return Promise.all(
           ESSENTIAL_RESOURCES.map(url => {
-            return fetch(url, { credentials: 'same-origin' })
+            return fetch(url, { 
+              credentials: 'same-origin',
+              redirect: 'follow'  // Seguir redirecciones automáticamente
+            })
               .then(response => {
-                if (!response.ok) {
-                  throw new Error(`Failed to fetch ${url}: ${response.status}`);
+                // Si es una redirección, seguirla y cachear el resultado final
+                if (response.redirected) {
+                  return cache.put(response.url, response.clone())
+                    .then(() => cache.put(url, response));
                 }
+                
+                if (!response.ok && !response.redirected) {
+                  console.warn(`[SW] Error al cachear ${url}: ${response.status}`);
+                  return Promise.resolve();
+                }
+                
                 return cache.put(url, response);
               })
               .catch(err => {
@@ -69,7 +95,7 @@ self.addEventListener('install', event => {
 
 // Activar y limpiar cachés viejos
 self.addEventListener('activate', event => {
-  console.log('[SW] Activando Service Worker v8');
+  console.log('[SW] Activando Service Worker v9');
   event.waitUntil(
     caches.keys()
       .then(cacheNames => {
@@ -104,14 +130,6 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Manejo especial para archivos que pueden no existir
-  if (url.pathname.includes('sw-unregister.js')) {
-    event.respondWith(
-      fetch(request).catch(() => new Response('', { status: 200 }))
-    );
-    return;
-  }
-
   // Manejo especial para POST offline
   if (request.method === 'POST' && !navigator.onLine) {
     if (url.pathname.includes('/crear') || 
@@ -124,7 +142,7 @@ self.addEventListener('fetch', event => {
 
   // Para peticiones GET
   if (request.method === 'GET') {
-    // Navegación de páginas - usar estrategia cache first
+    // Navegación de páginas - usar estrategia especial para navegación
     if (request.mode === 'navigate' || 
         request.headers.get('accept').includes('text/html')) {
       event.respondWith(handleNavigationRequest(request));
@@ -152,44 +170,70 @@ self.addEventListener('fetch', event => {
   }
 });
 
-// Manejar requests de navegación con redirecciones
+// Manejar requests de navegación con mejor soporte para redirecciones
 async function handleNavigationRequest(request) {
   try {
-    // Primero intentar desde caché
-    const cachedResponse = await caches.match(request);
+    const url = new URL(request.url);
+    const pathname = url.pathname;
     
-    if (navigator.onLine) {
-      // Si estamos online, intentar actualizar el caché
-      try {
-        const networkResponse = await fetch(request, {
-          redirect: 'manual',
+    // Si estamos offline, verificar si la página está disponible offline
+    if (!navigator.onLine) {
+      // Si es una de las páginas disponibles offline
+      if (OFFLINE_AVAILABLE_PAGES.includes(pathname)) {
+        const cachedResponse = await caches.match(pathname);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+      }
+      
+      // Si no está en caché, mostrar página offline
+      return caches.match(OFFLINE_PAGE);
+    }
+    
+    // Si estamos online, intentar red primero
+    try {
+      const networkResponse = await fetch(request, {
+        credentials: 'same-origin'
+      });
+      
+      // Si es una redirección, seguirla y cachear ambas
+      if (networkResponse.redirected) {
+        const redirectedUrl = networkResponse.url;
+        const cache = await caches.open(CACHE_NAME);
+        
+        // Guardar la redirección original
+        await cache.put(request, networkResponse.clone());
+        
+        // También guardar la URL final después de la redirección
+        const finalResponse = await fetch(redirectedUrl, {
           credentials: 'same-origin'
         });
-
-        // Si es una redirección (login), no cachear
-        if (networkResponse.type === 'opaqueredirect' || 
-            networkResponse.status === 302 || 
-            networkResponse.status === 301) {
-          return networkResponse;
-        }
-
-        // Si es exitoso, actualizar caché
-        if (networkResponse.ok) {
-          const cache = await caches.open(CACHE_NAME);
-          await cache.put(request, networkResponse.clone());
-          return networkResponse;
-        }
-
-        // Si falla, usar caché si existe
-        return cachedResponse || networkResponse;
         
-      } catch (error) {
-        console.log('[SW] Error de red, usando caché:', error);
-        return cachedResponse || caches.match(OFFLINE_PAGE);
+        if (finalResponse.ok) {
+          await cache.put(redirectedUrl, finalResponse.clone());
+        }
+        
+        return networkResponse;
       }
-    } else {
-      // Offline - usar caché o página offline
-      return cachedResponse || caches.match(OFFLINE_PAGE);
+      
+      // Si no es redirección, cachear normalmente
+      if (networkResponse.ok) {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(request, networkResponse.clone());
+      }
+      
+      return networkResponse;
+    } catch (error) {
+      // Error de red, intentar caché
+      console.log('[SW] Error de red, usando caché:', error);
+      const cachedResponse = await caches.match(request);
+      
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      
+      // Si no hay caché, mostrar página offline
+      return caches.match(OFFLINE_PAGE);
     }
   } catch (error) {
     console.error('[SW] Error en handleNavigationRequest:', error);
@@ -197,7 +241,7 @@ async function handleNavigationRequest(request) {
   }
 }
 
-// Estrategia Cache First
+// Estrategia Cache First mejorada
 async function cacheFirstStrategy(request) {
   try {
     const cachedResponse = await caches.match(request);
@@ -206,14 +250,30 @@ async function cacheFirstStrategy(request) {
     }
 
     if (navigator.onLine) {
-      const networkResponse = await fetch(request);
-      if (networkResponse.ok) {
-        const cache = await caches.open(CACHE_NAME);
-        cache.put(request, networkResponse.clone());
+      try {
+        const networkResponse = await fetch(request);
+        if (networkResponse.ok) {
+          const cache = await caches.open(CACHE_NAME);
+          cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+      } catch (error) {
+        console.warn(`[SW] Error de red para ${request.url}:`, error);
+        // Fallback a respuesta vacía pero "OK" para recursos no críticos
+        if (request.url.includes('/static/') || 
+            request.url.includes('.js') || 
+            request.url.includes('.css')) {
+          return new Response('', { status: 200 });
+        }
       }
-      return networkResponse;
     }
 
+    // Si llegamos aquí, no hay conexión y no hay caché
+    if (request.url.includes('/static/js/sw-unregister.js')) {
+      // Archivo especial que puede no existir
+      return new Response('', { status: 200 });
+    }
+    
     return new Response('Recurso no disponible offline', { status: 503 });
   } catch (error) {
     console.error('[SW] Error en cacheFirstStrategy:', error);
@@ -250,11 +310,30 @@ async function handleOfflinePost(request) {
     
     // Clonar request para poder leer el body
     const clonedRequest = request.clone();
-    const formData = await clonedRequest.formData();
-    const data = {};
+    let data = {};
+
+    // Verificar el tipo de contenido
+    const contentType = request.headers.get('Content-Type');
     
-    for (const [key, value] of formData.entries()) {
-      data[key] = value;
+    if (contentType && contentType.includes('application/json')) {
+      // Si es JSON
+      data = await clonedRequest.json();
+    } else if (contentType && contentType.includes('application/x-www-form-urlencoded')) {
+      // Si es form-urlencoded
+      const formData = await clonedRequest.formData();
+      for (const [key, value] of formData.entries()) {
+        data[key] = value;
+      }
+    } else {
+      // Intentar como formData de todos modos
+      try {
+        const formData = await clonedRequest.formData();
+        for (const [key, value] of formData.entries()) {
+          data[key] = value;
+        }
+      } catch (e) {
+        console.warn('[SW] No se pudo extraer datos del request:', e);
+      }
     }
 
     // Notificar a todos los clientes
@@ -265,6 +344,16 @@ async function handleOfflinePost(request) {
         data: data
       });
     });
+
+    // Determinar página a redirigir después del guardado
+    let redirectPage = '/';
+    
+    if (request.url.includes('/clientes')) redirectPage = '/clientes';
+    else if (request.url.includes('/productos')) redirectPage = '/productos';
+    else if (request.url.includes('/ventas')) redirectPage = '/ventas';
+    else if (request.url.includes('/abonos')) redirectPage = '/abonos';
+    else if (request.url.includes('/creditos')) redirectPage = '/creditos';
+    else if (request.url.includes('/cajas')) redirectPage = '/cajas';
 
     // Devolver página de confirmación
     const html = `
@@ -291,7 +380,7 @@ async function handleOfflinePost(request) {
         </div>
         <script>
           setTimeout(() => {
-            window.history.back();
+            window.location.href = '${redirectPage}';
           }, 2000);
         </script>
       </body>
