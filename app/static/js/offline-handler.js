@@ -280,3 +280,51 @@ class OfflineHandler {
 document.addEventListener('DOMContentLoaded', () => {
   window.offlineHandler = new OfflineHandler();
 });
+
+// Función para pre-cachear páginas críticas
+async function precacheCriticalPages() {
+    if (!navigator.onLine) return;
+    
+    console.log('Pre-cacheando páginas críticas...');
+    const pagesToCache = [
+        '/clientes',
+        '/productos', 
+        '/ventas',
+        '/abonos',
+        '/creditos',
+        '/cajas'
+    ];
+    
+    try {
+        const cache = await caches.open('creditapp-v7');
+        for (const page of pagesToCache) {
+            try {
+                const response = await fetch(page, {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                if (response.ok) {
+                    await cache.put(page, response);
+                    console.log(`✓ Página cacheada: ${page}`);
+                }
+            } catch (error) {
+                console.warn(`Error cacheando ${page}:`, error);
+            }
+        }
+    } catch (error) {
+        console.error('Error en pre-cacheo:', error);
+    }
+}
+
+// Ejecutar pre-cacheo cuando volvemos online
+window.addEventListener('online', () => {
+    setTimeout(precacheCriticalPages, 2000);
+});
+
+// Pre-cachear al cargar el dashboard
+if (window.location.pathname === '/' || window.location.pathname === '/dashboard') {
+    setTimeout(precacheCriticalPages, 3000);
+}
