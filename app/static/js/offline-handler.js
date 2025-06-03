@@ -68,70 +68,111 @@ class OfflineHandler {
   }
 
   async handleFormSubmit(event) {
-    // Solo interceptar si estamos offline
-    if (navigator.onLine) return;
-    
-    const form = event.target;
-    const formAction = form.action || '';
-    
-    // Solo interceptar formularios de creación
-    if (!formAction.includes('/crear') && 
-        !formAction.includes('/nuevo') &&
-        !formAction.includes('/registrar')) {
-      return;
-    }
-    
-    event.preventDefault();
-    event.stopPropagation();
-    
-    console.log('📱 Interceptando formulario offline:', formAction);
-    
-    // Obtener datos del formulario
-    const formData = new FormData(form);
-    const data = {};
-    
-    // Convertir FormData a objeto
-    for (let [key, value] of formData.entries()) {
-      if (key !== 'csrf_token') {
-        data[key] = value;
-      }
-    }
-    
-    // Agregar timestamp
-    data.timestamp = new Date().toISOString();
-    
-    // Determinar tipo de entidad
-    let entityType = 'unknown';
-    if (formAction.includes('clientes')) entityType = 'cliente';
-    else if (formAction.includes('productos')) entityType = 'producto';
-    else if (formAction.includes('ventas')) entityType = 'venta';
-    else if (formAction.includes('abonos')) entityType = 'abono';
-    
-    // Guardar en IndexedDB
-    try {
-      const savedRecord = await this.saveFormData(formAction, data, entityType);
-      console.log('✅ Datos guardados offline:', savedRecord);
-      
-      // Mostrar feedback
-      this.showOfflineSuccess(entityType);
-      
-      // Limpiar formulario
-      form.reset();
-      
-      // Redirigir a la página principal después de guardar
-      const section = this.getSectionFromUrl(formAction);
-      if (section) {
-        setTimeout(() => {
-          window.location.href = `/${section}`;
-        }, 1500);
-      }
-      
-    } catch (error) {
-      console.error('❌ Error guardando datos offline:', error);
-      this.showError('Error al guardar datos offline');
+  // Solo interceptar si estamos offline
+  if (navigator.onLine) return;
+  
+  const form = event.target;
+  const formAction = form.action || '';
+  
+  // Solo interceptar formularios de creación
+  if (!formAction.includes('/crear') && 
+      !formAction.includes('/nuevo') &&
+      !formAction.includes('/registrar')) {
+    return;
+  }
+  
+  event.preventDefault();
+  event.stopPropagation();
+  
+  console.log('📱 Interceptando formulario offline:', formAction);
+  
+  // Obtener datos del formulario
+  const formData = new FormData(form);
+  const data = {};
+  
+  // Convertir FormData a objeto
+  for (let [key, value] of formData.entries()) {
+    if (key !== 'csrf_token') {
+      data[key] = value;
     }
   }
+  
+  // Agregar timestamp y marca offline
+  data.timestamp = new Date().toISOString();
+  data.offline = true;
+  
+  // Determinar tipo de entidad
+  let entityType = 'unknown';
+  if (formAction.includes('clientes')) entityType = 'cliente';
+  else if (formAction.includes('productos')) entityType = 'producto';
+  else if (formAction.includes('ventas')) entityType = 'venta';
+  else if (formAction.includes('abonos')) entityType = 'abono';
+  
+  // Guardar en IndexedDB
+  try {
+    const savedRecord = await this.saveFormData(formAction, data, entityType);
+    console.log('✅ Datos guardados offline:', savedRecord);
+    
+    // Guardar también en el store específico
+    if (this.db && entityType !== 'unknown') {
+      const storeName = this.getStoreNameFromType(entityType);
+      if (storeName && this.db.db.objectStoreNames.contains(storeName)) {
+        try {
+          // ID temporal para offline
+          if (!data.id) {
+            data.id = 'offline_' + Date.now();
+          }
+          
+          // Guardar en store específico
+          const transaction = this.db.db.transaction([storeName], 'readwrite');
+          const store = transaction.objectStore(storeName);
+          
+          await new Promise((resolve, reject) => {
+            const request = store.put(data);
+            request.onsuccess = resolve;
+            request.onerror = (e) => {
+              console.error(`Error guardando en ${storeName}:`, e);
+              reject(e);
+            };
+          });
+          
+          console.log(`✅ Datos también guardados en store ${storeName}`);
+        } catch (e) {
+          console.error(`Error guardando en store específico:`, e);
+        }
+      }
+    }
+    
+    // Mostrar feedback
+    this.showOfflineSuccess(entityType);
+    
+    // Limpiar formulario
+    form.reset();
+    
+    // Redirigir a la página principal después de guardar
+    const section = this.getSectionFromUrl(formAction);
+    if (section) {
+      setTimeout(() => {
+        window.location.href = `/${section}`;
+      }, 1500);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error guardando datos offline:', error);
+    this.showError('Error al guardar datos offline');
+  }
+}
 
+// Nueva función auxiliar
+getStoreNameFromType(type) {
+  switch(type) {
+    case 'cliente': return 'clientes';
+    case 'producto': return 'productos';
+    case 'venta': return 'ventas';
+    case 'abono': return 'abonos';
+    default: return null;
+  }
+}
   getSectionFromUrl(url) {
     if (url.includes('/clientes')) return 'clientes';
     if (url.includes('/productos')) return 'productos';
