@@ -56,42 +56,177 @@ class CreditAppDB {
   }
 
   async saveOfflineData(type, url, data) {
-    try {
-      const db = await this.open();
-      const transaction = db.transaction(['pendingChanges'], 'readwrite');
-      const store = transaction.objectStore('pendingChanges');
-      
-      const uuid = this.generateUUID();
-      const record = {
-        type: type,
-        url: url,
-        data: data,
-        timestamp: new Date().toISOString(),
-        synced: 0,
-        uuid: uuid,
-        retries: 0,
-        lastError: null
+  try {
+    const db = await this.open();
+    const transaction = db.transaction(['pendingChanges'], 'readwrite');
+    const store = transaction.objectStore('pendingChanges');
+    
+    const uuid = this.generateUUID();
+    const record = {
+      type: type,
+      url: url,
+      data: data,
+      timestamp: new Date().toISOString(),
+      synced: 0,          // 0 = pendiente, 1 = sincronizado
+      uuid: uuid,
+      retries: 0,
+      lastError: null,
+      entityType: type     // Agregar campo explícito para facilitar búsquedas
+    };
+    
+    // También guardar en el store específico según tipo
+    await this.saveToEntityStore(type, data);
+    
+    return new Promise((resolve, reject) => {
+      const request = store.add(record);
+      request.onsuccess = () => {
+        const generatedId = request.result;
+        record.id = generatedId;
+        console.log('✅ Datos guardados offline - ID:', generatedId, 'UUID:', uuid, 'Tipo:', type);
+        resolve(record);
       };
-      
-      return new Promise((resolve, reject) => {
-        const request = store.add(record);
-        request.onsuccess = () => {
-          const generatedId = request.result;
-          record.id = generatedId;
-          console.log('✅ Datos guardados offline - ID:', generatedId, 'UUID:', uuid, 'Tipo:', type);
-          resolve(record);
-        };
-        request.onerror = () => {
-          console.error('❌ Error guardando datos offline:', request.error);
-          reject(request.error);
-        };
-      });
-    } catch (error) {
-      console.error('❌ Error en saveOfflineData:', error);
-      throw error;
-    }
+      request.onerror = () => {
+        console.error('❌ Error guardando datos offline:', request.error);
+        reject(request.error);
+      };
+    });
+  } catch (error) {
+    console.error('❌ Error en saveOfflineData:', error);
+    throw error;
   }
+}
 
+// Agregar esta nueva función para guardar en stores específicos
+async saveToEntityStore(type, data) {
+  try {
+    // Mapear tipo a nombre del store
+    let storeName = null;
+    switch(type) {
+      case 'cliente':
+        storeName = 'clientes';
+        break;
+      case 'producto':
+        storeName = 'productos';
+        break;
+      case 'venta':
+        storeName = 'ventas';
+        break;
+      case 'abono':
+        storeName = 'abonos';
+        break;
+      default:
+        return; // Si no es un tipo reconocido, no hacemos nada
+    }
+    
+    // Si el store existe, guardar los datos
+    if (storeName && this.db.objectStoreNames.contains(storeName)) {
+      const transaction = this.db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      
+      // Generar ID temporal si no tiene
+      if (!data.id) {
+        data.id = 'offline_' + Date.now();
+      }
+      
+      // Marcar como pendiente de sincronización
+      data.synced = 0;
+      data.offline = true;
+      data.timestamp = new Date().toISOString();
+      
+      // Guardar en el store
+      await new Promise((resolve, reject) => {
+        const request = store.put(data);
+        request.onsuccess = resolve;
+        request.onerror = reject;
+      });
+      
+      console.log(`✅ Datos guardados en store ${storeName}:`, data);
+    }
+  } catch (error) {
+    console.error(`❌ Error guardando en store específico:`, error);
+  }
+}
+
+// Mejorar la función getCachedData para que también busque en pendingChanges
+async getCachedData(storeName) {
+  try {
+    const db = await this.open();
+    let results = [];
+    
+    // Primero obtener datos del store específico
+    if (db.objectStoreNames.contains(storeName)) {
+      const transaction = db.transaction([storeName], 'readonly');
+      const store = transaction.objectStore(storeName);
+      
+      const storeResults = await new Promise((resolve, reject) => {
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      });
+      
+      results = [...storeResults];
+    }
+    
+    // Después buscar en pendingChanges para incluir cambios recientes
+    const pendingTransaction = db.transaction(['pendingChanges'], 'readonly');
+    const pendingStore = pendingTransaction.objectStore('pendingChanges');
+    
+    // Mapear storeName a tipo de entidad
+    let entityType = null;
+    switch(storeName) {
+      case 'clientes':
+        entityType = 'cliente';
+        break;
+      case 'productos':
+        entityType = 'producto';
+        break;
+      case 'ventas':
+        entityType = 'venta';
+        break;
+      case 'abonos':
+        entityType = 'abono';
+        break;
+    }
+    
+    if (entityType) {
+      const pendingResults = await new Promise((resolve, reject) => {
+        const index = pendingStore.index('type');
+        const request = index.getAll(entityType);
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      });
+      
+      // Para cada registro pendiente, extraer los datos
+      for (const pending of pendingResults) {
+        if (pending.data && pending.synced === 0) {
+          // Marcar como offline para identificarlo
+          pending.data.offline = true;
+          pending.data.pendingId = pending.id;
+          
+          // Evitar duplicados (si ya existe en results)
+          const existingIndex = results.findIndex(r => 
+            (r.id && pending.data.id && r.id === pending.data.id) || 
+            (r.uuid && pending.data.uuid && r.uuid === pending.data.uuid)
+          );
+          
+          if (existingIndex >= 0) {
+            // Reemplazar con la versión más reciente
+            results[existingIndex] = pending.data;
+          } else {
+            // Agregar como nuevo
+            results.push(pending.data);
+          }
+        }
+      }
+    }
+    
+    console.log(`📋 Datos cacheados para ${storeName}:`, results.length);
+    return results;
+  } catch (error) {
+    console.error('❌ Error obteniendo datos cacheados de', storeName, ':', error);
+    return [];
+  }
+}
   async getPendingChanges() {
     try {
       const db = await this.open();
