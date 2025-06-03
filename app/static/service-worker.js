@@ -176,21 +176,39 @@ async function handleNavigationRequest(request) {
     const url = new URL(request.url);
     const pathname = url.pathname;
     
-    // Si estamos offline, verificar si la página está disponible offline
+    // Si estamos offline
     if (!navigator.onLine) {
-      // Si es una de las páginas disponibles offline
-      if (OFFLINE_AVAILABLE_PAGES.includes(pathname)) {
-        const cachedResponse = await caches.match(pathname);
+      console.log('[SW] Modo offline: Intentando servir página', pathname);
+      
+      // Lista de páginas principales que deberían funcionar offline
+      const mainPages = ['/', '/dashboard', '/clientes', '/productos', '/ventas', '/abonos', '/creditos', '/cajas'];
+      
+      // Si es una página principal, intentar servirla desde caché
+      if (mainPages.includes(pathname)) {
+        const cache = await caches.open(CACHE_NAME);
+        const cachedResponse = await cache.match(pathname);
+        
         if (cachedResponse) {
+          console.log('[SW] Sirviendo página desde caché:', pathname);
           return cachedResponse;
+        }
+        
+        // Si no está exactamente la misma URL, buscar coincidencias parciales
+        const cachedKeys = await cache.keys();
+        for (const key of cachedKeys) {
+          if (key.url.includes(pathname)) {
+            console.log('[SW] Sirviendo página similar desde caché:', key.url);
+            return await cache.match(key);
+          }
         }
       }
       
-      // Si no está en caché, mostrar página offline
-      return caches.match(OFFLINE_PAGE);
+      // Si no la encontramos, servir la página offline
+      console.log('[SW] Sirviendo página offline');
+      return await caches.match(OFFLINE_PAGE);
     }
     
-    // Si estamos online, intentar red primero
+    // Resto del código para modo online igual...
     try {
       const networkResponse = await fetch(request, {
         credentials: 'same-origin'
