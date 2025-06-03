@@ -1,13 +1,12 @@
 // offline-handler.js
-class OfflineHandler {
-    constructor() {
-        this.isOnline = navigator.onLine;
-        this.db = null;
-        this.syncInProgress = false;
-        this.pendingRequests = [];
-        
-        this.init();
-    }
+constructor(db) {
+    this.db = db;
+    this.clientesManager = new ClientesManager(db);
+    this.ventasManager = new VentasManager(db);
+    this.productosManager = new ProductosManager(db);
+    this.abonosManager = new AbonosManager(db);
+    this.init();
+}
     
     async init() {
         console.log('✅ OfflineHandler inicializando...');
