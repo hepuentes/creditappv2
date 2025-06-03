@@ -19,7 +19,6 @@ class CreditAppDB {
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
                 
-                // Crear stores si no existen
                 const stores = ['clientes', 'ventas', 'productos', 'abonos', 'sync_queue'];
                 stores.forEach(storeName => {
                     if (!db.objectStoreNames.contains(storeName)) {
@@ -33,22 +32,30 @@ class CreditAppDB {
         });
     }
 
-    async saveOfflineData(storeName, data) {
+    saveOfflineData(storeName, data) {
         return new Promise((resolve, reject) => {
+            if (!this.db) {
+                reject(new Error('Base de datos no inicializada'));
+                return;
+            }
+
+            // Preparar datos antes de la transacción
+            const dataToSave = {
+                ...data,
+                offline: true,
+                timestamp: Date.now(),
+                uuid: this.generateUUID()
+            };
+
+            // Crear transacción e inmediatamente usar el store
             try {
-                // Agregar timestamp y estado offline
-                data.offline = true;
-                data.timestamp = Date.now();
-                data.uuid = this.generateUUID();
-                
                 const transaction = this.db.transaction([storeName], 'readwrite');
                 const store = transaction.objectStore(storeName);
-                
-                const request = store.add(data);
+                const request = store.add(dataToSave);
                 
                 request.onsuccess = () => {
-                    console.log(`✅ Datos guardados en store ${storeName}:`, data);
-                    resolve(data);
+                    console.log(`✅ Datos guardados en store ${storeName}:`, dataToSave);
+                    resolve(dataToSave);
                 };
                 
                 request.onerror = () => {
@@ -56,8 +63,13 @@ class CreditAppDB {
                     reject(request.error);
                 };
                 
+                transaction.onerror = () => {
+                    console.error(`❌ Error de transacción en ${storeName}:`, transaction.error);
+                    reject(transaction.error);
+                };
+                
             } catch (error) {
-                console.error(`❌ Error en saveOfflineData:`, error);
+                console.error(`❌ Error creando transacción para ${storeName}:`, error);
                 reject(error);
             }
         });
@@ -65,12 +77,21 @@ class CreditAppDB {
 
     async getAllData(storeName) {
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([storeName], 'readonly');
-            const store = transaction.objectStore(storeName);
-            const request = store.getAll();
-            
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
+            if (!this.db) {
+                reject(new Error('Base de datos no inicializada'));
+                return;
+            }
+
+            try {
+                const transaction = this.db.transaction([storeName], 'readonly');
+                const store = transaction.objectStore(storeName);
+                const request = store.getAll();
+                
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            } catch (error) {
+                reject(error);
+            }
         });
     }
 
@@ -79,6 +100,53 @@ class CreditAppDB {
             const r = Math.random() * 16 | 0;
             const v = c == 'x' ? r : (r & 0x3 | 0x8);
             return v.toString(16);
+        });
+    }
+
+    async clearSyncedData() {
+        const stores = ['clientes', 'ventas', 'productos', 'abonos'];
+        
+        for (const storeName of stores) {
+            try {
+                const data = await this.getAllData(storeName);
+                const syncedItems = data.filter(item => item.synced);
+                
+                if (syncedItems.length > 0) {
+                    await this.deleteMultipleRecords(storeName, syncedItems.map(item => item.id));
+                    console.log(`🧹 Limpiados ${syncedItems.length} registros sincronizados de ${storeName}`);
+                }
+            } catch (error) {
+                console.error(`Error limpiando datos sincronizados de ${storeName}:`, error);
+            }
+        }
+    }
+
+    deleteMultipleRecords(storeName, ids) {
+        return new Promise((resolve, reject) => {
+            try {
+                const transaction = this.db.transaction([storeName], 'readwrite');
+                const store = transaction.objectStore(storeName);
+                
+                let completedDeletes = 0;
+                
+                ids.forEach(id => {
+                    const deleteRequest = store.delete(id);
+                    deleteRequest.onsuccess = () => {
+                        completedDeletes++;
+                        if (completedDeletes === ids.length) {
+                            resolve();
+                        }
+                    };
+                    deleteRequest.onerror = () => reject(deleteRequest.error);
+                });
+                
+                if (ids.length === 0) {
+                    resolve();
+                }
+                
+            } catch (error) {
+                reject(error);
+            }
         });
     }
 }
