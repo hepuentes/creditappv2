@@ -1,37 +1,38 @@
 // service-worker.js
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v1.0.0';
 const CACHE_NAMES = {
-    static: `static-cache-${CACHE_VERSION}`,
-    dynamic: `dynamic-cache-${CACHE_VERSION}`,
-    offline: `offline-cache-${CACHE_VERSION}`
+    STATIC: `static-cache-${CACHE_VERSION}`,
+    DYNAMIC: `dynamic-cache-${CACHE_VERSION}`,
+    OFFLINE: `offline-cache-${CACHE_VERSION}`
 };
 
-// Recursos esenciales que SIEMPRE deben estar en caché
-const ESSENTIAL_CACHE = [
+// Recursos estáticos esenciales
+const STATIC_ASSETS = [
     '/',
     '/dashboard',
     '/clientes',
     '/productos',
     '/ventas',
-    '/ventas/crear',
     '/abonos',
     '/creditos',
     '/cajas',
     '/offline',
-    '/static/css/bootstrap.min.css',
-    '/static/css/all.min.css',
     '/static/css/style.css',
     '/static/js/db.js',
     '/static/js/sync.js',
     '/static/js/offline-handler.js',
     '/static/js/utils.js',
-    '/static/js/ventas.js',
     '/static/js/clientes.js',
+    '/static/js/ventas.js',
     '/static/js/productos.js',
     '/static/js/abonos.js',
-    '/static/js/cajas.js',
-    '/static/js/creditos.js',
-    '/manifest.json'
+    '/static/js/main.js',
+    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
+    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css',
+    'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
+    'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
+    'https://code.jquery.com/jquery-3.7.1.min.js',
+    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js'
 ];
 
 // Instalación del Service Worker
@@ -39,10 +40,10 @@ self.addEventListener('install', event => {
     console.log('[SW] Instalando Service Worker...');
     
     event.waitUntil(
-        caches.open(CACHE_NAMES.static)
+        caches.open(CACHE_NAMES.STATIC)
             .then(cache => {
-                console.log('[SW] Cacheando recursos esenciales...');
-                return cache.addAll(ESSENTIAL_CACHE);
+                console.log('[SW] Cacheando recursos estáticos...');
+                return cache.addAll(STATIC_ASSETS);
             })
             .then(() => {
                 console.log('[SW] Instalación completada');
@@ -59,157 +60,137 @@ self.addEventListener('activate', event => {
     console.log('[SW] Activando Service Worker...');
     
     event.waitUntil(
-        Promise.all([
-            // Limpiar cachés antiguos
-            caches.keys().then(cacheNames => {
+        caches.keys()
+            .then(cacheNames => {
+                // Eliminar caches antiguos
                 return Promise.all(
-                    cacheNames.map(cacheName => {
-                        if (!Object.values(CACHE_NAMES).includes(cacheName)) {
-                            console.log('[SW] Eliminando caché antiguo:', cacheName);
+                    cacheNames
+                        .filter(cacheName => {
+                            return cacheName.startsWith('static-cache-') ||
+                                   cacheName.startsWith('dynamic-cache-') ||
+                                   cacheName.startsWith('offline-cache-');
+                        })
+                        .filter(cacheName => {
+                            return !Object.values(CACHE_NAMES).includes(cacheName);
+                        })
+                        .map(cacheName => {
+                            console.log('[SW] Eliminando cache antiguo:', cacheName);
                             return caches.delete(cacheName);
-                        }
-                    })
+                        })
                 );
-            }),
-            // Tomar control inmediato
-            self.clients.claim()
-        ])
+            })
+            .then(() => {
+                console.log('[SW] Activación completada');
+                return self.clients.claim();
+            })
     );
 });
 
-// Estrategia de fetch
+// Estrategia de caché para diferentes tipos de recursos
+function getCacheStrategy(request) {
+    const url = new URL(request.url);
+    
+    // APIs - Network First
+    if (url.pathname.startsWith('/api/')) {
+        return 'network-first';
+    }
+    
+    // Recursos estáticos - Cache First
+    if (url.pathname.match(/\.(css|js|jpg|jpeg|png|gif|svg|woff|woff2|ttf|eot)$/)) {
+        return 'cache-first';
+    }
+    
+    // HTML - Network First con fallback offline
+    if (request.headers.get('accept').includes('text/html')) {
+        return 'network-first';
+    }
+    
+    // Por defecto - Network First
+    return 'network-first';
+}
+
+// Fetch event handler
 self.addEventListener('fetch', event => {
     const { request } = event;
     const url = new URL(request.url);
     
-    // Ignorar extensiones del navegador y peticiones no-http
-    if (!request.url.startsWith('http') || request.url.includes('chrome-extension')) {
+    // Ignorar extensiones del navegador
+    if (url.protocol === 'chrome-extension:') {
         return;
     }
     
-    // Manejar peticiones API
-    if (url.pathname.startsWith('/api/')) {
-        event.respondWith(handleApiRequest(request));
+    // Ignorar peticiones que no sean GET
+    if (request.method !== 'GET') {
         return;
     }
     
-    // Manejar archivos estáticos
-    if (isStaticAsset(url.pathname)) {
-        event.respondWith(handleStaticRequest(request));
-        return;
-    }
+    const strategy = getCacheStrategy(request);
     
-    // Manejar rutas de navegación
-    event.respondWith(handleNavigationRequest(request));
+    switch (strategy) {
+        case 'cache-first':
+            event.respondWith(cacheFirst(request));
+            break;
+        case 'network-first':
+            event.respondWith(networkFirst(request));
+            break;
+        default:
+            event.respondWith(networkFirst(request));
+    }
 });
 
-// Manejo de peticiones API
-async function handleApiRequest(request) {
+// Estrategia Cache First
+async function cacheFirst(request) {
     try {
-        // Intentar obtener de la red
+        const cachedResponse = await caches.match(request);
+        if (cachedResponse) {
+            console.log('[SW] Recurso desde caché:', request.url);
+            return cachedResponse;
+        }
+        
         const networkResponse = await fetch(request);
         
-        // Si es exitosa, clonar y guardar en caché
         if (networkResponse.ok) {
-            const cache = await caches.open(CACHE_NAMES.dynamic);
+            const cache = await caches.open(CACHE_NAMES.DYNAMIC);
             cache.put(request, networkResponse.clone());
         }
         
         return networkResponse;
     } catch (error) {
-        console.log('[SW] Error en petición API, buscando en caché:', request.url);
+        console.error('[SW] Error en cache-first:', error);
         
-        // Si falla la red, buscar en caché
+        // Si es un recurso HTML, devolver página offline
+        if (request.headers.get('accept').includes('text/html')) {
+            return caches.match('/offline');
+        }
+        
+        // Para otros recursos, intentar encontrar algo en caché
         const cachedResponse = await caches.match(request);
         if (cachedResponse) {
             return cachedResponse;
         }
         
-        // Si es una petición GET de datos, devolver respuesta offline
-        if (request.method === 'GET') {
-            return new Response(
-                JSON.stringify({
-                    error: 'offline',
-                    message: 'Sin conexión a internet',
-                    cached: false
-                }),
-                {
-                    status: 503,
-                    headers: { 'Content-Type': 'application/json' }
-                }
-            );
-        }
-        
-        // Para otras peticiones, devolver error
-        return new Response(
-            JSON.stringify({
-                error: 'offline',
-                message: 'Operación no disponible sin conexión'
-            }),
-            {
-                status: 503,
-                headers: { 'Content-Type': 'application/json' }
-            }
-        );
+        // Si no hay nada en caché, devolver error
+        return new Response('Recurso no disponible offline', {
+            status: 503,
+            statusText: 'Service Unavailable'
+        });
     }
 }
 
-// Manejo de archivos estáticos
-async function handleStaticRequest(request) {
-    // Primero buscar en caché
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-        return cachedResponse;
-    }
-    
+// Estrategia Network First
+async function networkFirst(request) {
     try {
-        // Si no está en caché, obtener de la red
         const networkResponse = await fetch(request);
         
-        // Guardar en caché si es exitoso
         if (networkResponse.ok) {
-            const cache = await caches.open(CACHE_NAMES.static);
+            // Guardar en caché si es exitoso
+            const cache = await caches.open(CACHE_NAMES.DYNAMIC);
             cache.put(request, networkResponse.clone());
         }
         
         return networkResponse;
     } catch (error) {
-        console.error('[SW] Error obteniendo recurso estático:', request.url);
-        
-        // Para archivos JS/CSS críticos, devolver un fallback
-        if (request.url.endsWith('.js')) {
-            return new Response(
-                '// Archivo no disponible offline',
-                { headers: { 'Content-Type': 'application/javascript' } }
-            );
-        }
-        
-        if (request.url.endsWith('.css')) {
-            return new Response(
-                '/* Archivo no disponible offline */',
-                { headers: { 'Content-Type': 'text/css' } }
-            );
-        }
-        
-        return new Response('Recurso no disponible offline', { status: 404 });
-    }
-}
-
-// Manejo de rutas de navegación
-async function handleNavigationRequest(request) {
-    try {
-        // Intentar obtener de la red primero
-        const networkResponse = await fetch(request);
-        
-        // Si es exitosa, actualizar caché
-        if (networkResponse.ok) {
-            const cache = await caches.open(CACHE_NAMES.dynamic);
-            cache.put(request, networkResponse.clone());
-        }
-        
-        return networkResponse;
-    } catch (error) {
-        console.log('[SW] Sin conexión, buscando en caché:', request.url);
+        console.log('[SW] Red no disponible, intentando caché para:', request.url);
         
         // Buscar en caché
         const cachedResponse = await caches.match(request);
@@ -217,71 +198,31 @@ async function handleNavigationRequest(request) {
             return cachedResponse;
         }
         
-        // Si no está en caché, buscar la ruta base
-        const basePath = getBasePath(request.url);
-        const baseResponse = await caches.match(basePath);
-        if (baseResponse) {
-            return baseResponse;
-        }
-        
-        // Si nada funciona, devolver página offline
-        const offlineResponse = await caches.match('/offline');
-        if (offlineResponse) {
-            return offlineResponse;
-        }
-        
-        // Último recurso: HTML básico
-        return new Response(
-            `<!DOCTYPE html>
-            <html>
-            <head>
-                <title>Sin conexión</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    body { 
-                        font-family: Arial, sans-serif; 
-                        text-align: center; 
-                        padding: 50px;
-                        background-color: #f5f5f5;
-                    }
-                    h1 { color: #333; }
-                    p { color: #666; }
-                </style>
-            </head>
-            <body>
-                <h1>Sin conexión a Internet</h1>
-                <p>La página solicitada no está disponible offline.</p>
-                <p>Por favor, verifica tu conexión e intenta nuevamente.</p>
-            </body>
-            </html>`,
-            {
-                status: 200,
-                headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        // Si es una petición HTML y no hay caché, mostrar página offline
+        if (request.headers.get('accept').includes('text/html')) {
+            const offlineResponse = await caches.match('/offline');
+            if (offlineResponse) {
+                return offlineResponse;
             }
-        );
+        }
+        
+        // Para APIs, devolver respuesta de error
+        if (request.url.includes('/api/')) {
+            return new Response(JSON.stringify({
+                error: 'Sin conexión',
+                offline: true
+            }), {
+                status: 503,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+        
+        // Para otros recursos
+        return new Response('Sin conexión', {
+            status: 503,
+            statusText: 'Service Unavailable'
+        });
     }
-}
-
-// Utilidades
-function isStaticAsset(pathname) {
-    return pathname.startsWith('/static/') || 
-           pathname.endsWith('.js') || 
-           pathname.endsWith('.css') || 
-           pathname.endsWith('.png') || 
-           pathname.endsWith('.jpg') || 
-           pathname.endsWith('.svg') ||
-           pathname.endsWith('.woff') ||
-           pathname.endsWith('.woff2') ||
-           pathname.endsWith('.ttf');
-}
-
-function getBasePath(url) {
-    const urlObj = new URL(url);
-    const pathParts = urlObj.pathname.split('/').filter(Boolean);
-    if (pathParts.length > 0) {
-        return `/${pathParts[0]}`;
-    }
-    return '/';
 }
 
 // Background Sync
@@ -293,38 +234,83 @@ self.addEventListener('sync', event => {
     }
 });
 
+// Función para sincronizar datos offline
 async function syncOfflineData() {
     try {
-        console.log('[SW] Iniciando sincronización de datos offline...');
-        
-        // Notificar a todos los clientes para que sincronicen
         const clients = await self.clients.matchAll();
-        clients.forEach(client => {
+        
+        for (const client of clients) {
             client.postMessage({
                 type: 'SYNC_START',
-                timestamp: Date.now()
+                message: 'Iniciando sincronización...'
             });
-        });
+        }
         
-        return true;
+        // Aquí se implementaría la lógica de sincronización
+        // Por ahora, solo notificamos a los clientes
+        
+        for (const client of clients) {
+            client.postMessage({
+                type: 'SYNC_COMPLETE',
+                message: 'Sincronización completada'
+            });
+        }
     } catch (error) {
         console.error('[SW] Error en sincronización:', error);
-        throw error;
+        
+        const clients = await self.clients.matchAll();
+        for (const client of clients) {
+            client.postMessage({
+                type: 'SYNC_ERROR',
+                message: 'Error en sincronización',
+                error: error.message
+            });
+        }
     }
 }
 
-// Mensajes del cliente
+// Manejo de mensajes desde la aplicación
 self.addEventListener('message', event => {
     console.log('[SW] Mensaje recibido:', event.data);
     
-    if (event.data.type === 'SKIP_WAITING') {
-        self.skipWaiting();
-    }
-    
-    if (event.data.type === 'CACHE_URLS') {
-        event.waitUntil(
-            caches.open(CACHE_NAMES.dynamic)
-                .then(cache => cache.addAll(event.data.urls))
-        );
+    switch (event.data.type) {
+        case 'SKIP_WAITING':
+            self.skipWaiting();
+            break;
+        case 'CACHE_URLS':
+            event.waitUntil(
+                cacheUrls(event.data.urls)
+            );
+            break;
+        case 'CLEAR_CACHE':
+            event.waitUntil(
+                clearCache()
+            );
+            break;
     }
 });
+
+// Función para cachear URLs específicas
+async function cacheUrls(urls) {
+    const cache = await caches.open(CACHE_NAMES.DYNAMIC);
+    for (const url of urls) {
+        try {
+            const response = await fetch(url);
+            if (response.ok) {
+                await cache.put(url, response);
+                console.log('[SW] URL cacheada:', url);
+            }
+        } catch (error) {
+            console.error('[SW] Error cacheando URL:', url, error);
+        }
+    }
+}
+
+// Función para limpiar caché
+async function clearCache() {
+    const cacheNames = await caches.keys();
+    await Promise.all(
+        cacheNames.map(cacheName => caches.delete(cacheName))
+    );
+    console.log('[SW] Caché limpiado');
+}
