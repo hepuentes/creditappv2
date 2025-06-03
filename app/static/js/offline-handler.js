@@ -775,84 +775,69 @@ class OfflineHandler {
 
     // NUEVA VERSIÓN DE handleFormSubmit (CAMBIO #1)
     async handleFormSubmit(event) {
-        event.preventDefault();
-        const form = event.target;
+    event.preventDefault();
+    const form = event.target;
+    
+    try {
+        // Convertir FormData a objeto
+        const formData = new FormData(form);
+        const data = {};
+        for (let [key, value] of formData.entries()) {
+            data[key] = value;
+        }
         
-        try {
-            // Convertir FormData a objeto simple
-            const formData = new FormData(form);
-            const data = {};
-            for (let [key, value] of formData.entries()) {
-                data[key] = value;
-            }
-            
-            console.log('📱 Interceptando formulario offline:', form.action);
-            
-            // Guardar datos directamente
-            await this.saveFormData(form, data);
-            
-            // Mostrar mensaje de éxito
-            this.showSuccessMessage('Datos guardados offline. Se sincronizarán cuando haya conexión.');
-            
+        console.log('📱 Procesando formulario offline:', form.action);
+        
+        // Determinar store según URL
+        let storeName = 'sync_queue'; // default
+        if (form.action.includes('/clientes/')) storeName = 'clientes';
+        else if (form.action.includes('/ventas/')) storeName = 'ventas';
+        else if (form.action.includes('/productos/')) storeName = 'productos';
+        else if (form.action.includes('/abonos/')) storeName = 'abonos';
+        
+        // Guardar datos - SIN await ni operaciones async
+        const result = await this.db.saveOfflineData(storeName, data);
+        
+        if (result.success) {
             // Limpiar formulario
             form.reset();
             
-            // Actualizar contadores si existen
-            this.updatePendingCount();
-            
-        } catch (error) {
-            console.error('❌ Error guardando datos offline:', error);
-            this.showErrorMessage('Error al guardar datos: ' + error.message);
-        }
-    }
-
-    // AGREGADAS FUNCIONES DE SOPORTE (CAMBIO #2)
-    async saveFormData(form, formData) {
-        try {
-            const storeName = this.getStoreNameFromUrl(form.action);
-            
-            // Guardar directamente sin operaciones asíncronas intermedias
-            await this.db.saveOfflineData(storeName, formData);
+            // Mostrar mensaje de éxito
+            this.showMessage('✅ Datos guardados offline. Se sincronizarán cuando haya conexión.', 'success');
             
             // Programar sincronización
-            if ('serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
-                const registration = await navigator.serviceWorker.ready;
-                await registration.sync.register('sync-offline-data');
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.ready.then(registration => {
+                    if ('sync' in registration) {
+                        registration.sync.register('sync-offline-data');
+                    }
+                });
             }
-            
-            console.log('✅ Datos guardados offline exitosamente');
-            
-        } catch (error) {
-            console.error('❌ Error en saveFormData:', error);
-            throw error;
         }
-    }
-
-    getStoreNameFromUrl(url) {
-        if (url.includes('/clientes/')) return 'clientes';
-        if (url.includes('/ventas/')) return 'ventas';
-        if (url.includes('/productos/')) return 'productos';
-        if (url.includes('/abonos/')) return 'abonos';
-        return 'sync_queue'; // Fallback
-    }
-
-    showSuccessMessage(message) {
-        // Crear notificación de éxito
-        const alert = document.createElement('div');
-        alert.className = 'alert alert-info alert-dismissible fade show position-fixed';
-        alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 350px;';
-        alert.innerHTML = `
-            <strong>✓ Guardado offline:</strong> ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        document.body.appendChild(alert);
         
-        setTimeout(() => {
-            if (alert.parentElement) {
-                alert.remove();
-            }
-        }, 5000);
+    } catch (error) {
+        console.error('❌ Error en handleFormSubmit:', error);
+        this.showMessage('❌ Error guardando datos: ' + error.message, 'error');
     }
+}
+
+showMessage(message, type) {
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const alert = document.createElement('div');
+    alert.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+    alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 350px;';
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(alert);
+    
+    setTimeout(() => {
+        if (alert.parentElement) {
+            alert.remove();
+        }
+    }, 5000);
+}
 
     showErrorMessage(message) {
         const alert = document.createElement('div');
