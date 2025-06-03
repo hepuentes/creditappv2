@@ -55,44 +55,102 @@ def sync_push_improved(dispositivo=None):
     Recibe cambios desde el cliente y los aplica
     """
     try:
-        data = request.get_json()
-        changes = data.get('changes', [])
+        tipo = request.form.get('type', '')
+        data_json = request.form.get('data', '{}')
+        
+        # Parsear datos JSON
+        try:
+            data_array = json.loads(data_json)
+            if not isinstance(data_array, list):
+                data_array = [data_array]
+        except Exception as e:
+            current_app.logger.error(f"Error parseando JSON: {str(e)}")
+            return jsonify({'error': f'Error parseando JSON: {str(e)}'}), 400
         
         results = []
         errors = []
         
         # Iniciar transacción
-        for change in changes:
-            try:
-                result = aplicar_cambio_mejorado(change, dispositivo)
-                results.append(result)
-            except Exception as e:
-                current_app.logger.error(f"Error aplicando cambio {change.get('uuid')}: {str(e)}")
-                errors.append({
-                    'uuid': change.get('uuid'),
-                    'error': str(e)
-                })
-                # No hacer rollback aquí para permitir cambios parciales
-        
-        # Solo hacer commit si hay cambios exitosos
-        if results and not all(r.get('status') == 'error' for r in results):
-            db.session.commit()
-            current_app.logger.info(f"Sincronizados {len(results)} cambios")
-        else:
+        try:
+            # Procesar datos según el tipo
+            if tipo == 'cliente':
+                for item in data_array:
+                    try:
+                        # Limpiar ID temporal si es necesario
+                        if isinstance(item.get('id'), str) and item['id'].startswith('offline_'):
+                            del item['id']
+                        
+                        # Verificar si ya existe por cédula
+                        cedula = item.get('cedula')
+                        if cedula:
+                            cliente_existente = Cliente.query.filter_by(cedula=cedula).first()
+                            if cliente_existente:
+                                # Actualizar cliente existente
+                                for key, value in item.items():
+                                    if key not in ['id', 'uuid'] and hasattr(cliente_existente, key):
+                                        setattr(cliente_existente, key, value)
+                                
+                                db.session.add(cliente_existente)
+                                results.append({
+                                    'status': 'updated',
+                                    'id': cliente_existente.id,
+                                    'message': f'Cliente actualizado: {cliente_existente.nombre}'
+                                })
+                                continue
+                        
+                        # Crear nuevo cliente
+                        nuevo_cliente = Cliente(
+                            nombre=item.get('nombre', ''),
+                            cedula=item.get('cedula', ''),
+                            telefono=item.get('telefono'),
+                            email=item.get('email'),
+                            direccion=item.get('direccion')
+                        )
+                        
+                        # Establecer UUID si viene
+                        if item.get('uuid'):
+                            nuevo_cliente.uuid = item['uuid']
+                        
+                        db.session.add(nuevo_cliente)
+                        db.session.flush()  # Para obtener el ID
+                        
+                        results.append({
+                            'status': 'created',
+                            'id': nuevo_cliente.id,
+                            'message': f'Cliente creado: {nuevo_cliente.nombre}'
+                        })
+                        
+                    except Exception as e:
+                        errors.append({
+                            'item': item,
+                            'error': str(e)
+                        })
+                        current_app.logger.error(f"Error procesando cliente: {str(e)}")
+            
+            # Implementar otros tipos (producto, venta, abono) de manera similar
+            
+            # Solo hacer commit si hay resultados exitosos
+            if results:
+                db.session.commit()
+                current_app.logger.info(f"Sincronizados {len(results)} registros de tipo {tipo}")
+            else:
+                db.session.rollback()
+            
+            return jsonify({
+                'success': True,
+                'results': results,
+                'errors': errors,
+                'message': f'{len(results)} registros procesados, {len(errors)} errores'
+            }), 200
+            
+        except Exception as e:
             db.session.rollback()
-        
-        return jsonify({
-            'success': True,
-            'results': results,
-            'errors': errors,
-            'message': f'{len(results)} cambios procesados, {len(errors)} errores'
-        }), 200
-        
+            current_app.logger.error(f"Error en procesamiento: {str(e)}")
+            return jsonify({'error': f'Error en procesamiento: {str(e)}'}), 500
+            
     except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error en sync push: {str(e)}")
+        current_app.logger.error(f"Error general en sync push: {str(e)}")
         return jsonify({'error': f'Error en sincronización: {str(e)}'}), 500
-
 def aplicar_cambio_mejorado(change, dispositivo):
     """Aplica un cambio individual con mejor manejo de errores"""
     tabla = change.get('tabla')
