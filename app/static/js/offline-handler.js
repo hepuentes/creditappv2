@@ -1,13 +1,14 @@
 // offline-handler.js
-constructor(db) {
-    this.db = db;
-    this.clientesManager = new ClientesManager(db);
-    this.ventasManager = new VentasManager(db);
-    this.productosManager = new ProductosManager(db);
-    this.abonosManager = new AbonosManager(db);
-    this.init();
-}
-    
+class OfflineHandler {
+    constructor(db) {
+        this.db = db;
+        this.clientesManager = new ClientesManager(db);
+        this.ventasManager = new VentasManager(db);
+        this.productosManager = new ProductosManager(db);
+        this.abonosManager = new AbonosManager(db);
+        this.init();
+    }
+        
     async init() {
         console.log('✅ OfflineHandler inicializando...');
         
@@ -25,7 +26,7 @@ constructor(db) {
         
         console.log('✅ OfflineHandler inicializado con DB');
     }
-    
+        
     async initDB() {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open('CreditAppDB', 5);
@@ -105,7 +106,7 @@ constructor(db) {
             };
         });
     }
-    
+        
     setupEventListeners() {
         // Eventos de conexión
         window.addEventListener('online', () => {
@@ -130,7 +131,7 @@ constructor(db) {
             });
         }
     }
-    
+        
     interceptFetch() {
         const originalFetch = window.fetch;
         const self = this;
@@ -156,7 +157,7 @@ constructor(db) {
             }
         };
     }
-    
+        
     async handleOfflineRequest(url, options = {}) {
         const method = options.method || 'GET';
         const urlObj = new URL(url, window.location.origin);
@@ -225,7 +226,7 @@ constructor(db) {
             }
         );
     }
-    
+        
     // Métodos para obtener datos offline
     async getOfflineClientes() {
         const transaction = this.db.transaction(['clientes'], 'readonly');
@@ -240,7 +241,7 @@ constructor(db) {
             }
         );
     }
-    
+        
     async getOfflineVentas() {
         const transaction = this.db.transaction(['ventas'], 'readonly');
         const store = transaction.objectStore('ventas');
@@ -254,7 +255,7 @@ constructor(db) {
             }
         );
     }
-    
+        
     async getOfflineProductos() {
         const transaction = this.db.transaction(['productos'], 'readonly');
         const store = transaction.objectStore('productos');
@@ -268,7 +269,7 @@ constructor(db) {
             }
         );
     }
-    
+        
     async getOfflineAbonos() {
         const transaction = this.db.transaction(['abonos'], 'readonly');
         const store = transaction.objectStore('abonos');
@@ -282,7 +283,7 @@ constructor(db) {
             }
         );
     }
-    
+        
     async getOfflineCajas() {
         const transaction = this.db.transaction(['cajas'], 'readonly');
         const store = transaction.objectStore('cajas');
@@ -296,7 +297,7 @@ constructor(db) {
             }
         );
     }
-    
+        
     // Métodos para guardar datos offline
     async saveOfflineCliente(data, method) {
         const transaction = this.db.transaction(['clientes'], 'readwrite');
@@ -329,7 +330,7 @@ constructor(db) {
             }
         );
     }
-    
+        
     async saveOfflineVenta(data, method) {
         const transaction = this.db.transaction(['ventas', 'productos'], 'readwrite');
         const ventasStore = transaction.objectStore('ventas');
@@ -371,7 +372,7 @@ constructor(db) {
             }
         );
     }
-    
+        
     async saveOfflineAbono(data, method) {
         const transaction = this.db.transaction(['abonos'], 'readwrite');
         const store = transaction.objectStore('abonos');
@@ -400,7 +401,7 @@ constructor(db) {
             }
         );
     }
-    
+        
     async saveOfflineCaja(data, method) {
         const transaction = this.db.transaction(['cajas'], 'readwrite');
         const store = transaction.objectStore('cajas');
@@ -429,7 +430,7 @@ constructor(db) {
             }
         );
     }
-    
+        
     async saveOfflineMovimiento(data, method) {
         const transaction = this.db.transaction(['movimientos'], 'readwrite');
         const store = transaction.objectStore('movimientos');
@@ -458,14 +459,14 @@ constructor(db) {
             }
         );
     }
-    
+        
     // Guardar cambio pendiente
     async savePendingChange(change) {
         const transaction = this.db.transaction(['pendingChanges'], 'readwrite');
         const store = transaction.objectStore('pendingChanges');
         await store.add(change);
     }
-    
+        
     // Sincronización de datos
     async syncPendingData() {
         if (this.syncInProgress || !this.isOnline) {
@@ -497,7 +498,7 @@ constructor(db) {
             this.syncInProgress = false;
         }
     }
-    
+        
     async syncPendingClientes() {
         const transaction = this.db.transaction(['clientes'], 'readonly');
         const store = transaction.objectStore('clientes');
@@ -528,7 +529,7 @@ constructor(db) {
             }
         }
     }
-    
+        
     async syncPendingVentas() {
         const transaction = this.db.transaction(['ventas'], 'readonly');
         const store = transaction.objectStore('ventas');
@@ -558,7 +559,7 @@ constructor(db) {
             }
         }
     }
-    
+        
     async syncPendingAbonos() {
         const transaction = this.db.transaction(['abonos'], 'readonly');
         const store = transaction.objectStore('abonos');
@@ -586,7 +587,7 @@ constructor(db) {
             }
         }
     }
-    
+        
     async syncPendingCajas() {
         const transaction = this.db.transaction(['cajas'], 'readonly');
         const store = transaction.objectStore('cajas');
@@ -614,7 +615,7 @@ constructor(db) {
             }
         }
     }
-    
+        
     async syncPendingMovimientos() {
         const transaction = this.db.transaction(['movimientos'], 'readonly');
         const store = transaction.objectStore('movimientos');
@@ -642,13 +643,13 @@ constructor(db) {
             }
         }
     }
-    
+        
     async clearPendingChanges() {
         const transaction = this.db.transaction(['pendingChanges'], 'readwrite');
         const store = transaction.objectStore('pendingChanges');
         await store.clear();
     }
-    
+        
     // Utilidades
     async getAllFromStore(store) {
         return new Promise((resolve, reject) => {
@@ -657,7 +658,7 @@ constructor(db) {
             request.onerror = () => reject(request.error);
         });
     }
-    
+        
     async getAllFromIndex(index, value) {
         return new Promise((resolve, reject) => {
             const request = index.getAll(value);
@@ -665,7 +666,7 @@ constructor(db) {
             request.onerror = () => reject(request.error);
         });
     }
-    
+        
     updateConnectionStatus() {
         const statusEl = document.getElementById('connection-status');
         if (statusEl) {
@@ -681,21 +682,29 @@ constructor(db) {
         // Agregar/quitar clase al body
         document.body.classList.toggle('offline-mode', !this.isOnline);
     }
-    
-    async updatePendingCount() {
-        const transaction = this.db.transaction(['pendingChanges'], 'readonly');
-        const store = transaction.objectStore('pendingChanges');
-        const count = await store.count();
         
-        const pendingEl = document.getElementById('pending-count');
-        if (pendingEl && count.result > 0) {
-            pendingEl.textContent = count.result;
-            pendingEl.style.display = 'inline-block';
-        } else if (pendingEl) {
-            pendingEl.style.display = 'none';
+    async updatePendingCount() {
+        try {
+            const stores = ['clientes', 'ventas', 'productos', 'abonos'];
+            let totalPending = 0;
+            
+            for (const store of stores) {
+                const data = await this.db.getAllData(store);
+                const pending = data.filter(item => item.offline && !item.synced);
+                totalPending += pending.length;
+            }
+            
+            // Actualizar badge de contador si existe
+            const badge = document.querySelector('.pending-count');
+            if (badge) {
+                badge.textContent = totalPending;
+                badge.style.display = totalPending > 0 ? 'inline' : 'none';
+            }
+        } catch (error) {
+            console.error('Error actualizando contador:', error);
         }
     }
-    
+        
     showNotification(message, type = 'success') {
         const notification = document.createElement('div');
         notification.className = `alert alert-${type} notification-toast`;
@@ -716,7 +725,7 @@ constructor(db) {
             setTimeout(() => notification.remove(), 300);
         }, 3000);
     }
-    
+        
     async cacheAllData() {
         console.log('🔄 Pre-cacheando datos para uso offline...');
         
@@ -763,7 +772,127 @@ constructor(db) {
             console.error('Error en pre-cacheo:', error);
         }
     }
-}
+
+    // NUEVA VERSIÓN DE handleFormSubmit (CAMBIO #1)
+    async handleFormSubmit(event) {
+        event.preventDefault();
+        const form = event.target;
+        
+        try {
+            // Convertir FormData a objeto simple
+            const formData = new FormData(form);
+            const data = {};
+            for (let [key, value] of formData.entries()) {
+                data[key] = value;
+            }
+            
+            console.log('📱 Interceptando formulario offline:', form.action);
+            
+            // Guardar datos directamente
+            await this.saveFormData(form, data);
+            
+            // Mostrar mensaje de éxito
+            this.showSuccessMessage('Datos guardados offline. Se sincronizarán cuando haya conexión.');
+            
+            // Limpiar formulario
+            form.reset();
+            
+            // Actualizar contadores si existen
+            this.updatePendingCount();
+            
+        } catch (error) {
+            console.error('❌ Error guardando datos offline:', error);
+            this.showErrorMessage('Error al guardar datos: ' + error.message);
+        }
+    }
+
+    // AGREGADAS FUNCIONES DE SOPORTE (CAMBIO #2)
+    async saveFormData(form, formData) {
+        try {
+            const storeName = this.getStoreNameFromUrl(form.action);
+            
+            // Guardar directamente sin operaciones asíncronas intermedias
+            await this.db.saveOfflineData(storeName, formData);
+            
+            // Programar sincronización
+            if ('serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
+                const registration = await navigator.serviceWorker.ready;
+                await registration.sync.register('sync-offline-data');
+            }
+            
+            console.log('✅ Datos guardados offline exitosamente');
+            
+        } catch (error) {
+            console.error('❌ Error en saveFormData:', error);
+            throw error;
+        }
+    }
+
+    getStoreNameFromUrl(url) {
+        if (url.includes('/clientes/')) return 'clientes';
+        if (url.includes('/ventas/')) return 'ventas';
+        if (url.includes('/productos/')) return 'productos';
+        if (url.includes('/abonos/')) return 'abonos';
+        return 'sync_queue'; // Fallback
+    }
+
+    showSuccessMessage(message) {
+        // Crear notificación de éxito
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-info alert-dismissible fade show position-fixed';
+        alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 350px;';
+        alert.innerHTML = `
+            <strong>✓ Guardado offline:</strong> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alert);
+        
+        setTimeout(() => {
+            if (alert.parentElement) {
+                alert.remove();
+            }
+        }, 5000);
+    }
+
+    showErrorMessage(message) {
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+        alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 350px;';
+        alert.innerHTML = `
+            <strong>✗ Error:</strong> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alert);
+        
+        setTimeout(() => {
+            if (alert.parentElement) {
+                alert.remove();
+            }
+        }, 8000);
+    }
+
+    async updatePendingCount() {
+        try {
+            const stores = ['clientes', 'ventas', 'productos', 'abonos'];
+            let totalPending = 0;
+            
+            for (const store of stores) {
+                const data = await this.db.getAllData(store);
+                const pending = data.filter(item => item.offline && !item.synced);
+                totalPending += pending.length;
+            }
+            
+            // Actualizar badge de contador si existe
+            const badge = document.querySelector('.pending-count');
+            if (badge) {
+                badge.textContent = totalPending;
+                badge.style.display = totalPending > 0 ? 'inline' : 'none';
+            }
+        } catch (error) {
+            console.error('Error actualizando contador:', error);
+        }
+    }
+} // <-- Fin de la clase OfflineHandler
 
 // Inicializar cuando el DOM esté listo
 if (document.readyState === 'loading') {
@@ -777,42 +906,4 @@ if (document.readyState === 'loading') {
 // Exportar para uso en otros módulos
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = OfflineHandler;
-}
-
-async handleFormSubmit(event) {
-    event.preventDefault();
-    const form = event.target;
-    const formData = new FormData(form);
-    const url = form.action;
-    
-    try {
-        // Convertir FormData a objeto
-        const data = {};
-        for (let [key, value] of formData.entries()) {
-            data[key] = value;
-        }
-        
-        console.log('📱 Interceptando formulario offline:', url);
-        
-        // Determinar tipo de formulario por URL
-        if (url.includes('/clientes/')) {
-            await this.clientesManager.crearCliente(data);
-        } else if (url.includes('/ventas/')) {
-            await this.ventasManager.crearVenta(data);
-        } else if (url.includes('/productos/')) {
-            await this.productosManager.crearProducto(data);
-        } else if (url.includes('/abonos/')) {
-            await this.abonosManager.crearAbono(data);
-        } else {
-            // Guardar genéricamente
-            await this.saveFormData(form, data);
-        }
-        
-        // Limpiar formulario si es exitoso
-        form.reset();
-        
-    } catch (error) {
-        console.error('❌ Error guardando datos offline:', error);
-        Utils.showNotification('Error: ' + error.message, 'danger');
-    }
 }
