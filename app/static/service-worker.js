@@ -1,436 +1,330 @@
-// app/static/service-worker.js
-// CreditApp Service Worker v9 - Offline First Mejorado con soporte para redirecciones
-// =====================================================
+// service-worker.js
+const CACHE_VERSION = 'v6';
+const CACHE_NAMES = {
+    static: `static-cache-${CACHE_VERSION}`,
+    dynamic: `dynamic-cache-${CACHE_VERSION}`,
+    offline: `offline-cache-${CACHE_VERSION}`
+};
 
-const CACHE_VERSION = 'v9';
-const CACHE_NAME = `creditapp-${CACHE_VERSION}`;
-const API_CACHE = `creditapp-api-${CACHE_VERSION}`;
-const OFFLINE_PAGE = '/offline';
-
-// Recursos esenciales para offline
-const ESSENTIAL_RESOURCES = [
-  '/',
-  '/dashboard',
-  '/clientes',
-  '/clientes/crear',
-  '/productos',
-  '/productos/crear',
-  '/ventas',
-  '/ventas/crear',
-  '/abonos',
-  '/abonos/crear',
-  '/creditos',
-  '/cajas',
-  OFFLINE_PAGE,
-  '/auth/login',
-  '/static/css/style.css',
-  '/static/js/main.js',
-  '/static/js/db.js',
-  '/static/js/sync.js',
-  '/static/js/offline-handler.js',
-  '/static/manifest.json',
-  '/static/icon-192x192.png',
-  '/static/icon-512x512.png',
-  '/static/favicon.ico',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js',
-  'https://code.jquery.com/jquery-3.7.1.min.js'
+// Recursos esenciales que SIEMPRE deben estar en caché
+const ESSENTIAL_CACHE = [
+    '/',
+    '/dashboard',
+    '/clientes',
+    '/productos',
+    '/ventas',
+    '/ventas/crear',
+    '/abonos',
+    '/creditos',
+    '/cajas',
+    '/offline',
+    '/static/css/bootstrap.min.css',
+    '/static/css/all.min.css',
+    '/static/css/style.css',
+    '/static/js/db.js',
+    '/static/js/sync.js',
+    '/static/js/offline-handler.js',
+    '/static/js/utils.js',
+    '/static/js/ventas.js',
+    '/static/js/clientes.js',
+    '/static/js/productos.js',
+    '/static/js/abonos.js',
+    '/static/js/cajas.js',
+    '/static/js/creditos.js',
+    '/manifest.json'
 ];
 
-// Páginas accesibles en modo offline
-const OFFLINE_AVAILABLE_PAGES = [
-  '/',
-  '/dashboard',
-  '/clientes',
-  '/productos',
-  '/ventas',
-  '/abonos',
-  '/creditos',
-  '/cajas',
-  OFFLINE_PAGE
-];
-
-// Instalar y cachear recursos
+// Instalación del Service Worker
 self.addEventListener('install', event => {
-  console.log('[SW] Instalando Service Worker v9');
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        // Cachear recursos uno por uno para mejor control de errores
-        return Promise.all(
-          ESSENTIAL_RESOURCES.map(url => {
-            return fetch(url, { 
-              credentials: 'same-origin',
-              redirect: 'follow'  // Seguir redirecciones automáticamente
-            })
-              .then(response => {
-                // Si es una redirección, seguirla y cachear el resultado final
-                if (response.redirected) {
-                  return cache.put(response.url, response.clone())
-                    .then(() => cache.put(url, response));
-                }
-                
-                if (!response.ok && !response.redirected) {
-                  console.warn(`[SW] Error al cachear ${url}: ${response.status}`);
-                  return Promise.resolve();
-                }
-                
-                return cache.put(url, response);
-              })
-              .catch(err => {
-                console.warn(`[SW] No se pudo cachear: ${url}`, err);
-                // Continuar con otros recursos
-                return Promise.resolve();
-              });
-          })
-        );
-      })
-      .then(() => {
-        console.log('[SW] Recursos esenciales cacheados');
-        return self.skipWaiting();
-      })
-  );
-});
-
-// Activar y limpiar cachés viejos
-self.addEventListener('activate', event => {
-  console.log('[SW] Activando Service Worker v9');
-  event.waitUntil(
-    caches.keys()
-      .then(cacheNames => {
-        return Promise.all(
-          cacheNames
-            .filter(name => name.startsWith('creditapp-') && name !== CACHE_NAME && name !== API_CACHE)
-            .map(name => {
-              console.log('[SW] Eliminando caché viejo:', name);
-              return caches.delete(name);
-            })
-        );
-      })
-      .then(() => self.clients.claim())
-  );
-});
-
-// Estrategia de fetch mejorada con manejo de redirecciones
-self.addEventListener('fetch', event => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  // Ignorar peticiones que no son del mismo origen
-  if (url.origin !== self.location.origin && 
-      !url.href.startsWith('https://cdn.jsdelivr.net') &&
-      !url.href.startsWith('https://cdnjs.cloudflare.com') &&
-      !url.href.startsWith('https://code.jquery.com')) {
-    return;
-  }
-
-  // Ignorar extensiones del navegador
-  if (url.protocol === 'chrome-extension:') {
-    return;
-  }
-
-  // Manejo especial para POST offline
-  if (request.method === 'POST' && !navigator.onLine) {
-    if (url.pathname.includes('/crear') || 
-        url.pathname.includes('/nuevo') || 
-        url.pathname.includes('/registrar')) {
-      event.respondWith(handleOfflinePost(request));
-      return;
-    }
-  }
-
-  // Para peticiones GET
-  if (request.method === 'GET') {
-    // Navegación de páginas - usar estrategia especial para navegación
-    if (request.mode === 'navigate' || 
-        request.headers.get('accept').includes('text/html')) {
-      event.respondWith(handleNavigationRequest(request));
-      return;
-    }
-
-    // Recursos estáticos - cache first
-    if (url.pathname.startsWith('/static/') || 
-        url.pathname.includes('.js') || 
-        url.pathname.includes('.css') ||
-        url.pathname.includes('.png') ||
-        url.pathname.includes('.jpg')) {
-      event.respondWith(cacheFirstStrategy(request));
-      return;
-    }
-
-    // API requests - network first
-    if (url.pathname.includes('/api/')) {
-      event.respondWith(networkFirstStrategy(request));
-      return;
-    }
-
-    // Default - cache first
-    event.respondWith(cacheFirstStrategy(request));
-  }
-});
-
-// Manejar requests de navegación con mejor soporte para redirecciones
-async function handleNavigationRequest(request) {
-  try {
-    const url = new URL(request.url);
-    const pathname = url.pathname;
+    console.log('[SW] Instalando Service Worker...');
     
-    // Si estamos offline
-    if (!navigator.onLine) {
-      console.log('[SW] Modo offline: Intentando servir página', pathname);
-      
-      // Lista de páginas principales que deberían funcionar offline
-      const mainPages = ['/', '/dashboard', '/clientes', '/productos', '/ventas', '/abonos', '/creditos', '/cajas'];
-      
-      // Si es una página principal, intentar servirla desde caché
-      if (mainPages.includes(pathname)) {
-        const cache = await caches.open(CACHE_NAME);
-        const cachedResponse = await cache.match(pathname);
-        
-        if (cachedResponse) {
-          console.log('[SW] Sirviendo página desde caché:', pathname);
-          return cachedResponse;
-        }
-        
-        // Si no está exactamente la misma URL, buscar coincidencias parciales
-        const cachedKeys = await cache.keys();
-        for (const key of cachedKeys) {
-          if (key.url.includes(pathname)) {
-            console.log('[SW] Sirviendo página similar desde caché:', key.url);
-            return await cache.match(key);
-          }
-        }
-      }
-      
-      // Si no la encontramos, servir la página offline
-      console.log('[SW] Sirviendo página offline');
-      return await caches.match(OFFLINE_PAGE);
-    }
-    
-    // Resto del código para modo online igual...
-    try {
-      const networkResponse = await fetch(request, {
-        credentials: 'same-origin'
-      });
-      
-      // Si es una redirección, seguirla y cachear ambas
-      if (networkResponse.redirected) {
-        const redirectedUrl = networkResponse.url;
-        const cache = await caches.open(CACHE_NAME);
-        
-        // Guardar la redirección original
-        await cache.put(request, networkResponse.clone());
-        
-        // También guardar la URL final después de la redirección
-        const finalResponse = await fetch(redirectedUrl, {
-          credentials: 'same-origin'
-        });
-        
-        if (finalResponse.ok) {
-          await cache.put(redirectedUrl, finalResponse.clone());
-        }
-        
-        return networkResponse;
-      }
-      
-      // Si no es redirección, cachear normalmente
-      if (networkResponse.ok) {
-        const cache = await caches.open(CACHE_NAME);
-        await cache.put(request, networkResponse.clone());
-      }
-      
-      return networkResponse;
-    } catch (error) {
-      // Error de red, intentar caché
-      console.log('[SW] Error de red, usando caché:', error);
-      const cachedResponse = await caches.match(request);
-      
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      
-      // Si no hay caché, mostrar página offline
-      return caches.match(OFFLINE_PAGE);
-    }
-  } catch (error) {
-    console.error('[SW] Error en handleNavigationRequest:', error);
-    return caches.match(OFFLINE_PAGE) || new Response('Error', { status: 500 });
-  }
-}
-
-// Estrategia Cache First mejorada
-async function cacheFirstStrategy(request) {
-  try {
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-
-    if (navigator.onLine) {
-      try {
-        const networkResponse = await fetch(request);
-        if (networkResponse.ok) {
-          const cache = await caches.open(CACHE_NAME);
-          cache.put(request, networkResponse.clone());
-        }
-        return networkResponse;
-      } catch (error) {
-        console.warn(`[SW] Error de red para ${request.url}:`, error);
-        // Fallback a respuesta vacía pero "OK" para recursos no críticos
-        if (request.url.includes('/static/') || 
-            request.url.includes('.js') || 
-            request.url.includes('.css')) {
-          return new Response('', { status: 200 });
-        }
-      }
-    }
-
-    // Si llegamos aquí, no hay conexión y no hay caché
-    if (request.url.includes('/static/js/sw-unregister.js')) {
-      // Archivo especial que puede no existir
-      return new Response('', { status: 200 });
-    }
-    
-    return new Response('Recurso no disponible offline', { status: 503 });
-  } catch (error) {
-    console.error('[SW] Error en cacheFirstStrategy:', error);
-    return new Response('Error', { status: 500 });
-  }
-}
-
-// Estrategia Network First para API
-async function networkFirstStrategy(request) {
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(API_CACHE);
-      cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    return new Response(JSON.stringify({ error: 'Sin conexión' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-}
-
-// Manejar POST offline mejorado
-async function handleOfflinePost(request) {
-  try {
-    // Notificar al cliente para guardar en IndexedDB
-    const clients = await self.clients.matchAll();
-    
-    // Clonar request para poder leer el body
-    const clonedRequest = request.clone();
-    let data = {};
-
-    // Verificar el tipo de contenido
-    const contentType = request.headers.get('Content-Type');
-    
-    if (contentType && contentType.includes('application/json')) {
-      // Si es JSON
-      data = await clonedRequest.json();
-    } else if (contentType && contentType.includes('application/x-www-form-urlencoded')) {
-      // Si es form-urlencoded
-      const formData = await clonedRequest.formData();
-      for (const [key, value] of formData.entries()) {
-        data[key] = value;
-      }
-    } else {
-      // Intentar como formData de todos modos
-      try {
-        const formData = await clonedRequest.formData();
-        for (const [key, value] of formData.entries()) {
-          data[key] = value;
-        }
-      } catch (e) {
-        console.warn('[SW] No se pudo extraer datos del request:', e);
-      }
-    }
-
-    // Notificar a todos los clientes
-    clients.forEach(client => {
-      client.postMessage({
-        type: 'SAVE_OFFLINE_FORM',
-        url: request.url,
-        data: data
-      });
-    });
-
-    // Determinar página a redirigir después del guardado
-    let redirectPage = '/';
-    
-    if (request.url.includes('/clientes')) redirectPage = '/clientes';
-    else if (request.url.includes('/productos')) redirectPage = '/productos';
-    else if (request.url.includes('/ventas')) redirectPage = '/ventas';
-    else if (request.url.includes('/abonos')) redirectPage = '/abonos';
-    else if (request.url.includes('/creditos')) redirectPage = '/creditos';
-    else if (request.url.includes('/cajas')) redirectPage = '/cajas';
-
-    // Devolver página de confirmación
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Guardado Offline</title>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>
-          body { background-color: #f8f9fa; }
-          .container { margin-top: 50px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="alert alert-warning">
-            <h4 class="alert-heading">Guardado Offline</h4>
-            <p>Los datos se han guardado localmente y se sincronizarán cuando haya conexión.</p>
-            <hr>
-            <p class="mb-0">Redirigiendo...</p>
-          </div>
-        </div>
-        <script>
-          setTimeout(() => {
-            window.location.href = '${redirectPage}';
-          }, 2000);
-        </script>
-      </body>
-      </html>
-    `;
-
-    return new Response(html, {
-      headers: { 'Content-Type': 'text/html; charset=utf-8' }
-    });
-  } catch (error) {
-    console.error('[SW] Error manejando POST offline:', error);
-    return new Response('Error al guardar offline', { status: 500 });
-  }
-}
-
-// Background sync
-self.addEventListener('sync', event => {
-  console.log('[SW] Evento sync:', event.tag);
-  if (event.tag === 'sync-offline-data') {
     event.waitUntil(
-      self.clients.matchAll().then(clients => {
-        clients.forEach(client => {
-          client.postMessage({ type: 'SYNC_OFFLINE_DATA' });
-        });
-      })
+        caches.open(CACHE_NAMES.static)
+            .then(cache => {
+                console.log('[SW] Cacheando recursos esenciales...');
+                return cache.addAll(ESSENTIAL_CACHE);
+            })
+            .then(() => {
+                console.log('[SW] Instalación completada');
+                return self.skipWaiting();
+            })
+            .catch(error => {
+                console.error('[SW] Error durante instalación:', error);
+            })
     );
-  }
 });
+
+// Activación del Service Worker
+self.addEventListener('activate', event => {
+    console.log('[SW] Activando Service Worker...');
+    
+    event.waitUntil(
+        Promise.all([
+            // Limpiar cachés antiguos
+            caches.keys().then(cacheNames => {
+                return Promise.all(
+                    cacheNames.map(cacheName => {
+                        if (!Object.values(CACHE_NAMES).includes(cacheName)) {
+                            console.log('[SW] Eliminando caché antiguo:', cacheName);
+                            return caches.delete(cacheName);
+                        }
+                    })
+                );
+            }),
+            // Tomar control inmediato
+            self.clients.claim()
+        ])
+    );
+});
+
+// Estrategia de fetch
+self.addEventListener('fetch', event => {
+    const { request } = event;
+    const url = new URL(request.url);
+    
+    // Ignorar extensiones del navegador y peticiones no-http
+    if (!request.url.startsWith('http') || request.url.includes('chrome-extension')) {
+        return;
+    }
+    
+    // Manejar peticiones API
+    if (url.pathname.startsWith('/api/')) {
+        event.respondWith(handleApiRequest(request));
+        return;
+    }
+    
+    // Manejar archivos estáticos
+    if (isStaticAsset(url.pathname)) {
+        event.respondWith(handleStaticRequest(request));
+        return;
+    }
+    
+    // Manejar rutas de navegación
+    event.respondWith(handleNavigationRequest(request));
+});
+
+// Manejo de peticiones API
+async function handleApiRequest(request) {
+    try {
+        // Intentar obtener de la red
+        const networkResponse = await fetch(request);
+        
+        // Si es exitosa, clonar y guardar en caché
+        if (networkResponse.ok) {
+            const cache = await caches.open(CACHE_NAMES.dynamic);
+            cache.put(request, networkResponse.clone());
+        }
+        
+        return networkResponse;
+    } catch (error) {
+        console.log('[SW] Error en petición API, buscando en caché:', request.url);
+        
+        // Si falla la red, buscar en caché
+        const cachedResponse = await caches.match(request);
+        if (cachedResponse) {
+            return cachedResponse;
+        }
+        
+        // Si es una petición GET de datos, devolver respuesta offline
+        if (request.method === 'GET') {
+            return new Response(
+                JSON.stringify({
+                    error: 'offline',
+                    message: 'Sin conexión a internet',
+                    cached: false
+                }),
+                {
+                    status: 503,
+                    headers: { 'Content-Type': 'application/json' }
+                }
+            );
+        }
+        
+        // Para otras peticiones, devolver error
+        return new Response(
+            JSON.stringify({
+                error: 'offline',
+                message: 'Operación no disponible sin conexión'
+            }),
+            {
+                status: 503,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+    }
+}
+
+// Manejo de archivos estáticos
+async function handleStaticRequest(request) {
+    // Primero buscar en caché
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+        return cachedResponse;
+    }
+    
+    try {
+        // Si no está en caché, obtener de la red
+        const networkResponse = await fetch(request);
+        
+        // Guardar en caché si es exitoso
+        if (networkResponse.ok) {
+            const cache = await caches.open(CACHE_NAMES.static);
+            cache.put(request, networkResponse.clone());
+        }
+        
+        return networkResponse;
+    } catch (error) {
+        console.error('[SW] Error obteniendo recurso estático:', request.url);
+        
+        // Para archivos JS/CSS críticos, devolver un fallback
+        if (request.url.endsWith('.js')) {
+            return new Response(
+                '// Archivo no disponible offline',
+                { headers: { 'Content-Type': 'application/javascript' } }
+            );
+        }
+        
+        if (request.url.endsWith('.css')) {
+            return new Response(
+                '/* Archivo no disponible offline */',
+                { headers: { 'Content-Type': 'text/css' } }
+            );
+        }
+        
+        return new Response('Recurso no disponible offline', { status: 404 });
+    }
+}
+
+// Manejo de rutas de navegación
+async function handleNavigationRequest(request) {
+    try {
+        // Intentar obtener de la red primero
+        const networkResponse = await fetch(request);
+        
+        // Si es exitosa, actualizar caché
+        if (networkResponse.ok) {
+            const cache = await caches.open(CACHE_NAMES.dynamic);
+            cache.put(request, networkResponse.clone());
+        }
+        
+        return networkResponse;
+    } catch (error) {
+        console.log('[SW] Sin conexión, buscando en caché:', request.url);
+        
+        // Buscar en caché
+        const cachedResponse = await caches.match(request);
+        if (cachedResponse) {
+            return cachedResponse;
+        }
+        
+        // Si no está en caché, buscar la ruta base
+        const basePath = getBasePath(request.url);
+        const baseResponse = await caches.match(basePath);
+        if (baseResponse) {
+            return baseResponse;
+        }
+        
+        // Si nada funciona, devolver página offline
+        const offlineResponse = await caches.match('/offline');
+        if (offlineResponse) {
+            return offlineResponse;
+        }
+        
+        // Último recurso: HTML básico
+        return new Response(
+            `<!DOCTYPE html>
+            <html>
+            <head>
+                <title>Sin conexión</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        text-align: center; 
+                        padding: 50px;
+                        background-color: #f5f5f5;
+                    }
+                    h1 { color: #333; }
+                    p { color: #666; }
+                </style>
+            </head>
+            <body>
+                <h1>Sin conexión a Internet</h1>
+                <p>La página solicitada no está disponible offline.</p>
+                <p>Por favor, verifica tu conexión e intenta nuevamente.</p>
+            </body>
+            </html>`,
+            {
+                status: 200,
+                headers: { 'Content-Type': 'text/html; charset=utf-8' }
+            }
+        );
+    }
+}
+
+// Utilidades
+function isStaticAsset(pathname) {
+    return pathname.startsWith('/static/') || 
+           pathname.endsWith('.js') || 
+           pathname.endsWith('.css') || 
+           pathname.endsWith('.png') || 
+           pathname.endsWith('.jpg') || 
+           pathname.endsWith('.svg') ||
+           pathname.endsWith('.woff') ||
+           pathname.endsWith('.woff2') ||
+           pathname.endsWith('.ttf');
+}
+
+function getBasePath(url) {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/').filter(Boolean);
+    if (pathParts.length > 0) {
+        return `/${pathParts[0]}`;
+    }
+    return '/';
+}
+
+// Background Sync
+self.addEventListener('sync', event => {
+    console.log('[SW] Evento sync:', event.tag);
+    
+    if (event.tag === 'sync-offline-data') {
+        event.waitUntil(syncOfflineData());
+    }
+});
+
+async function syncOfflineData() {
+    try {
+        console.log('[SW] Iniciando sincronización de datos offline...');
+        
+        // Notificar a todos los clientes para que sincronicen
+        const clients = await self.clients.matchAll();
+        clients.forEach(client => {
+            client.postMessage({
+                type: 'SYNC_START',
+                timestamp: Date.now()
+            });
+        });
+        
+        return true;
+    } catch (error) {
+        console.error('[SW] Error en sincronización:', error);
+        throw error;
+    }
+}
 
 // Mensajes del cliente
 self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
+    console.log('[SW] Mensaje recibido:', event.data);
+    
+    if (event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+    
+    if (event.data.type === 'CACHE_URLS') {
+        event.waitUntil(
+            caches.open(CACHE_NAMES.dynamic)
+                .then(cache => cache.addAll(event.data.urls))
+        );
+    }
 });
