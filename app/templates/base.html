@@ -333,5 +333,10 @@ document.addEventListener('DOMContentLoaded', updateOfflineIndicator);
 </script>
 
     {% block extra_js %}{% endblock %}
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/clientes.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ventas.js') }}"></script>
+<script src="{{ url_for('static', filename='js/productos.js') }}"></script>
+<script src="{{ url_for('static', filename='js/abonos.js') }}"></script>
 </body>
 </html>
