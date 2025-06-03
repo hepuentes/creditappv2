@@ -1,442 +1,781 @@
-// app/static/js/offline-handler.js
-// Manejador principal de modo offline - VERSIÓN CORREGIDA V2
+// offline-handler.js
 class OfflineHandler {
-  constructor() {
-    this.isOffline = !navigator.onLine;
-    this.db = null;
-    this.pendingRequests = [];
-    this.init();
-  }
-
-  async init() {
-    try {
-      // Esperar a que window.db esté disponible
-      if (!window.db) {
-        console.log('⏳ Esperando base de datos...');
-        // Reintentar en 500ms
-        setTimeout(() => this.init(), 500);
-        return;
-      }
-      
-      // Usar la instancia global de db
-      this.db = window.db;
-      console.log('✅ OfflineHandler inicializado con DB');
-      
-      // Registrar event listeners
-      this.setupEventListeners();
-      
-      // Actualizar UI
-      this.updateUI();
-      
-      // Actualizar contador de pendientes
-      await this.updatePendingCount();
-      
-      // Precachear recursos importantes
-      if (navigator.onLine) {
-        setTimeout(() => this.precacheResources(), 2000);
-      }
-      
-    } catch (error) {
-      console.error('❌ Error inicializando OfflineHandler:', error);
+    constructor() {
+        this.isOnline = navigator.onLine;
+        this.db = null;
+        this.syncInProgress = false;
+        this.pendingRequests = [];
+        
+        this.init();
     }
-  }
-
-  setupEventListeners() {
-    // Eventos de conexión
-    window.addEventListener('online', () => this.handleOnline());
-    window.addEventListener('offline', () => this.handleOffline());
     
-    // Interceptar formularios
-    document.addEventListener('submit', (e) => this.handleFormSubmit(e), true);
-    
-    // Interceptar clicks en links
-    document.addEventListener('click', (e) => this.handleLinkClick(e), true);
-    
-    // Mensajes del Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', async (e) => {
-        if (e.data.type === 'SAVE_OFFLINE_FORM') {
-          await this.saveFormData(e.data.url, e.data.data);
-          this.showOfflineConfirmation();
-        } else if (e.data.type === 'SYNC_OFFLINE_DATA') {
-          if (window.syncManager) {
-            await window.syncManager.syncAllData();
-          }
-        }
-      });
+    async init() {
+        console.log('✅ OfflineHandler inicializando...');
+        
+        // Inicializar IndexedDB
+        await this.initDB();
+        
+        // Configurar listeners
+        this.setupEventListeners();
+        
+        // Interceptar fetch para peticiones API
+        this.interceptFetch();
+        
+        // Actualizar UI según estado de conexión
+        this.updateConnectionStatus();
+        
+        console.log('✅ OfflineHandler inicializado con DB');
     }
-  }
-
-  async handleFormSubmit(event) {
-  // Solo interceptar si estamos offline
-  if (navigator.onLine) return;
-  
-  const form = event.target;
-  const formAction = form.action || '';
-  
-  // Solo interceptar formularios de creación
-  if (!formAction.includes('/crear') && 
-      !formAction.includes('/nuevo') &&
-      !formAction.includes('/registrar')) {
-    return;
-  }
-  
-  event.preventDefault();
-  event.stopPropagation();
-  
-  console.log('📱 Interceptando formulario offline:', formAction);
-  
-  // Obtener datos del formulario
-  const formData = new FormData(form);
-  const data = {};
-  
-  // Convertir FormData a objeto
-  for (let [key, value] of formData.entries()) {
-    if (key !== 'csrf_token') {
-      data[key] = value;
-    }
-  }
-  
-  // Agregar timestamp y marca offline
-  data.timestamp = new Date().toISOString();
-  data.offline = true;
-  
-  // Determinar tipo de entidad
-  let entityType = 'unknown';
-  if (formAction.includes('clientes')) entityType = 'cliente';
-  else if (formAction.includes('productos')) entityType = 'producto';
-  else if (formAction.includes('ventas')) entityType = 'venta';
-  else if (formAction.includes('abonos')) entityType = 'abono';
-  
-  // Guardar en IndexedDB
-  try {
-    const savedRecord = await this.saveFormData(formAction, data, entityType);
-    console.log('✅ Datos guardados offline:', savedRecord);
     
-    // Guardar también en el store específico
-    if (this.db && entityType !== 'unknown') {
-      const storeName = this.getStoreNameFromType(entityType);
-      if (storeName && this.db.db.objectStoreNames.contains(storeName)) {
-        try {
-          // ID temporal para offline
-          if (!data.id) {
-            data.id = 'offline_' + Date.now();
-          }
-          
-          // Guardar en store específico
-          const transaction = this.db.db.transaction([storeName], 'readwrite');
-          const store = transaction.objectStore(storeName);
-          
-          await new Promise((resolve, reject) => {
-            const request = store.put(data);
-            request.onsuccess = resolve;
-            request.onerror = (e) => {
-              console.error(`Error guardando en ${storeName}:`, e);
-              reject(e);
+    async initDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open('CreditAppDB', 5);
+            
+            request.onerror = () => {
+                console.error('Error abriendo IndexedDB');
+                reject(request.error);
             };
-          });
-          
-          console.log(`✅ Datos también guardados en store ${storeName}`);
-        } catch (e) {
-          console.error(`Error guardando en store específico:`, e);
+            
+            request.onsuccess = () => {
+                this.db = request.result;
+                console.log('IndexedDB conectada en OfflineHandler');
+                resolve();
+            };
+            
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                
+                // Crear stores si no existen
+                if (!db.objectStoreNames.contains('pendingChanges')) {
+                    db.createObjectStore('pendingChanges', { 
+                        keyPath: 'id', 
+                        autoIncrement: true 
+                    });
+                }
+                
+                if (!db.objectStoreNames.contains('clientes')) {
+                    const clientesStore = db.createObjectStore('clientes', { 
+                        keyPath: 'id',
+                        autoIncrement: true 
+                    });
+                    clientesStore.createIndex('telefono', 'telefono', { unique: false });
+                    clientesStore.createIndex('sync_status', 'sync_status', { unique: false });
+                }
+                
+                if (!db.objectStoreNames.contains('ventas')) {
+                    const ventasStore = db.createObjectStore('ventas', { 
+                        keyPath: 'id',
+                        autoIncrement: true 
+                    });
+                    ventasStore.createIndex('cliente_id', 'cliente_id', { unique: false });
+                    ventasStore.createIndex('sync_status', 'sync_status', { unique: false });
+                }
+                
+                if (!db.objectStoreNames.contains('productos')) {
+                    const productosStore = db.createObjectStore('productos', { 
+                        keyPath: 'id' 
+                    });
+                    productosStore.createIndex('sync_status', 'sync_status', { unique: false });
+                }
+                
+                if (!db.objectStoreNames.contains('abonos')) {
+                    const abonosStore = db.createObjectStore('abonos', { 
+                        keyPath: 'id',
+                        autoIncrement: true 
+                    });
+                    abonosStore.createIndex('venta_id', 'venta_id', { unique: false });
+                    abonosStore.createIndex('sync_status', 'sync_status', { unique: false });
+                }
+                
+                if (!db.objectStoreNames.contains('cajas')) {
+                    const cajasStore = db.createObjectStore('cajas', { 
+                        keyPath: 'id',
+                        autoIncrement: true 
+                    });
+                    cajasStore.createIndex('sync_status', 'sync_status', { unique: false });
+                }
+                
+                if (!db.objectStoreNames.contains('movimientos')) {
+                    const movimientosStore = db.createObjectStore('movimientos', { 
+                        keyPath: 'id',
+                        autoIncrement: true 
+                    });
+                    movimientosStore.createIndex('caja_id', 'caja_id', { unique: false });
+                    movimientosStore.createIndex('sync_status', 'sync_status', { unique: false });
+                }
+            };
+        });
+    }
+    
+    setupEventListeners() {
+        // Eventos de conexión
+        window.addEventListener('online', () => {
+            console.log('📶 Conexión restaurada');
+            this.isOnline = true;
+            this.updateConnectionStatus();
+            this.syncPendingData();
+        });
+        
+        window.addEventListener('offline', () => {
+            console.log('📱 Sin conexión - Modo Offline activado');
+            this.isOnline = false;
+            this.updateConnectionStatus();
+        });
+        
+        // Mensajes del Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data.type === 'SYNC_START') {
+                    this.syncPendingData();
+                }
+            });
         }
-      }
     }
     
-    // Mostrar feedback
-    this.showOfflineSuccess(entityType);
-    
-    // Limpiar formulario
-    form.reset();
-    
-    // Redirigir a la página principal después de guardar
-    const section = this.getSectionFromUrl(formAction);
-    if (section) {
-      setTimeout(() => {
-        window.location.href = `/${section}`;
-      }, 1500);
-    }
-    
-  } catch (error) {
-    console.error('❌ Error guardando datos offline:', error);
-    this.showError('Error al guardar datos offline');
-  }
-}
-
-// Nueva función auxiliar
-getStoreNameFromType(type) {
-  switch(type) {
-    case 'cliente': return 'clientes';
-    case 'producto': return 'productos';
-    case 'venta': return 'ventas';
-    case 'abono': return 'abonos';
-    default: return null;
-  }
-}
-  getSectionFromUrl(url) {
-    if (url.includes('/clientes')) return 'clientes';
-    if (url.includes('/productos')) return 'productos';
-    if (url.includes('/ventas')) return 'ventas';
-    if (url.includes('/abonos')) return 'abonos';
-    if (url.includes('/creditos')) return 'creditos';
-    if (url.includes('/cajas')) return 'cajas';
-    return '';
-  }
-
-  async handleLinkClick(event) {
-    // Solo interceptar si estamos offline
-    if (navigator.onLine) return;
-    
-    const link = event.target.closest('a');
-    if (!link) return;
-    
-    const href = link.getAttribute('href');
-    if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
-    
-    // Permitir navegación a páginas cacheadas
-    const cachedPages = [
-      '/', '/dashboard', '/clientes', '/productos', '/ventas', 
-      '/abonos', '/creditos', '/cajas', '/offline'
-    ];
-    
-    // Si es un enlace relativo a una página principal, permitir la navegación
-    if (cachedPages.some(page => href === page || href.startsWith(page + '/'))) {
-      // No intervenir, permitir navegación normal
-      console.log('📱 Permitiendo navegación offline a:', href);
-      return;
-    }
-    
-    // Para otras páginas, prevenir navegación y mostrar mensaje
-    event.preventDefault();
-    this.showOfflineMessage('Esta página no está disponible offline');
-    
-    // Opcional: redirigir a la página offline si es una sección principal
-    if (href.includes('/clientes') || 
-        href.includes('/productos') || 
-        href.includes('/ventas') || 
-        href.includes('/abonos') || 
-        href.includes('/creditos') || 
-        href.includes('/cajas')) {
-      const section = this.getSectionFromUrl(href);
-      if (section) {
-        window.location.href = `/${section}`;
-      }
-    }
-  }
-
-  async saveFormData(url, data, type) {
-    if (!this.db) {
-      throw new Error('Base de datos no disponible');
-    }
-    
-    if (!type) {
-      type = this.getTypeFromUrl(url);
-    }
-    
-    // Guardar en IndexedDB usando el método correcto
-    const record = await this.db.saveOfflineData(type, url, data);
-    
-    // Actualizar contador
-    await this.updatePendingCount();
-    
-    return record;
-  }
-
-  getTypeFromUrl(url) {
-    if (url.includes('/clientes/')) return 'cliente';
-    if (url.includes('/productos/')) return 'producto';
-    if (url.includes('/ventas/')) return 'venta';
-    if (url.includes('/abonos/')) return 'abono';
-    if (url.includes('/creditos/')) return 'credito';
-    return 'unknown';
-  }
-
-  showOfflineSuccess(entityType) {
-    const messages = {
-      'cliente': 'Cliente guardado offline',
-      'producto': 'Producto guardado offline',
-      'venta': 'Venta guardada offline',
-      'abono': 'Abono guardado offline'
-    };
-    
-    const message = messages[entityType] || 'Datos guardados offline';
-    
-    // Crear notificación
-    const alert = document.createElement('div');
-    alert.className = 'alert alert-warning alert-dismissible fade show position-fixed';
-    alert.style.cssText = 'top: 70px; right: 20px; z-index: 9999; max-width: 350px;';
-    alert.innerHTML = `
-      <div class="d-flex align-items-center">
-        <i class="fas fa-wifi-slash me-2"></i>
-        <div>
-          <strong>Modo Offline</strong><br>
-          <small>${message}. Se sincronizará cuando haya conexión.</small>
-        </div>
-      </div>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(alert);
-    
-    // Auto cerrar después de 5 segundos
-    setTimeout(() => {
-      alert.classList.remove('show');
-      setTimeout(() => alert.remove(), 300);
-    }, 5000);
-  }
-
-  showOfflineMessage(message) {
-    const alert = document.createElement('div');
-    alert.className = 'alert alert-info alert-dismissible fade show position-fixed';
-    alert.style.cssText = 'top: 70px; right: 20px; z-index: 9999; max-width: 350px;';
-    alert.innerHTML = `
-      <div class="d-flex align-items-center">
-        <i class="fas fa-info-circle me-2"></i>
-        <span>${message}</span>
-      </div>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(alert);
-    
-    setTimeout(() => {
-      alert.classList.remove('show');
-      setTimeout(() => alert.remove(), 300);
-    }, 3000);
-  }
-
-  showError(message) {
-    const alert = document.createElement('div');
-    alert.className = 'alert alert-danger alert-dismissible fade show position-fixed';
-    alert.style.cssText = 'top: 70px; right: 20px; z-index: 9999; max-width: 350px;';
-    alert.innerHTML = `
-      <div class="d-flex align-items-center">
-        <i class="fas fa-exclamation-circle me-2"></i>
-        <span>${message}</span>
-      </div>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(alert);
-    
-    setTimeout(() => {
-      alert.classList.remove('show');
-      setTimeout(() => alert.remove(), 300);
-    }, 5000);
-  }
-
-  async handleOnline() {
-    console.log('🌐 Conexión restaurada');
-    this.isOffline = false;
-    this.updateUI();
-    
-    // Notificar al usuario
-    this.showOfflineMessage('Conexión restaurada. Sincronizando datos...');
-    
-    // Esperar un momento y sincronizar
-    setTimeout(async () => {
-      if (window.syncManager) {
-        await window.syncManager.syncAllData();
-      }
-    }, 2000);
-  }
-
-  handleOffline() {
-    console.log('📱 Sin conexión - Modo Offline activado');
-    this.isOffline = true;
-    this.updateUI();
-    
-    // Notificar al usuario
-    this.showOfflineMessage('Modo offline activado. Puedes seguir trabajando.');
-  }
-
-  updateUI() {
-    document.body.classList.toggle('offline-mode', this.isOffline);
-    
-    // Actualizar indicador
-    let indicator = document.querySelector('.offline-indicator');
-    if (!indicator && this.isOffline) {
-      indicator = document.createElement('div');
-      indicator.className = 'offline-indicator';
-      indicator.innerHTML = `
-        <i class="fas fa-wifi-slash"></i>
-        <span>Modo Offline</span>
-        <span class="badge bg-light text-dark ms-2">
-          <span id="pending-count">0</span> pendientes
-        </span>
-      `;
-      indicator.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #ffc107; color: #000; padding: 10px 20px; border-radius: 5px; z-index: 9999; display: flex; align-items: center; gap: 10px;';
-      
-      // Agregar botón para ir a página offline
-      const offlinePageBtn = document.createElement('a');
-      offlinePageBtn.href = '/offline';
-      offlinePageBtn.className = 'ms-2 btn btn-sm btn-dark';
-      offlinePageBtn.innerHTML = 'Centro Offline';
-      indicator.appendChild(offlinePageBtn);
-      
-      document.body.appendChild(indicator);
-    }
-    
-    if (indicator) {
-      indicator.style.display = this.isOffline ? 'flex' : 'none';
-    }
-  }
-
-  async updatePendingCount() {
-    if (!this.db) return;
-    
-    try {
-      const count = await this.db.countPendingChanges();
-      const badges = document.querySelectorAll('#pending-count');
-      badges.forEach(badge => badge.textContent = count);
-    } catch (error) {
-      console.error('❌ Error actualizando contador:', error);
-    }
-  }
-
-  // Pre-cachear recursos importantes
-  async precacheResources() {
-    if (!navigator.onLine) return;
-    
-    try {
-      // Hacer solicitudes para cachear recursos clave
-      const pagesToCache = [
-        '/',
-        '/dashboard',
-        '/clientes',
-        '/productos',
-        '/ventas',
-        '/abonos',
-        '/creditos',
-        '/cajas',
-        '/offline'
-      ];
-      
-      console.log('🔄 Pre-cacheando recursos para uso offline...');
-      
-      for (const page of pagesToCache) {
-        try {
-          const response = await fetch(page, {
-            credentials: 'same-origin',
-            headers: {
-              'X-Requested-With': 'XMLHttpRequest'
+    interceptFetch() {
+        const originalFetch = window.fetch;
+        const self = this;
+        
+        window.fetch = async function(...args) {
+            const [url, options = {}] = args;
+            
+            // Si es una petición API y estamos offline
+            if (url.includes('/api/') && !self.isOnline) {
+                return self.handleOfflineRequest(url, options);
             }
-          });
-          
-          if (response.ok || response.redirected) {
-            console.log(`✅ Cacheado: ${page}`);
-          }
-        } catch (error) {
-          console.warn(`⚠️ Error pre-cacheando ${page}:`, error);
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error durante pre-cacheo:', error);
+            
+            // Si estamos online, hacer petición normal
+            try {
+                const response = await originalFetch.apply(this, args);
+                return response;
+            } catch (error) {
+                // Si falla y es una petición API, manejar offline
+                if (url.includes('/api/')) {
+                    return self.handleOfflineRequest(url, options);
+                }
+                throw error;
+            }
+        };
     }
-  }
+    
+    async handleOfflineRequest(url, options = {}) {
+        const method = options.method || 'GET';
+        const urlObj = new URL(url, window.location.origin);
+        const pathname = urlObj.pathname;
+        
+        console.log(`🔄 Manejando petición offline: ${method} ${pathname}`);
+        
+        // Rutas GET - obtener de IndexedDB
+        if (method === 'GET') {
+            if (pathname.includes('/api/clientes')) {
+                return this.getOfflineClientes();
+            }
+            if (pathname.includes('/api/ventas')) {
+                return this.getOfflineVentas();
+            }
+            if (pathname.includes('/api/productos')) {
+                return this.getOfflineProductos();
+            }
+            if (pathname.includes('/api/abonos')) {
+                return this.getOfflineAbonos();
+            }
+            if (pathname.includes('/api/cajas')) {
+                return this.getOfflineCajas();
+            }
+        }
+        
+        // Rutas POST/PUT/DELETE - guardar en IndexedDB
+        if (['POST', 'PUT', 'DELETE'].includes(method)) {
+            const body = options.body ? JSON.parse(options.body) : {};
+            
+            // Guardar cambio pendiente
+            await this.savePendingChange({
+                url: pathname,
+                method: method,
+                body: body,
+                timestamp: Date.now()
+            });
+            
+            // Manejar según la ruta
+            if (pathname.includes('/api/clientes')) {
+                return this.saveOfflineCliente(body, method);
+            }
+            if (pathname.includes('/api/ventas')) {
+                return this.saveOfflineVenta(body, method);
+            }
+            if (pathname.includes('/api/abonos')) {
+                return this.saveOfflineAbono(body, method);
+            }
+            if (pathname.includes('/api/cajas')) {
+                return this.saveOfflineCaja(body, method);
+            }
+            if (pathname.includes('/api/movimientos')) {
+                return this.saveOfflineMovimiento(body, method);
+            }
+        }
+        
+        // Respuesta por defecto
+        return new Response(
+            JSON.stringify({
+                error: 'offline',
+                message: 'Operación guardada para sincronizar'
+            }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+    }
+    
+    // Métodos para obtener datos offline
+    async getOfflineClientes() {
+        const transaction = this.db.transaction(['clientes'], 'readonly');
+        const store = transaction.objectStore('clientes');
+        const clientes = await this.getAllFromStore(store);
+        
+        return new Response(
+            JSON.stringify({ clientes: clientes }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+    }
+    
+    async getOfflineVentas() {
+        const transaction = this.db.transaction(['ventas'], 'readonly');
+        const store = transaction.objectStore('ventas');
+        const ventas = await this.getAllFromStore(store);
+        
+        return new Response(
+            JSON.stringify({ ventas: ventas }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+    }
+    
+    async getOfflineProductos() {
+        const transaction = this.db.transaction(['productos'], 'readonly');
+        const store = transaction.objectStore('productos');
+        const productos = await this.getAllFromStore(store);
+        
+        return new Response(
+            JSON.stringify({ productos: productos }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+    }
+    
+    async getOfflineAbonos() {
+        const transaction = this.db.transaction(['abonos'], 'readonly');
+        const store = transaction.objectStore('abonos');
+        const abonos = await this.getAllFromStore(store);
+        
+        return new Response(
+            JSON.stringify({ abonos: abonos }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+    }
+    
+    async getOfflineCajas() {
+        const transaction = this.db.transaction(['cajas'], 'readonly');
+        const store = transaction.objectStore('cajas');
+        const cajas = await this.getAllFromStore(store);
+        
+        return new Response(
+            JSON.stringify({ cajas: cajas }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+    }
+    
+    // Métodos para guardar datos offline
+    async saveOfflineCliente(data, method) {
+        const transaction = this.db.transaction(['clientes'], 'readwrite');
+        const store = transaction.objectStore('clientes');
+        
+        // Agregar datos de sincronización
+        data.sync_status = 'pending';
+        data.sync_timestamp = Date.now();
+        data.local_id = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Si no tiene ID (nuevo), usar ID temporal
+        if (!data.id) {
+            data.id = data.local_id;
+        }
+        
+        await store.put(data);
+        
+        // Actualizar contador en UI
+        this.updatePendingCount();
+        
+        return new Response(
+            JSON.stringify({
+                success: true,
+                message: 'Cliente guardado localmente',
+                data: data
+            }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+    }
+    
+    async saveOfflineVenta(data, method) {
+        const transaction = this.db.transaction(['ventas', 'productos'], 'readwrite');
+        const ventasStore = transaction.objectStore('ventas');
+        const productosStore = transaction.objectStore('productos');
+        
+        // Agregar datos de sincronización
+        data.sync_status = 'pending';
+        data.sync_timestamp = Date.now();
+        data.local_id = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        if (!data.id) {
+            data.id = data.local_id;
+        }
+        
+        // Actualizar stock de productos localmente
+        if (data.productos && Array.isArray(data.productos)) {
+            for (const item of data.productos) {
+                const producto = await productosStore.get(item.producto_id);
+                if (producto) {
+                    producto.stock -= item.cantidad;
+                    await productosStore.put(producto);
+                }
+            }
+        }
+        
+        await ventasStore.put(data);
+        
+        this.updatePendingCount();
+        
+        return new Response(
+            JSON.stringify({
+                success: true,
+                message: 'Venta guardada localmente',
+                data: data
+            }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+    }
+    
+    async saveOfflineAbono(data, method) {
+        const transaction = this.db.transaction(['abonos'], 'readwrite');
+        const store = transaction.objectStore('abonos');
+        
+        data.sync_status = 'pending';
+        data.sync_timestamp = Date.now();
+        data.local_id = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        if (!data.id) {
+            data.id = data.local_id;
+        }
+        
+        await store.put(data);
+        
+        this.updatePendingCount();
+        
+        return new Response(
+            JSON.stringify({
+                success: true,
+                message: 'Abono guardado localmente',
+                data: data
+            }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+    }
+    
+    async saveOfflineCaja(data, method) {
+        const transaction = this.db.transaction(['cajas'], 'readwrite');
+        const store = transaction.objectStore('cajas');
+        
+        data.sync_status = 'pending';
+        data.sync_timestamp = Date.now();
+        data.local_id = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        if (!data.id) {
+            data.id = data.local_id;
+        }
+        
+        await store.put(data);
+        
+        this.updatePendingCount();
+        
+        return new Response(
+            JSON.stringify({
+                success: true,
+                message: 'Caja guardada localmente',
+                data: data
+            }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+    }
+    
+    async saveOfflineMovimiento(data, method) {
+        const transaction = this.db.transaction(['movimientos'], 'readwrite');
+        const store = transaction.objectStore('movimientos');
+        
+        data.sync_status = 'pending';
+        data.sync_timestamp = Date.now();
+        data.local_id = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        if (!data.id) {
+            data.id = data.local_id;
+        }
+        
+        await store.put(data);
+        
+        this.updatePendingCount();
+        
+        return new Response(
+            JSON.stringify({
+                success: true,
+                message: 'Movimiento guardado localmente',
+                data: data
+            }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+    }
+    
+    // Guardar cambio pendiente
+    async savePendingChange(change) {
+        const transaction = this.db.transaction(['pendingChanges'], 'readwrite');
+        const store = transaction.objectStore('pendingChanges');
+        await store.add(change);
+    }
+    
+    // Sincronización de datos
+    async syncPendingData() {
+        if (this.syncInProgress || !this.isOnline) {
+            return;
+        }
+        
+        this.syncInProgress = true;
+        console.log('🔄 Iniciando sincronización de datos pendientes...');
+        
+        try {
+            // Sincronizar cada tipo de datos
+            await this.syncPendingClientes();
+            await this.syncPendingVentas();
+            await this.syncPendingAbonos();
+            await this.syncPendingCajas();
+            await this.syncPendingMovimientos();
+            
+            // Limpiar cambios pendientes
+            await this.clearPendingChanges();
+            
+            // Actualizar UI
+            this.updatePendingCount();
+            this.showNotification('✅ Sincronización completada');
+            
+        } catch (error) {
+            console.error('Error en sincronización:', error);
+            this.showNotification('❌ Error en sincronización', 'error');
+        } finally {
+            this.syncInProgress = false;
+        }
+    }
+    
+    async syncPendingClientes() {
+        const transaction = this.db.transaction(['clientes'], 'readonly');
+        const store = transaction.objectStore('clientes');
+        const index = store.index('sync_status');
+        const clientes = await this.getAllFromIndex(index, 'pending');
+        
+        console.log(`Sincronizando ${clientes.length} clientes...`);
+        
+        for (const cliente of clientes) {
+            try {
+                const response = await fetch('/api/clientes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(cliente)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    // Actualizar con ID del servidor
+                    cliente.id = result.id;
+                    cliente.sync_status = 'synced';
+                    
+                    const updateTx = this.db.transaction(['clientes'], 'readwrite');
+                    await updateTx.objectStore('clientes').put(cliente);
+                }
+            } catch (error) {
+                console.error('Error sincronizando cliente:', error);
+            }
+        }
+    }
+    
+    async syncPendingVentas() {
+        const transaction = this.db.transaction(['ventas'], 'readonly');
+        const store = transaction.objectStore('ventas');
+        const index = store.index('sync_status');
+        const ventas = await this.getAllFromIndex(index, 'pending');
+        
+        console.log(`Sincronizando ${ventas.length} ventas...`);
+        
+        for (const venta of ventas) {
+            try {
+                const response = await fetch('/api/ventas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(venta)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    venta.id = result.id;
+                    venta.sync_status = 'synced';
+                    
+                    const updateTx = this.db.transaction(['ventas'], 'readwrite');
+                    await updateTx.objectStore('ventas').put(venta);
+                }
+            } catch (error) {
+                console.error('Error sincronizando venta:', error);
+            }
+        }
+    }
+    
+    async syncPendingAbonos() {
+        const transaction = this.db.transaction(['abonos'], 'readonly');
+        const store = transaction.objectStore('abonos');
+        const index = store.index('sync_status');
+        const abonos = await this.getAllFromIndex(index, 'pending');
+        
+        for (const abono of abonos) {
+            try {
+                const response = await fetch('/api/abonos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(abono)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    abono.id = result.id;
+                    abono.sync_status = 'synced';
+                    
+                    const updateTx = this.db.transaction(['abonos'], 'readwrite');
+                    await updateTx.objectStore('abonos').put(abono);
+                }
+            } catch (error) {
+                console.error('Error sincronizando abono:', error);
+            }
+        }
+    }
+    
+    async syncPendingCajas() {
+        const transaction = this.db.transaction(['cajas'], 'readonly');
+        const store = transaction.objectStore('cajas');
+        const index = store.index('sync_status');
+        const cajas = await this.getAllFromIndex(index, 'pending');
+        
+        for (const caja of cajas) {
+            try {
+                const response = await fetch('/api/cajas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(caja)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    caja.id = result.id;
+                    caja.sync_status = 'synced';
+                    
+                    const updateTx = this.db.transaction(['cajas'], 'readwrite');
+                    await updateTx.objectStore('cajas').put(caja);
+                }
+            } catch (error) {
+                console.error('Error sincronizando caja:', error);
+            }
+        }
+    }
+    
+    async syncPendingMovimientos() {
+        const transaction = this.db.transaction(['movimientos'], 'readonly');
+        const store = transaction.objectStore('movimientos');
+        const index = store.index('sync_status');
+        const movimientos = await this.getAllFromIndex(index, 'pending');
+        
+        for (const movimiento of movimientos) {
+            try {
+                const response = await fetch('/api/movimientos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(movimiento)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    movimiento.id = result.id;
+                    movimiento.sync_status = 'synced';
+                    
+                    const updateTx = this.db.transaction(['movimientos'], 'readwrite');
+                    await updateTx.objectStore('movimientos').put(movimiento);
+                }
+            } catch (error) {
+                console.error('Error sincronizando movimiento:', error);
+            }
+        }
+    }
+    
+    async clearPendingChanges() {
+        const transaction = this.db.transaction(['pendingChanges'], 'readwrite');
+        const store = transaction.objectStore('pendingChanges');
+        await store.clear();
+    }
+    
+    // Utilidades
+    async getAllFromStore(store) {
+        return new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+    
+    async getAllFromIndex(index, value) {
+        return new Promise((resolve, reject) => {
+            const request = index.getAll(value);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+    
+    updateConnectionStatus() {
+        const statusEl = document.getElementById('connection-status');
+        if (statusEl) {
+            if (this.isOnline) {
+                statusEl.innerHTML = '<i class="fas fa-wifi"></i> Online';
+                statusEl.className = 'badge bg-success';
+            } else {
+                statusEl.innerHTML = '<i class="fas fa-wifi-slash"></i> Offline';
+                statusEl.className = 'badge bg-warning';
+            }
+        }
+        
+        // Agregar/quitar clase al body
+        document.body.classList.toggle('offline-mode', !this.isOnline);
+    }
+    
+    async updatePendingCount() {
+        const transaction = this.db.transaction(['pendingChanges'], 'readonly');
+        const store = transaction.objectStore('pendingChanges');
+        const count = await store.count();
+        
+        const pendingEl = document.getElementById('pending-count');
+        if (pendingEl && count.result > 0) {
+            pendingEl.textContent = count.result;
+            pendingEl.style.display = 'inline-block';
+        } else if (pendingEl) {
+            pendingEl.style.display = 'none';
+        }
+    }
+    
+    showNotification(message, type = 'success') {
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type} notification-toast`;
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            min-width: 250px;
+            animation: slideIn 0.3s ease-out;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+    
+    async cacheAllData() {
+        console.log('🔄 Pre-cacheando datos para uso offline...');
+        
+        try {
+            // Obtener todos los datos del servidor
+            const endpoints = [
+                '/api/clientes',
+                '/api/productos',
+                '/api/ventas',
+                '/api/abonos',
+                '/api/cajas'
+            ];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(endpoint);
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        // Guardar en IndexedDB
+                        const storeName = endpoint.split('/').pop();
+                        const transaction = this.db.transaction([storeName], 'readwrite');
+                        const store = transaction.objectStore(storeName);
+                        
+                        // Limpiar store existente
+                        await store.clear();
+                        
+                        // Guardar nuevos datos
+                        const items = data[storeName] || [];
+                        for (const item of items) {
+                            item.sync_status = 'synced';
+                            await store.put(item);
+                        }
+                        
+                        console.log(`✅ Cacheado: ${endpoint}`);
+                    }
+                } catch (error) {
+                    console.error(`Error cacheando ${endpoint}:`, error);
+                }
+            }
+            
+            console.log('✅ Pre-cacheo completado');
+        } catch (error) {
+            console.error('Error en pre-cacheo:', error);
+        }
+    }
 }
 
-// Inicializar cuando DOM esté listo
-document.addEventListener('DOMContentLoaded', () => {
-  window.offlineHandler = new OfflineHandler();
-});
+// Inicializar cuando el DOM esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.offlineHandler = new OfflineHandler();
+    });
+} else {
+    window.offlineHandler = new OfflineHandler();
+}
+
+// Exportar para uso en otros módulos
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = OfflineHandler;
+}
