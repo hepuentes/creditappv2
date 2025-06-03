@@ -355,112 +355,109 @@
         }
 
         // Cargar datos cacheados
-        <script>
-// Cargar datos cacheados
-async function loadCachedData() {
-    if (db) {
-        try {
-            // Cargar clientes
-            const clientes = await db.getCachedData('clientes');
-            const clienteSelects = document.querySelectorAll('select[name="cliente_id"]');
-            
-            clienteSelects.forEach(select => {
-                select.innerHTML = '<option value="">Seleccione un cliente</option>';
-                
-                // Ordenar clientes por nombre
-                clientes.sort((a, b) => {
-                    if (a.nombre && b.nombre) {
-                        return a.nombre.localeCompare(b.nombre);
-                    }
-                    return 0;
-                });
-                
-                clientes.forEach(cliente => {
-                    // Solo agregar si tiene nombre e id
-                    if (cliente && cliente.nombre && cliente.id) {
-                        const option = document.createElement('option');
-                        option.value = cliente.id;
-                        let displayText = cliente.nombre;
-                        if (cliente.cedula) {
-                            displayText += ` - ${cliente.cedula}`;
-                        }
-                        if (cliente.offline) {
-                            displayText += ' (pendiente)';
-                        }
-                        option.textContent = displayText;
-                        select.appendChild(option);
-                    }
-                });
-                
-                // Si hay clientes, activar el botón de submit
-                const form = select.closest('form');
-                if (form) {
-                    const submitBtn = form.querySelector('button[type="submit"]');
-                    if (submitBtn) {
-                        submitBtn.disabled = clientes.length === 0;
-                    }
-                }
-            });
-            
-            // También cargar productos si hay formulario de venta
-            const productosList = document.getElementById('productos-lista');
-            if (productosList) {
-                const productos = await db.getCachedData('productos');
-                
-                if (productos.length > 0) {
-                    productosList.innerHTML = '';
+        async function loadCachedData() {
+            if (db) {
+                try {
+                    // Cargar clientes
+                    const clientes = await db.getCachedData('clientes');
+                    const clienteSelects = document.querySelectorAll('select[name="cliente_id"]');
                     
-                    productos.forEach(producto => {
-                        if (producto && producto.nombre) {
-                            const item = document.createElement('div');
-                            item.className = 'producto-item';
-                            
-                            let stockStatus = '';
-                            if (producto.stock <= 0) {
-                                stockStatus = '<span class="badge bg-danger">Agotado</span>';
-                            } else if (producto.stock <= producto.stock_minimo) {
-                                stockStatus = `<span class="badge bg-warning">Stock bajo (${producto.stock})</span>`;
-                            } else {
-                                stockStatus = `<span class="badge bg-success">Disponible (${producto.stock})</span>`;
+                    clienteSelects.forEach(select => {
+                        select.innerHTML = '<option value="">Seleccione un cliente</option>';
+                        
+                        // Ordenar clientes por nombre
+                        clientes.sort((a, b) => {
+                            if (a.nombre && b.nombre) {
+                                return a.nombre.localeCompare(b.nombre);
                             }
-                            
-                            item.innerHTML = `
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h6>${producto.nombre}</h6>
-                                        <small>${producto.codigo || 'Sin código'}</small>
-                                    </div>
-                                    <div class="text-end">
-                                        <div>${stockStatus}</div>
-                                        <div class="precio">${formatCurrency(producto.precio_venta)}</div>
-                                    </div>
-                                </div>
-                            `;
-                            
-                            productosList.appendChild(item);
+                            return 0;
+                        });
+                        
+                        clientes.forEach(cliente => {
+                            // Solo agregar si tiene nombre e id
+                            if (cliente && cliente.nombre && cliente.id) {
+                                const option = document.createElement('option');
+                                option.value = cliente.id;
+                                let displayText = cliente.nombre;
+                                if (cliente.cedula) {
+                                    displayText += ` - ${cliente.cedula}`;
+                                }
+                                if (cliente.offline) {
+                                    displayText += ' (pendiente)';
+                                }
+                                option.textContent = displayText;
+                                select.appendChild(option);
+                            }
+                        });
+                        
+                        // Si hay clientes, activar el botón de submit
+                        const form = select.closest('form');
+                        if (form) {
+                            const submitBtn = form.querySelector('button[type="submit"]');
+                            if (submitBtn) {
+                                submitBtn.disabled = clientes.length === 0;
+                            }
                         }
                     });
-                } else {
-                    productosList.innerHTML = '<p class="text-muted">No hay productos disponibles en caché</p>';
+                    
+                    // También cargar productos si hay formulario de venta
+                    const productosList = document.getElementById('productos-lista');
+                    if (productosList) {
+                        const productos = await db.getCachedData('productos');
+                        
+                        if (productos.length > 0) {
+                            productosList.innerHTML = '';
+                            
+                            productos.forEach(producto => {
+                                if (producto && producto.nombre) {
+                                    const item = document.createElement('div');
+                                    item.className = 'producto-item';
+                                    
+                                    let stockStatus = '';
+                                    if (producto.stock <= 0) {
+                                        stockStatus = '<span class="badge bg-danger">Agotado</span>';
+                                    } else if (producto.stock <= producto.stock_minimo) {
+                                        stockStatus = `<span class="badge bg-warning">Stock bajo (${producto.stock})</span>`;
+                                    } else {
+                                        stockStatus = `<span class="badge bg-success">Disponible (${producto.stock})</span>`;
+                                    }
+                                    
+                                    item.innerHTML = `
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6>${producto.nombre}</h6>
+                                                <small>${producto.codigo || 'Sin código'}</small>
+                                            </div>
+                                            <div class="text-end">
+                                                <div>${stockStatus}</div>
+                                                <div class="precio">${formatCurrency(producto.precio_venta)}</div>
+                                            </div>
+                                        </div>
+                                    `;
+                                    
+                                    productosList.appendChild(item);
+                                }
+                            });
+                        } else {
+                            productosList.innerHTML = '<p class="text-muted">No hay productos disponibles en caché</p>';
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error cargando datos cacheados:', error);
+                    showAlert('danger', 'Error cargando datos del caché local');
                 }
             }
-        } catch (error) {
-            console.error('Error cargando datos cacheados:', error);
-            showAlert('danger', 'Error cargando datos del caché local');
         }
-    }
-}
 
-// Formatear moneda
-function formatCurrency(amount) {
-    if (!amount) return '$0';
-    return new Intl.NumberFormat('es-CO', {
-        style: 'currency',
-        currency: 'COP',
-        minimumFractionDigits: 0
-    }).format(amount);
-}
-</script>
+        // Formatear moneda
+        function formatCurrency(amount) {
+            if (!amount) return '$0';
+            return new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                minimumFractionDigits: 0
+            }).format(amount);
+        }
 
         // Mostrar formulario rápido
         function showQuickForm(type) {
