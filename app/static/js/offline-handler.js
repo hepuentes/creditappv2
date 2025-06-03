@@ -779,3 +779,41 @@ if (document.readyState === 'loading') {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = OfflineHandler;
 }
+
+async handleFormSubmit(event) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    const url = form.action;
+    
+    try {
+        // Convertir FormData a objeto
+        const data = {};
+        for (let [key, value] of formData.entries()) {
+            data[key] = value;
+        }
+        
+        console.log('📱 Interceptando formulario offline:', url);
+        
+        // Determinar tipo de formulario por URL
+        if (url.includes('/clientes/')) {
+            await this.clientesManager.crearCliente(data);
+        } else if (url.includes('/ventas/')) {
+            await this.ventasManager.crearVenta(data);
+        } else if (url.includes('/productos/')) {
+            await this.productosManager.crearProducto(data);
+        } else if (url.includes('/abonos/')) {
+            await this.abonosManager.crearAbono(data);
+        } else {
+            // Guardar genéricamente
+            await this.saveFormData(form, data);
+        }
+        
+        // Limpiar formulario si es exitoso
+        form.reset();
+        
+    } catch (error) {
+        console.error('❌ Error guardando datos offline:', error);
+        Utils.showNotification('Error: ' + error.message, 'danger');
+    }
+}
