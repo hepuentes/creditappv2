@@ -1,441 +1,480 @@
-// Gestor de sincronización corregido v3
+// sync.js - Sistema de sincronización offline/online
 class SyncManager {
-  constructor() {
-    this.syncInProgress = false;
-    this.db = null;
-    this.maxRetries = 3;
-    this.retryDelay = 2000;
-    this.csrfToken = null;
-    this.csrfTokenExpiry = null;
-  }
-
-  async init() {
-    this.db = window.db;
-    if (!this.db) {
-      console.error('❌ Base de datos no disponible');
-      return;
-    }
-
-    await this.setupServiceWorker();
-    this.setupEventListeners();
-    await this.updatePendingCount();
-    
-    // Obtener CSRF token inicial
-    await this.refreshCSRFToken();
-  }
-
-  async setupServiceWorker() {
-    if ('serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.sync.register('sync-offline-data');
-        console.log('✅ Background sync registrado exitosamente');
-      } catch (error) {
-        console.log('⚠️ Background sync no disponible:', error.message);
-      }
-    }
-
-    // Escuchar mensajes del Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', async (event) => {
-        const { type, url, data } = event.data;
-        
-        if (type === 'SAVE_OFFLINE_FORM') {
-          await this.saveOfflineForm(url, data);
-          this.showOfflineConfirmation();
-        } else if (type === 'SYNC_OFFLINE_DATA') {
-          setTimeout(() => this.syncAllData(), 1000);
-        }
-      });
-    }
-  }
-
-  setupEventListeners() {
-    // Interceptar formularios para modo offline
-    document.addEventListener('submit', async (e) => {
-      if (!navigator.onLine && e.target.tagName === 'FORM' && this.shouldInterceptForm(e.target)) {
-        e.preventDefault();
-        await this.handleOfflineForm(e.target);
-      }
-    });
-
-    // Sincronizar al volver online
-    window.addEventListener('online', () => {
-      console.log('🌐 Conexión restaurada - iniciando sincronización');
-      this.showNotification('🌐 Conexión restaurada. Sincronizando datos...', 'info', 2000);
-      // Refrescar CSRF token y sincronizar
-      setTimeout(async () => {
-        await this.refreshCSRFToken();
-        await this.syncAllData();
-      }, 2000);
-    });
-
-    // Mostrar indicador offline
-    window.addEventListener('offline', () => {
-      console.log('📱 Sin conexión - activando modo offline');
-      this.showNotification('📱 Modo offline activado', 'warning', 2000);
-    });
-  }
-
-  shouldInterceptForm(form) {
-    const action = form.action || '';
-    return action.includes('/crear') || 
-           action.includes('/nuevo') || 
-           action.includes('/registrar');
-  }
-
-  async handleOfflineForm(form) {
-    try {
-      const formData = new FormData(form);
-      const data = {};
-      
-      for (let [key, value] of formData.entries()) {
-        if (key !== 'csrf_token') {
-          data[key] = value;
-        }
-      }
-
-      const savedRecord = await this.saveOfflineForm(form.action, data);
-      this.showOfflineConfirmation();
-      
-      // Redirigir después de mostrar confirmación
-      setTimeout(() => {
-        const section = this.getSectionFromUrl(form.action);
-        window.location.href = `/${section}`;
-      }, 2500);
-      
-      return savedRecord;
-      
-    } catch (error) {
-      console.error('❌ Error manejando formulario offline:', error);
-      this.showError('Error guardando datos offline');
-    }
-  }
-
-  async saveOfflineForm(url, data) {
-    const type = this.getTypeFromUrl(url);
-    
-    try {
-      const savedRecord = await this.db.saveOfflineData(type, url, data);
-      await this.updatePendingCount();
-      
-      console.log(`📱 Formulario ${type} guardado offline - ID: ${savedRecord.id}, UUID: ${savedRecord.uuid}`);
-      return savedRecord;
-    } catch (error) {
-      console.error('❌ Error guardando formulario offline:', error);
-      throw error;
-    }
-  }
-
-  getTypeFromUrl(url) {
-    if (url.includes('/clientes/')) return 'cliente';
-    if (url.includes('/productos/')) return 'producto';
-    if (url.includes('/ventas/')) return 'venta';
-    if (url.includes('/abonos/')) return 'abono';
-    return 'unknown';
-  }
-
-  getSectionFromUrl(url) {
-    if (url.includes('/clientes/')) return 'clientes';
-    if (url.includes('/productos/')) return 'productos';
-    if (url.includes('/ventas/')) return 'ventas';
-    if (url.includes('/abonos/')) return 'abonos';
-    return '';
-  }
-
-  async refreshCSRFToken() {
-    try {
-      const response = await fetch('/', {
-        method: 'GET',
-        credentials: 'same-origin',
-        cache: 'no-cache'
-      });
-      
-      if (response.ok) {
-        const text = await response.text();
-        const match = text.match(/name="csrf_token".*?value="([^"]+)"/);
-        if (match && match[1]) {
-          this.csrfToken = match[1];
-          this.csrfTokenExpiry = Date.now() + (30 * 60 * 1000); // 30 minutos
-          console.log('🔑 CSRF token actualizado exitosamente');
-          return this.csrfToken;
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error obteniendo CSRF token:', error);
-    }
-    
-    this.csrfToken = null;
-    this.csrfTokenExpiry = null;
-    return null;
-  }
-
-  async getValidCSRFToken() {
-    // Verificar si el token actual es válido
-    if (this.csrfToken && this.csrfTokenExpiry && Date.now() < this.csrfTokenExpiry) {
-      return this.csrfToken;
-    }
-    
-    // Refrescar token si es necesario
-    return await this.refreshCSRFToken();
-  }
-
-  async syncAllData() {
-    if (this.syncInProgress || !navigator.onLine) {
-      console.log('🔄 Sincronización no disponible (en progreso o sin conexión)');
-      return;
-    }
-
-    this.syncInProgress = true;
-    console.log('🔄 Iniciando sincronización completa...');
-
-    try {
-      const pending = await this.db.getPendingChanges();
-      
-      if (pending.length === 0) {
-        console.log('✅ No hay datos para sincronizar');
+    constructor() {
+        this.db = null;
+        this.dbReady = false;
+        this.isOnline = navigator.onLine;
         this.syncInProgress = false;
-        return;
-      }
-
-      console.log(`📊 Encontrados ${pending.length} registros pendientes`);
-      
-      let successCount = 0;
-      let errorCount = 0;
-      const errors = [];
-
-      // Asegurar CSRF token fresco
-      const csrfToken = await this.getValidCSRFToken();
-      if (!csrfToken) {
-        console.warn('⚠️ No se pudo obtener CSRF token válido');
-      }
-
-      // Sincronizar cada item
-      for (const item of pending) {
+        this.pendingOperations = [];
+        this.initPromise = null;
+        
+        // Configuración de reintentos
+        this.maxRetries = 5;
+        this.retryDelay = 1000;
+        
+        console.log('🔄 SyncManager: Iniciando...');
+        this.init();
+    }
+    
+    async init() {
+        // Evitar múltiples inicializaciones
+        if (this.initPromise) {
+            return this.initPromise;
+        }
+        
+        this.initPromise = this._initInternal();
+        return this.initPromise;
+    }
+    
+    async _initInternal() {
         try {
-          if (!item.id || item.id === undefined) {
-            console.error(`❌ Item sin ID válido:`, item);
-            errorCount++;
-            continue;
-          }
-
-          const success = await this.syncSingleItem(item, csrfToken);
-          if (success) {
-            const marked = await this.db.markAsSynced(item.id);
-            if (marked) {
-              successCount++;
-              console.log(`✅ Sincronizado: ${item.type} #${item.id} UUID: ${item.uuid}`);
-            } else {
-              console.error(`❌ No se pudo marcar como sincronizado: ${item.type} #${item.id}`);
-              errorCount++;
-            }
-          } else {
-            await this.db.updateRetryCount(item.id, 'Falló sincronización');
-            errorCount++;
-            errors.push(`${item.type} #${item.id}`);
-          }
-        } catch (error) {
-          console.error(`❌ Error sincronizando ${item.type} #${item.id}:`, error);
-          await this.db.updateRetryCount(item.id, error.message);
-          errorCount++;
-          errors.push(`${item.type} #${item.id}: ${error.message}`);
-        }
-        
-        // Pequeña pausa entre sincronizaciones
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      await this.updatePendingCount();
-      this.showSyncResult(successCount, errorCount, errors);
-
-      // Solo recargar si hubo sincronizaciones exitosas y no hay errores
-      if (successCount > 0 && errorCount === 0) {
-        setTimeout(() => {
-          console.log('🔄 Recargando página tras sincronización exitosa...');
-          window.location.reload();
-        }, 2000);
-      } else if (errorCount > 0) {
-        console.log(`⚠️ Sincronización parcial: ${successCount} exitosos, ${errorCount} errores`);
-      }
-
-    } catch (error) {
-      console.error('❌ Error crítico en sincronización:', error);
-      this.showError('Error crítico en sincronización');
-    } finally {
-      this.syncInProgress = false;
-    }
-  }
-
-  async syncSingleItem(item, csrfToken) {
-    let retries = 0;
-    let currentToken = csrfToken;
-    
-    while (retries < this.maxRetries) {
-      try {
-        const formData = new URLSearchParams();
-        
-        // Agregar datos del formulario
-        for (const [key, value] of Object.entries(item.data)) {
-          formData.append(key, value);
-        }
-        
-        // Agregar CSRF token si está disponible
-        if (currentToken) {
-          formData.append('csrf_token', currentToken);
-        }
-
-        const response = await fetch(item.url, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          credentials: 'same-origin'
-        });
-
-        // Considerar exitoso si es 200, 201 o redirección
-        if (response.ok || response.status === 302) {
-          return true;
-        }
-        
-        // Si es error de CSRF, intentar obtener nuevo token
-        if (response.status === 400 || response.status === 403) {
-          const responseText = await response.text();
-          if (responseText.includes('CSRF') || responseText.includes('expired')) {
-            console.warn(`⚠️ Error CSRF en ${item.type}, obteniendo nuevo token...`);
-            currentToken = await this.refreshCSRFToken();
+            console.log('🔄 SyncManager: Esperando DB...');
             
-            if (currentToken) {
-              retries++;
-              await new Promise(resolve => setTimeout(resolve, this.retryDelay * retries));
-              continue;
+            // Esperar a que window.db esté disponible
+            await this.waitForDB();
+            
+            // Verificar que db tenga todos los métodos necesarios
+            if (!this.db || typeof this.db.getAllData !== 'function') {
+                throw new Error('DB no tiene los métodos requeridos');
             }
-          }
+            
+            this.dbReady = true;
+            console.log('✅ SyncManager: DB lista y conectada');
+            
+            // Configurar listeners
+            this.setupEventListeners();
+            
+            // Cargar operaciones pendientes
+            await this.loadPendingOperations();
+            
+            // Si estamos online, sincronizar
+            if (this.isOnline) {
+                await this.syncAll();
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('❌ SyncManager: Error en inicialización:', error);
+            this.dbReady = false;
+            throw error;
+        }
+    }
+    
+    async waitForDB() {
+        let attempts = 0;
+        const maxAttempts = 30;
+        const checkInterval = 100;
+        
+        return new Promise((resolve, reject) => {
+            const checkDB = () => {
+                attempts++;
+                
+                // Verificar si window.db existe y está inicializada
+                if (window.db && window.db.isReady && window.db.isReady()) {
+                    this.db = window.db;
+                    console.log('✅ SyncManager: DB encontrada en intento', attempts);
+                    resolve();
+                    return;
+                }
+                
+                // Verificar si window.DB existe (la clase)
+                if (window.DB && !window.db) {
+                    console.log('🔄 SyncManager: Inicializando DB...');
+                    window.db = new window.DB();
+                    // Continuar esperando a que se inicialice
+                }
+                
+                if (attempts >= maxAttempts) {
+                    reject(new Error(`DB no disponible después de ${maxAttempts} intentos`));
+                    return;
+                }
+                
+                setTimeout(checkDB, checkInterval);
+            };
+            
+            checkDB();
+        });
+    }
+    
+    setupEventListeners() {
+        // Listener para cambios de conectividad
+        window.addEventListener('online', () => {
+            console.log('🌐 Online - Iniciando sincronización...');
+            this.isOnline = true;
+            this.syncAll();
+        });
+        
+        window.addEventListener('offline', () => {
+            console.log('📴 Offline - Modo sin conexión activado');
+            this.isOnline = false;
+        });
+        
+        // Listener para mensajes del Service Worker
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'SYNC_REQUIRED') {
+                    console.log('📬 Mensaje del SW: Sincronización requerida');
+                    this.syncAll();
+                }
+            });
         }
         
-        // Para otros errores, no reintentar
-        console.error(`❌ Error HTTP ${response.status} en ${item.type}`);
-        return false;
+        // Sincronización periódica cada 30 segundos si estamos online
+        setInterval(() => {
+            if (this.isOnline && !this.syncInProgress) {
+                this.syncAll();
+            }
+        }, 30000);
+    }
+    
+    async loadPendingOperations() {
+        if (!this.dbReady) return;
         
-      } catch (error) {
-        retries++;
-        console.warn(`⚠️ Intento ${retries}/${this.maxRetries} falló para ${item.type}:`, error.message);
-        
-        if (retries >= this.maxRetries) {
-          return false;
+        try {
+            const operations = await this.db.getAllData('pending_sync');
+            this.pendingOperations = operations || [];
+            console.log(`📋 ${this.pendingOperations.length} operaciones pendientes cargadas`);
+        } catch (error) {
+            console.error('Error cargando operaciones pendientes:', error);
+            this.pendingOperations = [];
+        }
+    }
+    
+    async addPendingOperation(operation) {
+        if (!this.dbReady) {
+            console.warn('⚠️ DB no lista, operación no guardada');
+            return;
         }
         
-        await new Promise(resolve => setTimeout(resolve, this.retryDelay * retries));
-      }
+        try {
+            const pendingOp = {
+                id: Date.now(),
+                timestamp: new Date().toISOString(),
+                ...operation
+            };
+            
+            await this.db.saveData('pending_sync', pendingOp);
+            this.pendingOperations.push(pendingOp);
+            
+            console.log('✅ Operación guardada para sincronización:', pendingOp.type);
+            
+            // Actualizar contador en UI
+            this.updatePendingCount();
+            
+            // Si estamos online, intentar sincronizar inmediatamente
+            if (this.isOnline) {
+                this.syncAll();
+            }
+            
+            return pendingOp;
+        } catch (error) {
+            console.error('Error guardando operación pendiente:', error);
+            throw error;
+        }
     }
     
-    return false;
-  }
-
-  async updatePendingCount() {
-    try {
-      const count = await this.db.countPendingChanges();
-      document.querySelectorAll('#pending-count').forEach(el => {
-        el.textContent = count;
-      });
-      
-      // Actualizar indicador offline
-      const indicator = document.querySelector('.offline-indicator');
-      if (indicator) {
-        indicator.style.display = (!navigator.onLine && count > 0) ? 'flex' : 'none';
-      }
-      
-      return count;
-    } catch (error) {
-      console.error('❌ Error actualizando contador:', error);
-      return 0;
+    async syncAll() {
+        if (!this.isOnline || this.syncInProgress || !this.dbReady) {
+            return;
+        }
+        
+        this.syncInProgress = true;
+        console.log('🔄 Iniciando sincronización completa...');
+        
+        try {
+            // Sincronizar cada tipo de datos
+            await this.syncClientes();
+            await this.syncVentas();
+            await this.syncAbonos();
+            
+            // Procesar operaciones pendientes
+            await this.processPendingOperations();
+            
+            console.log('✅ Sincronización completa exitosa');
+        } catch (error) {
+            console.error('❌ Error en sincronización:', error);
+        } finally {
+            this.syncInProgress = false;
+        }
     }
-  }
-
-  generateUUID() {
-    return 'sync-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-  }
-
-  showOfflineConfirmation() {
-    this.showNotification('📱 Datos guardados offline. Se sincronizarán al reconectar.', 'warning', 3000);
-  }
-
-  showSyncResult(success, errors, errorDetails = []) {
-    if (success > 0) {
-      this.showNotification(`✅ ${success} registros sincronizados exitosamente`, 'success', 3000);
-    }
-    if (errors > 0) {
-      console.warn('⚠️ Errores en sincronización:', errorDetails);
-      this.showNotification(`⚠️ ${errors} registros con errores de sincronización`, 'warning', 5000);
-    }
-  }
-
-  showError(message) {
-    this.showNotification(`❌ ${message}`, 'danger', 5000);
-  }
-
-  showNotification(message, type = 'info', duration = 4000) {
-    const alertClass = {
-      'success': 'alert-success',
-      'warning': 'alert-warning', 
-      'danger': 'alert-danger',
-      'info': 'alert-info'
-    }[type] || 'alert-info';
-
-    const notification = document.createElement('div');
-    notification.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
-    notification.style.cssText = 'top: 70px; right: 20px; z-index: 9999; max-width: 400px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);';
-    notification.innerHTML = `
-      <div class="d-flex align-items-center">
-        <div class="flex-grow-1">${message}</div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-      </div>
-    `;
     
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-      notification.classList.remove('show');
-      setTimeout(() => notification.remove(), 300);
-    }, duration);
-  }
-
-  // Método para depuración
-  async debugSync() {
-    console.log('🔍 DEBUG SYNC - Estado actual:');
-    console.log('En progreso:', this.syncInProgress);
-    console.log('Online:', navigator.onLine);
-    console.log('CSRF Token:', this.csrfToken ? 'Disponible' : 'No disponible');
-    
-    if (this.db) {
-      const pending = await this.db.debugPendingRecords();
-      console.log('Registros pendientes:', pending.length);
+    async syncClientes() {
+        try {
+            console.log('👥 Sincronizando clientes...');
+            
+            // Obtener clientes locales
+            const localClientes = await this.db.getAllData('clientes');
+            const pendingClientes = localClientes.filter(c => c.pendingSync);
+            
+            if (pendingClientes.length === 0) {
+                console.log('✅ No hay clientes pendientes de sincronizar');
+                return;
+            }
+            
+            for (const cliente of pendingClientes) {
+                try {
+                    const response = await this.fetchWithRetry('/api/clientes', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({
+                            nombre: cliente.nombre,
+                            cedula: cliente.cedula,
+                            telefono: cliente.telefono,
+                            direccion: cliente.direccion,
+                            barrio: cliente.barrio,
+                            negocio: cliente.negocio,
+                            local_id: cliente.local_id
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        // Actualizar cliente local con ID del servidor
+                        cliente.id = data.id;
+                        cliente.pendingSync = false;
+                        cliente.syncDate = new Date().toISOString();
+                        
+                        await this.db.saveData('clientes', cliente);
+                        console.log(`✅ Cliente ${cliente.nombre} sincronizado`);
+                    } else {
+                        console.error(`Error sincronizando cliente ${cliente.nombre}:`, response.status);
+                    }
+                } catch (error) {
+                    console.error(`Error sincronizando cliente ${cliente.nombre}:`, error);
+                }
+            }
+        } catch (error) {
+            console.error('Error en syncClientes:', error);
+        }
     }
-  }
+    
+    async syncVentas() {
+        try {
+            console.log('🛒 Sincronizando ventas...');
+            
+            const localVentas = await this.db.getAllData('ventas');
+            const pendingVentas = localVentas.filter(v => v.pendingSync);
+            
+            if (pendingVentas.length === 0) {
+                console.log('✅ No hay ventas pendientes de sincronizar');
+                return;
+            }
+            
+            for (const venta of pendingVentas) {
+                try {
+                    // Preparar datos de venta
+                    const ventaData = {
+                        cliente_id: venta.cliente_id,
+                        fecha_venta: venta.fecha_venta,
+                        fecha_vencimiento: venta.fecha_vencimiento,
+                        tipo_venta: venta.tipo_venta,
+                        productos: venta.productos,
+                        precio_total: venta.precio_total,
+                        cuota_inicial: venta.cuota_inicial || 0,
+                        observaciones: venta.observaciones || '',
+                        local_id: venta.local_id
+                    };
+                    
+                    const response = await this.fetchWithRetry('/api/ventas', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify(ventaData)
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        // Actualizar venta local
+                        venta.id = data.id;
+                        venta.pendingSync = false;
+                        venta.syncDate = new Date().toISOString();
+                        
+                        await this.db.saveData('ventas', venta);
+                        console.log(`✅ Venta sincronizada: ${venta.id}`);
+                    } else {
+                        console.error('Error sincronizando venta:', response.status);
+                    }
+                } catch (error) {
+                    console.error('Error sincronizando venta:', error);
+                }
+            }
+        } catch (error) {
+            console.error('Error en syncVentas:', error);
+        }
+    }
+    
+    async syncAbonos() {
+        try {
+            console.log('💰 Sincronizando abonos...');
+            
+            const localAbonos = await this.db.getAllData('abonos');
+            const pendingAbonos = localAbonos.filter(a => a.pendingSync);
+            
+            if (pendingAbonos.length === 0) {
+                console.log('✅ No hay abonos pendientes de sincronizar');
+                return;
+            }
+            
+            for (const abono of pendingAbonos) {
+                try {
+                    const response = await this.fetchWithRetry('/api/abonos', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({
+                            venta_id: abono.venta_id,
+                            monto: abono.monto,
+                            fecha: abono.fecha,
+                            local_id: abono.local_id
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        // Actualizar abono local
+                        abono.id = data.id;
+                        abono.pendingSync = false;
+                        abono.syncDate = new Date().toISOString();
+                        
+                        await this.db.saveData('abonos', abono);
+                        console.log(`✅ Abono sincronizado: ${abono.id}`);
+                    } else {
+                        console.error('Error sincronizando abono:', response.status);
+                    }
+                } catch (error) {
+                    console.error('Error sincronizando abono:', error);
+                }
+            }
+        } catch (error) {
+            console.error('Error en syncAbonos:', error);
+        }
+    }
+    
+    async processPendingOperations() {
+        if (this.pendingOperations.length === 0) return;
+        
+        console.log(`📋 Procesando ${this.pendingOperations.length} operaciones pendientes...`);
+        
+        const completedOps = [];
+        
+        for (const op of this.pendingOperations) {
+            try {
+                const success = await this.executeOperation(op);
+                if (success) {
+                    completedOps.push(op.id);
+                }
+            } catch (error) {
+                console.error('Error procesando operación:', error);
+            }
+        }
+        
+        // Eliminar operaciones completadas
+        if (completedOps.length > 0) {
+            for (const id of completedOps) {
+                await this.db.deleteData('pending_sync', id);
+            }
+            
+            this.pendingOperations = this.pendingOperations.filter(
+                op => !completedOps.includes(op.id)
+            );
+            
+            this.updatePendingCount();
+        }
+    }
+    
+    async executeOperation(operation) {
+        console.log(`⚡ Ejecutando operación: ${operation.type}`);
+        
+        try {
+            const response = await this.fetchWithRetry(operation.url, {
+                method: operation.method,
+                headers: operation.headers,
+                body: operation.body
+            });
+            
+            if (response.ok) {
+                console.log(`✅ Operación ${operation.type} completada`);
+                return true;
+            } else {
+                console.error(`Error en operación ${operation.type}:`, response.status);
+                return false;
+            }
+        } catch (error) {
+            console.error(`Error ejecutando operación ${operation.type}:`, error);
+            return false;
+        }
+    }
+    
+    async fetchWithRetry(url, options, retries = 0) {
+        try {
+            // Asegurar que la URL sea completa
+            const fullUrl = url.startsWith('http') ? url : window.location.origin + url;
+            
+            const response = await fetch(fullUrl, {
+                ...options,
+                credentials: 'same-origin'
+            });
+            
+            if (!response.ok && retries < this.maxRetries) {
+                console.log(`⚠️ Reintentando (${retries + 1}/${this.maxRetries})...`);
+                await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+                return this.fetchWithRetry(url, options, retries + 1);
+            }
+            
+            return response;
+        } catch (error) {
+            if (retries < this.maxRetries) {
+                console.log(`⚠️ Error de red, reintentando (${retries + 1}/${this.maxRetries})...`);
+                await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+                return this.fetchWithRetry(url, options, retries + 1);
+            }
+            throw error;
+        }
+    }
+    
+    updatePendingCount() {
+        const badge = document.querySelector('.pending-sync-badge');
+        if (badge) {
+            const count = this.pendingOperations.length;
+            badge.textContent = count;
+            badge.style.display = count > 0 ? 'inline-block' : 'none';
+        }
+    }
+    
+    // Método auxiliar para verificar si estamos online
+    checkOnlineStatus() {
+        return navigator.onLine;
+    }
+    
+    // Método para forzar sincronización
+    async forceSyncNow() {
+        console.log('🔄 Forzando sincronización...');
+        this.isOnline = navigator.onLine;
+        if (this.isOnline) {
+            await this.syncAll();
+        } else {
+            console.warn('⚠️ No se puede sincronizar sin conexión');
+        }
+    }
 }
 
-// Inicializar cuando DOM esté listo
-document.addEventListener('DOMContentLoaded', async () => {
-  // Esperar a que window.db esté disponible
-  let attempts = 0;
-  const maxAttempts = 30;
-  
-  const waitForDB = setInterval(async () => {
-    attempts++;
-    
-    if (window.db && typeof window.db.getAllData === 'function') {
-        clearInterval(waitForDB);
-        try {
-            window.syncManager = new SyncManager();
-            await window.syncManager.init();
-            console.log('✅ SyncManager inicializado exitosamente');
-        } catch (error) {
-            console.error('❌ Error inicializando SyncManager:', error);
-        }
-    } else if (attempts >= maxAttempts) {
-        clearInterval(waitForDB);
-        console.error('❌ Timeout: DB no disponible después de', maxAttempts, 'intentos');
-    }
-}, 200);
-});
+// Inicializar el SyncManager cuando el documento esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.syncManager = new SyncManager();
+    });
+} else {
+    window.syncManager = new SyncManager();
+}
+
+console.log('✅ sync.js cargado');
