@@ -438,3 +438,4 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('❌ Timeout: DB no disponible después de', maxAttempts, 'intentos');
     }
 }, 200);
+});
