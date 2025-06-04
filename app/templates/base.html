@@ -218,125 +218,41 @@
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
-    <!-- Scripts de la aplicación -->
-<script src="{{ url_for('static', filename='js/sw-unregister.js') }}"></script>
-<script src="{{ url_for('static', filename='js/db.js') }}"></script>
-<script src="{{ url_for('static', filename='js/sync.js') }}"></script>
-<script src="{{ url_for('static', filename='js/offline-handler.js') }}"></script>
-<script src="{{ url_for('static', filename='js/main.js') }}"></script>
-
-<script>
-// Registrar Service Worker (solo uno)
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', async () => {
-        try {
-            // Limpiar SW duplicados
-            const registrations = await navigator.serviceWorker.getRegistrations();
-            for (const registration of registrations) {
-                if (registration.scope.includes('/static/js/')) {
-                    await registration.unregister();
-                    console.log('SW duplicado eliminado');
-                }
-            }
-
-            // Registrar SW principal con alcance correcto
-            const registration = await navigator.serviceWorker.register('/service-worker.js', {
-                scope: '/'
-            });
-            console.log('Service Worker registrado:', registration.scope);
-            
-            // Forzar activación del nuevo Service Worker
-            if (registration.waiting) {
-                registration.waiting.postMessage({type: 'SKIP_WAITING'});
-            }
-            
-            // Permitir sincronización en segundo plano si está disponible
-            if ('sync' in registration) {
-                try {
-                    await registration.sync.register('sync-offline-data');
-                    console.log('Background sync registrado');
-                } catch (e) {
-                    console.warn('Error registrando background sync:', e);
-                }
-            }
-            
-            // Manejar actualizaciones
-            registration.addEventListener('updatefound', () => {
-                const newWorker = registration.installing;
-                newWorker.addEventListener('statechange', () => {
-                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        // Nueva versión disponible - mostrar notificación
-                        showUpdateNotification();
-                    }
-                });
-            });
-            
-        } catch (error) {
-            console.error('Error registrando Service Worker:', error);
+    <!-- Scripts de la aplicación (NUEVO BLOQUE) -->
+    <script src="{{ url_for('static', filename='js/db.js') }}"></script>
+    <script>
+    // Esperar a que DB esté lista antes de cargar otros scripts
+    (async function() {
+        // Inicializar DB primero
+        if (!window.db) {
+            window.db = new DB();
         }
-    });
-}
 
-// Función para mostrar notificación de actualización
-function showUpdateNotification() {
-    const updateBanner = document.createElement('div');
-    updateBanner.className = 'alert alert-info position-fixed bottom-0 start-50 translate-middle-x mb-3';
-    updateBanner.style.zIndex = '9999';
-    updateBanner.innerHTML = `
-        <div class="d-flex align-items-center">
-            <span>Nueva versión disponible</span>
-            <button class="btn btn-sm btn-primary ms-3" onclick="location.reload()">
-                Actualizar
-            </button>
-        </div>
-    `;
-    document.body.appendChild(updateBanner);
-}
+        // Esperar a que esté lista
+        let attempts = 0;
+        const maxAttempts = 50;
 
-// Indicador offline mejorado
-function updateOfflineIndicator() {
-    const isOffline = !navigator.onLine;
-    document.body.classList.toggle('offline-mode', isOffline);
-    
-    const indicator = document.querySelector('.offline-indicator');
-    if (indicator) {
-        indicator.style.display = isOffline ? 'flex' : 'none';
-        
-        if (isOffline) {
-            // Verificar si el botón de centro offline ya existe
-            if (!indicator.querySelector('a[href="/offline"]')) {
-                const offlinePageBtn = document.createElement('a');
-                offlinePageBtn.href = '/offline';
-                offlinePageBtn.className = 'ms-2 btn btn-sm btn-dark';
-                offlinePageBtn.innerHTML = 'Centro Offline';
-                indicator.appendChild(offlinePageBtn);
-            }
-            
-            // Mostrar notificación
-            const notification = document.createElement('div');
-            notification.className = 'alert alert-warning position-fixed top-0 start-50 translate-middle-x mt-3';
-            notification.style.zIndex = '9999';
-            notification.innerHTML = `
-                <i class="fas fa-wifi-slash me-2"></i>
-                Modo offline activado. Los cambios se guardarán localmente.
-            `;
-            document.body.appendChild(notification);
-            
-            setTimeout(() => notification.remove(), 5000);
+        while (!window.db.isReady() && attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
         }
-    }
-}
 
-window.addEventListener('online', updateOfflineIndicator);
-window.addEventListener('offline', updateOfflineIndicator);
-document.addEventListener('DOMContentLoaded', updateOfflineIndicator);
-</script>
+        if (window.db.isReady()) {
+            console.log('✅ DB inicializada correctamente');
+        } else {
+            console.error('❌ DB no se pudo inicializar');
+        }
+    })();
+    </script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/clientes.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ventas.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/productos.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/abonos.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/sync.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/offline-handler.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     {% block extra_js %}{% endblock %}
-<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-<script src="{{ url_for('static', filename='js/clientes.js') }}"></script>
-<script src="{{ url_for('static', filename='js/ventas.js') }}"></script>
-<script src="{{ url_for('static', filename='js/productos.js') }}"></script>
-<script src="{{ url_for('static', filename='js/abonos.js') }}"></script>
 </body>
 </html>
