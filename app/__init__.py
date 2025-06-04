@@ -1,3 +1,4 @@
+```python
 import os
 import traceback
 from flask import Flask, send_from_directory
@@ -21,6 +22,20 @@ def create_app():
     
     # Configuración
     app.config.from_object('app.config.Config')
+    
+    # Configurar CSP para permitir eval (necesario para algunas librerías)
+    @app.after_request
+    def set_security_headers(response):
+        # Permitir eval solo para desarrollo/necesidades específicas
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://code.jquery.com https://cdnjs.cloudflare.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+            "font-src 'self' https://cdnjs.cloudflare.com; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self' https://creditappv2.onrender.com"
+        )
+        return response
 
     # Asegurar que existan los directorios necesarios
     static_dir = app.static_folder
@@ -29,7 +44,7 @@ def create_app():
     uploads_dir = os.path.join(static_dir, 'uploads')
     img_dir = os.path.join(static_dir, 'img')  
     
-    for directory in [static_dir, css_dir, js_dir, uploads_dir, img_dir]:  
+    for directory in [static_dir, css_dir, js_dir, uploads_dir, img_dir]:
         if not os.path.exists(directory):
             os.makedirs(directory)
     
@@ -50,7 +65,8 @@ def create_app():
         return send_from_directory(
             os.path.join(app.root_path, 'static'),
             'favicon.ico',
-            mimetype='image/vnd.microsoft.icon')
+            mimetype='image/vnd.microsoft.icon'
+        )
 
     # Ruta para servir el service worker desde la raíz - CORREGIDO
     @app.route('/service-worker.js')
@@ -107,13 +123,7 @@ def create_app():
             response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
             response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
         return response
-        # Configurar CSP para permitir eval (necesario para algunas librerías)
-@app.after_request
-def set_security_headers(response):
-    # Permitir eval solo para desarrollo/necesidades específicas
-    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://code.jquery.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://creditappv2.onrender.com"
-    return response
-    
+
     # Crear todas las tablas
     with app.app_context():
         db.create_all()
