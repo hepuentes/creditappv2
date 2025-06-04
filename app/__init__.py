@@ -107,6 +107,12 @@ def create_app():
             response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
             response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
         return response
+        # Configurar CSP para permitir eval (necesario para algunas librerías)
+@app.after_request
+def set_security_headers(response):
+    # Permitir eval solo para desarrollo/necesidades específicas
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://code.jquery.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://creditappv2.onrender.com"
+    return response
     
     # Crear todas las tablas
     with app.app_context():
