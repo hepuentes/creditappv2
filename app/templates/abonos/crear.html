@@ -27,14 +27,14 @@
                             <div class="mb-3">
                                 <label class="form-label">Cliente *</label>
                                 <div class="input-group mb-2">
-                                    <select class="form-select" id="cliente_select" name="cliente_id" required>
+                                    <select class="form-select" id="cliente_select" name="cliente_id" required autocomplete="off">
                                         {% for id, nombre in form.cliente_id.choices %}
                                             <option value="{{ id }}" {% if form.cliente_id.data == id %}selected{% endif %}>{{ nombre }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
                                 <div class="input-group">
-                                    <input type="text" class="form-control" id="buscar-cliente" placeholder="Buscar cliente...">
+                                    <input type="text" class="form-control" id="buscar-cliente" placeholder="Buscar cliente..." autocomplete="off">
                                     <button type="button" class="btn btn-outline-secondary" id="btn-buscar-cliente">
                                         <i class="fas fa-search"></i>
                                     </button>
@@ -47,7 +47,7 @@
                             <!-- Venta a abonar -->
                             <div class="mb-3">
                                 <label class="form-label">Venta/Crédito *</label>
-                                <select class="form-select" id="venta_select" name="venta_id" required>
+                                <select class="form-select" id="venta_select" name="venta_id" required autocomplete="off">
                                     {% for id, texto in form.venta_id.choices %}
                                         <option value="{{ id }}" {% if form.venta_id.data == id %}selected{% endif %}>{{ texto }}</option>
                                     {% endfor %}
@@ -68,6 +68,7 @@
                                         required
                                         value="{{ form.monto.data or '' }}"
                                         placeholder="Ingrese el monto (ej: 50000)"
+                                        autocomplete="off"
                                     >
                                 </div>
                                 <small class="form-text text-muted">
@@ -78,7 +79,7 @@
                             <!-- Caja -->
                             <div class="mb-3">
                                 <label class="form-label">Caja *</label>
-                                <select class="form-select" id="caja_id" name="caja_id" required>
+                                <select class="form-select" id="caja_id" name="caja_id" required autocomplete="off">
                                     {% for id, nombre in form.caja_id.choices %}
                                         <option value="{{ id }}" {% if form.caja_id.data == id %}selected{% endif %}>{{ nombre }}</option>
                                     {% endfor %}
@@ -88,7 +89,7 @@
                             <!-- Notas -->
                             <div class="mb-3">
                                 <label class="form-label">Notas (opcional)</label>
-                                <textarea class="form-control" id="notas" name="notas" rows="3">{{ form.notas.data or '' }}</textarea>
+                                <textarea class="form-control" id="notas" name="notas" rows="3" autocomplete="off">{{ form.notas.data or '' }}</textarea>
                             </div>
 
                             <!-- Botones de acción -->
