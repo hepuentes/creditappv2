@@ -302,30 +302,50 @@
         let db = null;
         let isOnline = navigator.onLine;
 
-        // Inicializar
+        // Reemplazar la función init() en offline.html
         async function init() {
-            // Inicializar DB
-            db = window.db || new CreditAppDB();
-            await db.open();
-
-            // Actualizar estado
-            updateOnlineStatus();
-            await updatePendingCount();
-
-            // Cargar datos cacheados
-            await loadCachedData();
-
-            // Event listeners
-            window.addEventListener('online', updateOnlineStatus);
-            window.addEventListener('offline', updateOnlineStatus);
-
-            // Formularios
-            document.getElementById('form-cliente').addEventListener('submit', handleClienteSubmit);
-            document.getElementById('form-venta').addEventListener('submit', handleVentaSubmit);
-            document.getElementById('form-abono').addEventListener('submit', handleAbonoSubmit);
-
-            // Actualizar contador cada 5 segundos
-            setInterval(updatePendingCount, 5000);
+            try {
+                // Inicializar DB
+                if (!window.db) {
+                    window.db = new DB();
+                }
+                
+                // Esperar a que la DB esté lista
+                let attempts = 0;
+                while (!window.db.isReady() && attempts < 50) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+                
+                if (!window.db.isReady()) {
+                    throw new Error('DB no se pudo inicializar');
+                }
+                
+                console.log('✅ DB inicializada en página offline');
+                
+                // Actualizar estado
+                updateOnlineStatus();
+                await updatePendingCount();
+                
+                // Cargar datos cacheados
+                await loadCachedData();
+                
+                // Event listeners
+                window.addEventListener('online', updateOnlineStatus);
+                window.addEventListener('offline', updateOnlineStatus);
+                
+                // Formularios
+                document.getElementById('form-cliente').addEventListener('submit', handleClienteSubmit);
+                document.getElementById('form-venta').addEventListener('submit', handleVentaSubmit);
+                document.getElementById('form-abono').addEventListener('submit', handleAbonoSubmit);
+                
+                // Actualizar contador cada 5 segundos
+                setInterval(updatePendingCount, 5000);
+                
+            } catch (error) {
+                console.error('Error en inicialización:', error);
+                showAlert('danger', 'Error inicializando la aplicación offline');
+            }
         }
 
         // Actualizar estado de conexión
@@ -346,6 +366,7 @@
             }
         }
 
+        // ... El resto del archivo JS continúa igual ...
         // Actualizar contador de pendientes
         async function updatePendingCount() {
             if (db) {
@@ -353,7 +374,6 @@
                 document.getElementById('pending-count').textContent = count;
             }
         }
-
         // Cargar datos cacheados
         async function loadCachedData() {
             if (db) {
