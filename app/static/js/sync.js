@@ -424,19 +424,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const waitForDB = setInterval(async () => {
     attempts++;
     
-    if (window.db || attempts >= maxAttempts) {
-      clearInterval(waitForDB);
-      
-      if (window.db) {
-        window.syncManager = new SyncManager();
-        await window.syncManager.init();
-        console.log('✅ SyncManager inicializado exitosamente');
-        
-        // Agregar método debug global
-        window.debugSync = () => window.syncManager.debugSync();
-      } else {
-        console.error('❌ No se pudo inicializar SyncManager: DB no disponible');
-      }
+    if (window.db && window.db.db) {
+        clearInterval(waitForDB);
+        try {
+            window.syncManager = new SyncManager();
+            await window.syncManager.init();
+            console.log('✅ SyncManager inicializado exitosamente');
+        } catch (error) {
+            console.error('❌ Error inicializando SyncManager:', error);
+        }
+    } else if (attempts >= maxAttempts) {
+        clearInterval(waitForDB);
+        console.error('❌ Timeout: DB no disponible después de', maxAttempts, 'intentos');
     }
-  }, 200);
-});
+}, 200);
