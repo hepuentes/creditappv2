@@ -1,4 +1,4 @@
-// sync.js - Sistema de sincronización offline/online
+// sync.js - Sistema de sincronización offline/online CORREGIDO
 class SyncManager {
     constructor() {
         this.db = null;
@@ -7,13 +7,14 @@ class SyncManager {
         this.syncInProgress = false;
         this.pendingOperations = [];
         this.initPromise = null;
+        this.initialized = false;
         
         // Configuración de reintentos
         this.maxRetries = 5;
         this.retryDelay = 1000;
         
         console.log('🔄 SyncManager: Iniciando...');
-        this.init();
+        // NO inicializar automáticamente
     }
     
     async init() {
@@ -30,70 +31,54 @@ class SyncManager {
         try {
             console.log('🔄 SyncManager: Esperando DB...');
             
-            // Esperar a que window.db esté disponible
-            await this.waitForDB();
-            
-            // Verificar que db tenga todos los métodos necesarios
-            if (!this.db || typeof this.db.getAllData !== 'function') {
-                throw new Error('DB no tiene los métodos requeridos');
+            // Verificar si la DB ya existe
+            if (!window.db) {
+                console.log('🔄 SyncManager: DB no encontrada, esperando...');
+                // Esperar a que la DB se inicialice
+                await new Promise(resolve => {
+                    const checkDB = setInterval(() => {
+                        if (window.db && window.db.isReady && window.db.isReady()) {
+                            clearInterval(checkDB);
+                            resolve();
+                        }
+                    }, 100);
+                    
+                    // Timeout después de 10 segundos
+                    setTimeout(() => {
+                        clearInterval(checkDB);
+                        resolve();
+                    }, 10000);
+                });
             }
             
-            this.dbReady = true;
-            console.log('✅ SyncManager: DB lista y conectada');
-            
-            // Configurar listeners
-            this.setupEventListeners();
-            
-            // Cargar operaciones pendientes
-            await this.loadPendingOperations();
-            
-            // Si estamos online, sincronizar
-            if (this.isOnline) {
-                await this.syncAll();
+            if (window.db && window.db.isReady()) {
+                this.db = window.db;
+                this.dbReady = true;
+                console.log('✅ SyncManager: DB lista y conectada');
+                
+                // Configurar listeners
+                this.setupEventListeners();
+                
+                // Cargar operaciones pendientes
+                await this.loadPendingOperations();
+                
+                this.initialized = true;
+                
+                // Si estamos online, sincronizar
+                if (this.isOnline) {
+                    setTimeout(() => this.syncAll(), 2000);
+                }
+            } else {
+                throw new Error('DB no disponible después del timeout');
             }
             
             return true;
         } catch (error) {
             console.error('❌ SyncManager: Error en inicialización:', error);
             this.dbReady = false;
+            this.initialized = false;
             throw error;
         }
-    }
-    
-    async waitForDB() {
-        let attempts = 0;
-        const maxAttempts = 30;
-        const checkInterval = 100;
-        
-        return new Promise((resolve, reject) => {
-            const checkDB = () => {
-                attempts++;
-                
-                // Verificar si window.db existe y está inicializada
-                if (window.db && window.db.isReady && window.db.isReady()) {
-                    this.db = window.db;
-                    console.log('✅ SyncManager: DB encontrada en intento', attempts);
-                    resolve();
-                    return;
-                }
-                
-                // Verificar si window.DB existe (la clase)
-                if (window.DB && !window.db) {
-                    console.log('🔄 SyncManager: Inicializando DB...');
-                    window.db = new window.DB();
-                    // Continuar esperando a que se inicialice
-                }
-                
-                if (attempts >= maxAttempts) {
-                    reject(new Error(`DB no disponible después de ${maxAttempts} intentos`));
-                    return;
-                }
-                
-                setTimeout(checkDB, checkInterval);
-            };
-            
-            checkDB();
-        });
     }
     
     setupEventListeners() {
@@ -101,7 +86,9 @@ class SyncManager {
         window.addEventListener('online', () => {
             console.log('🌐 Online - Iniciando sincronización...');
             this.isOnline = true;
-            this.syncAll();
+            if (this.initialized && this.dbReady) {
+                this.syncAll();
+            }
         });
         
         window.addEventListener('offline', () => {
@@ -114,21 +101,16 @@ class SyncManager {
             navigator.serviceWorker.addEventListener('message', (event) => {
                 if (event.data && event.data.type === 'SYNC_REQUIRED') {
                     console.log('📬 Mensaje del SW: Sincronización requerida');
-                    this.syncAll();
+                    if (this.initialized && this.dbReady) {
+                        this.syncAll();
+                    }
                 }
             });
         }
-        
-        // Sincronización periódica cada 30 segundos si estamos online
-        setInterval(() => {
-            if (this.isOnline && !this.syncInProgress) {
-                this.syncAll();
-            }
-        }, 30000);
     }
     
     async loadPendingOperations() {
-        if (!this.dbReady) return;
+        if (!this.dbReady || !this.db) return;
         
         try {
             const operations = await this.db.getAllData('pending_sync');
@@ -141,7 +123,7 @@ class SyncManager {
     }
     
     async addPendingOperation(operation) {
-        if (!this.dbReady) {
+        if (!this.dbReady || !this.db) {
             console.warn('⚠️ DB no lista, operación no guardada');
             return;
         }
@@ -162,7 +144,7 @@ class SyncManager {
             this.updatePendingCount();
             
             // Si estamos online, intentar sincronizar inmediatamente
-            if (this.isOnline) {
+            if (this.isOnline && this.initialized) {
                 this.syncAll();
             }
             
@@ -174,7 +156,7 @@ class SyncManager {
     }
     
     async syncAll() {
-        if (!this.isOnline || this.syncInProgress || !this.dbReady) {
+        if (!this.isOnline || this.syncInProgress || !this.dbReady || !this.initialized) {
             return;
         }
         
@@ -199,6 +181,8 @@ class SyncManager {
     }
     
     async syncClientes() {
+        if (!this.db) return;
+        
         try {
             console.log('👥 Sincronizando clientes...');
             
@@ -224,9 +208,8 @@ class SyncManager {
                             cedula: cliente.cedula,
                             telefono: cliente.telefono,
                             direccion: cliente.direccion,
-                            barrio: cliente.barrio,
-                            negocio: cliente.negocio,
-                            local_id: cliente.local_id
+                            email: cliente.email,
+                            local_id: cliente.local_id || cliente.id
                         })
                     });
                     
@@ -253,6 +236,8 @@ class SyncManager {
     }
     
     async syncVentas() {
+        if (!this.db) return;
+        
         try {
             console.log('🛒 Sincronizando ventas...');
             
@@ -269,14 +254,11 @@ class SyncManager {
                     // Preparar datos de venta
                     const ventaData = {
                         cliente_id: venta.cliente_id,
-                        fecha_venta: venta.fecha_venta,
-                        fecha_vencimiento: venta.fecha_vencimiento,
-                        tipo_venta: venta.tipo_venta,
-                        productos: venta.productos,
-                        precio_total: venta.precio_total,
-                        cuota_inicial: venta.cuota_inicial || 0,
-                        observaciones: venta.observaciones || '',
-                        local_id: venta.local_id
+                        fecha: venta.fecha || new Date().toISOString(),
+                        tipo: venta.tipo,
+                        total: venta.total,
+                        productos: venta.productos || [],
+                        local_id: venta.local_id || venta.id
                     };
                     
                     const response = await this.fetchWithRetry('/api/ventas', {
@@ -311,6 +293,8 @@ class SyncManager {
     }
     
     async syncAbonos() {
+        if (!this.db) return;
+        
         try {
             console.log('💰 Sincronizando abonos...');
             
@@ -334,7 +318,7 @@ class SyncManager {
                             venta_id: abono.venta_id,
                             monto: abono.monto,
                             fecha: abono.fecha,
-                            local_id: abono.local_id
+                            local_id: abono.local_id || abono.id
                         })
                     });
                     
@@ -361,7 +345,7 @@ class SyncManager {
     }
     
     async processPendingOperations() {
-        if (this.pendingOperations.length === 0) return;
+        if (!this.db || this.pendingOperations.length === 0) return;
         
         console.log(`📋 Procesando ${this.pendingOperations.length} operaciones pendientes...`);
         
@@ -449,6 +433,12 @@ class SyncManager {
             badge.textContent = count;
             badge.style.display = count > 0 ? 'inline-block' : 'none';
         }
+        
+        // Actualizar contador en el indicador offline
+        const pendingCount = document.getElementById('pending-count');
+        if (pendingCount) {
+            pendingCount.textContent = this.pendingOperations.length;
+        }
     }
     
     // Método auxiliar para verificar si estamos online
@@ -460,21 +450,38 @@ class SyncManager {
     async forceSyncNow() {
         console.log('🔄 Forzando sincronización...');
         this.isOnline = navigator.onLine;
-        if (this.isOnline) {
+        if (this.isOnline && this.initialized) {
             await this.syncAll();
         } else {
-            console.warn('⚠️ No se puede sincronizar sin conexión');
+            console.warn('⚠️ No se puede sincronizar sin conexión o DB no inicializada');
         }
     }
 }
 
-// Inicializar el SyncManager cuando el documento esté listo
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        window.syncManager = new SyncManager();
-    });
-} else {
-    window.syncManager = new SyncManager();
-}
+// Inicializar el SyncManager cuando el DOM Y la DB estén listos
+document.addEventListener('DOMContentLoaded', async () => {
+    // Esperar a que la DB esté lista
+    let dbReady = false;
+    const waitForDB = setInterval(() => {
+        if (window.db && window.db.isReady && window.db.isReady()) {
+            clearInterval(waitForDB);
+            dbReady = true;
+            
+            // Ahora sí inicializar SyncManager
+            window.syncManager = new SyncManager();
+            window.syncManager.init().catch(error => {
+                console.error('Error inicializando SyncManager:', error);
+            });
+        }
+    }, 100);
+    
+    // Timeout después de 15 segundos
+    setTimeout(() => {
+        if (!dbReady) {
+            clearInterval(waitForDB);
+            console.error('Timeout esperando DB para SyncManager');
+        }
+    }, 15000);
+});
 
 console.log('✅ sync.js cargado');
