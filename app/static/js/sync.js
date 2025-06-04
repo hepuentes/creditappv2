@@ -424,7 +424,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const waitForDB = setInterval(async () => {
     attempts++;
     
-    if (window.db && window.db.db) {
+    if (window.db && typeof window.db.getAllData === 'function') {
         clearInterval(waitForDB);
         try {
             window.syncManager = new SyncManager();
