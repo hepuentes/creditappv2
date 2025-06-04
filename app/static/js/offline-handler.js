@@ -666,7 +666,7 @@ class OfflineHandler {
             request.onerror = () => reject(request.error);
         });
     }
-        
+
     updateConnectionStatus() {
         const statusEl = document.getElementById('connection-status');
         if (statusEl) {
@@ -773,71 +773,140 @@ class OfflineHandler {
         }
     }
 
+    // Agregar este método en la clase OfflineHandler
+    async saveOfflineData(type, url, data) {
+        if (!this.db) {
+            throw new Error('DB no inicializada');
+        }
+        
+        try {
+            // Determinar el store según el tipo
+            let storeName;
+            switch(type) {
+                case 'cliente':
+                    storeName = 'clientes';
+                    break;
+                case 'venta':
+                    storeName = 'ventas';
+                    break;
+                case 'abono':
+                    storeName = 'abonos';
+                    break;
+                case 'producto':
+                    storeName = 'productos';
+                    break;
+                default:
+                    storeName = 'pending_sync';
+            }
+            
+            // Agregar metadatos para sincronización
+            const offlineData = {
+                ...data,
+                id: data.id || `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                offline: true,
+                pendingSync: true,
+                createdOffline: new Date().toISOString(),
+                syncUrl: url,
+                syncType: type
+            };
+            
+            // Guardar en IndexedDB
+            await this.db.saveData(storeName, offlineData);
+            
+            // Actualizar contador de pendientes
+            await this.updatePendingCount();
+            
+            console.log(`✅ ${type} guardado offline:`, offlineData.id);
+            
+            return { success: true, data: offlineData };
+            
+        } catch (error) {
+            console.error(`Error guardando ${type} offline:`, error);
+            throw error;
+        }
+    }
+
+    // Método corregido para obtener datos cacheados
+    async getCachedData(storeName) {
+        if (!this.db) {
+            console.warn('DB no inicializada');
+            return [];
+        }
+        
+        try {
+            const data = await this.db.getAllData(storeName);
+            return data || [];
+        } catch (error) {
+            console.error(`Error obteniendo datos de ${storeName}:`, error);
+            return [];
+        }
+    }
+
     // NUEVA VERSIÓN DE handleFormSubmit (CAMBIO #1)
     async handleFormSubmit(event) {
-    event.preventDefault();
-    const form = event.target;
-    
-    try {
-        // Convertir FormData a objeto
-        const formData = new FormData(form);
-        const data = {};
-        for (let [key, value] of formData.entries()) {
-            data[key] = value;
-        }
+        event.preventDefault();
+        const form = event.target;
         
-        console.log('📱 Procesando formulario offline:', form.action);
-        
-        // Determinar store según URL
-        let storeName = 'sync_queue'; // default
-        if (form.action.includes('/clientes/')) storeName = 'clientes';
-        else if (form.action.includes('/ventas/')) storeName = 'ventas';
-        else if (form.action.includes('/productos/')) storeName = 'productos';
-        else if (form.action.includes('/abonos/')) storeName = 'abonos';
-        
-        // Guardar datos - SIN await ni operaciones async
-        const result = await this.db.saveOfflineData(storeName, data);
-        
-        if (result.success) {
-            // Limpiar formulario
-            form.reset();
-            
-            // Mostrar mensaje de éxito
-            this.showMessage('✅ Datos guardados offline. Se sincronizarán cuando haya conexión.', 'success');
-            
-            // Programar sincronización
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.ready.then(registration => {
-                    if ('sync' in registration) {
-                        registration.sync.register('sync-offline-data');
-                    }
-                });
+        try {
+            // Convertir FormData a objeto
+            const formData = new FormData(form);
+            const data = {};
+            for (let [key, value] of formData.entries()) {
+                data[key] = value;
             }
+            
+            console.log('📱 Procesando formulario offline:', form.action);
+            
+            // Determinar store según URL
+            let storeName = 'sync_queue'; // default
+            if (form.action.includes('/clientes/')) storeName = 'clientes';
+            else if (form.action.includes('/ventas/')) storeName = 'ventas';
+            else if (form.action.includes('/productos/')) storeName = 'productos';
+            else if (form.action.includes('/abonos/')) storeName = 'abonos';
+            
+            // Guardar datos - SIN await ni operaciones async
+            const result = await this.db.saveOfflineData(storeName, data);
+            
+            if (result.success) {
+                // Limpiar formulario
+                form.reset();
+                
+                // Mostrar mensaje de éxito
+                this.showMessage('✅ Datos guardados offline. Se sincronizarán cuando haya conexión.', 'success');
+                
+                // Programar sincronización
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.ready.then(registration => {
+                        if ('sync' in registration) {
+                            registration.sync.register('sync-offline-data');
+                        }
+                    });
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Error en handleFormSubmit:', error);
+            this.showMessage('❌ Error guardando datos: ' + error.message, 'error');
         }
-        
-    } catch (error) {
-        console.error('❌ Error en handleFormSubmit:', error);
-        this.showMessage('❌ Error guardando datos: ' + error.message, 'error');
     }
-}
 
-showMessage(message, type) {
-    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
-    const alert = document.createElement('div');
-    alert.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
-    alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 350px;';
-    alert.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    document.body.appendChild(alert);
-    
-    setTimeout(() => {
-        if (alert.parentElement) {
-            alert.remove();
-        }
-    }, 5000);
-}
+    showMessage(message, type) {
+        const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+        const alert = document.createElement('div');
+        alert.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+        alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 350px;';
+        alert.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alert);
+        
+        setTimeout(() => {
+            if (alert.parentElement) {
+                alert.remove();
+            }
+        }, 5000);
+    }
 
     showErrorMessage(message) {
         const alert = document.createElement('div');
@@ -854,28 +923,6 @@ showMessage(message, type) {
                 alert.remove();
             }
         }, 8000);
-    }
-
-    async updatePendingCount() {
-        try {
-            const stores = ['clientes', 'ventas', 'productos', 'abonos'];
-            let totalPending = 0;
-            
-            for (const store of stores) {
-                const data = await this.db.getAllData(store);
-                const pending = data.filter(item => item.offline && !item.synced);
-                totalPending += pending.length;
-            }
-            
-            // Actualizar badge de contador si existe
-            const badge = document.querySelector('.pending-count');
-            if (badge) {
-                badge.textContent = totalPending;
-                badge.style.display = totalPending > 0 ? 'inline' : 'none';
-            }
-        } catch (error) {
-            console.error('Error actualizando contador:', error);
-        }
     }
 } // <-- Fin de la clase OfflineHandler
 
