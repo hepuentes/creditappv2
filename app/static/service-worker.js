@@ -1,5 +1,5 @@
 // service-worker.js
-const CACHE_VERSION = 'v1.0.0';
+const CACHE_VERSION = 'v10';
 const CACHE_NAMES = {
     STATIC: `static-cache-${CACHE_VERSION}`,
     DYNAMIC: `dynamic-cache-${CACHE_VERSION}`,
