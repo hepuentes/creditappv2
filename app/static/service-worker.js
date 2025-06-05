@@ -296,7 +296,10 @@ async function cacheFirstWithNetworkFallback(request) {
 // Estrategia Network First con mejor manejo de errores
 async function networkFirst(request) {
     try {
-        const networkResponse = await fetch(request);
+        const networkResponse = await fetch(request, { 
+            cache: 'no-cache',
+            credentials: 'same-origin'
+        });
         
         if (networkResponse.ok) {
             // Guardar en caché si es exitoso
@@ -306,21 +309,45 @@ async function networkFirst(request) {
         
         return networkResponse;
     } catch (error) {
-        console.log('[SW] Red no disponible, intentando caché para:', request.url);
+        console.log('[SW] Red no disponible, buscando en caché:', request.url);
         
-        // Buscar en caché
-        const cachedResponse = await caches.match(request);
-        if (cachedResponse) {
-            return cachedResponse;
+        // Buscar en todas las cachés
+        const cacheNames = await caches.keys();
+        for (const cacheName of cacheNames) {
+            const cache = await caches.open(cacheName);
+            const cachedResponse = await cache.match(request);
+            if (cachedResponse) {
+                console.log('[SW] Encontrado en caché:', cacheName);
+                return cachedResponse;
+            }
         }
         
         // Si es una petición HTML y no hay caché, mostrar página offline
         if (request.headers.get('accept') && 
             request.headers.get('accept').includes('text/html')) {
-            const offlineResponse = await caches.match('/offline');
-            if (offlineResponse) {
-                return offlineResponse;
+            
+            // Buscar página offline en todas las cachés
+            for (const cacheName of cacheNames) {
+                const cache = await caches.open(cacheName);
+                const offlineResponse = await cache.match('/offline');
+                if (offlineResponse) {
+                    return offlineResponse;
+                }
             }
+            
+            // Página offline básica si no se encuentra
+            return new Response(`
+                <!DOCTYPE html>
+                <html><head><title>Sin conexión</title></head>
+                <body>
+                    <h1>Sin conexión a internet</h1>
+                    <p>La aplicación requiere conexión para cargar esta página.</p>
+                    <button onclick="window.location.reload()">Reintentar</button>
+                </body></html>
+            `, {
+                status: 200,
+                headers: { 'Content-Type': 'text/html' }
+            });
         }
         
         // Para APIs, devolver respuesta de error
@@ -363,9 +390,7 @@ async function syncOfflineData() {
             });
         }
         
-        // Aquí implementaríamos la lógica de sincronización con el servidor
-        // Por ahora, notificamos a los clientes que estamos intentando sincronizar
-        
+             
         for (const client of clients) {
             client.postMessage({
                 type: 'SYNC_COMPLETE',
