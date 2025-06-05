@@ -304,49 +304,54 @@
 
         // Reemplazar la función init() en offline.html
         async function init() {
-            try {
-                // Inicializar DB
-                if (!window.db) {
-                    window.db = new DB();
-                }
-                
-                // Esperar a que la DB esté lista
-                let attempts = 0;
-                while (!window.db.isReady() && attempts < 50) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    attempts++;
-                }
-                
-                if (!window.db.isReady()) {
-                    throw new Error('DB no se pudo inicializar');
-                }
-                
-                console.log('✅ DB inicializada en página offline');
-                
-                // Actualizar estado
-                updateOnlineStatus();
-                await updatePendingCount();
-                
-                // Cargar datos cacheados
-                await loadCachedData();
-                
-                // Event listeners
-                window.addEventListener('online', updateOnlineStatus);
-                window.addEventListener('offline', updateOnlineStatus);
-                
-                // Formularios
-                document.getElementById('form-cliente').addEventListener('submit', handleClienteSubmit);
-                document.getElementById('form-venta').addEventListener('submit', handleVentaSubmit);
-                document.getElementById('form-abono').addEventListener('submit', handleAbonoSubmit);
-                
-                // Actualizar contador cada 5 segundos
-                setInterval(updatePendingCount, 5000);
-                
-            } catch (error) {
-                console.error('Error en inicialización:', error);
-                showAlert('danger', 'Error inicializando la aplicación offline');
+        try {
+            // Esperar a que la DB esté disponible globalmente
+            while (!window.db) {
+                console.log('Esperando disponibilidad de DB...');
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
+            
+            // Esperar a que la DB esté lista
+            if (!window.db.isReady()) {
+                console.log('Esperando inicialización de DB...');
+                
+                // Usar evento para saber cuando DB está lista
+                const dbReadyPromise = new Promise(resolve => {
+                    window.db.addEventListener('db-ready', resolve);
+                    
+                    // Timeout para evitar espera infinita
+                    setTimeout(resolve, 5000);
+                });
+                
+                await dbReadyPromise;
+            }
+            
+            console.log('✅ DB inicializada en página offline');
+            
+            // Actualizar estado
+            updateOnlineStatus();
+            await updatePendingCount();
+            
+            // Cargar datos cacheados
+            await loadCachedData();
+            
+            // Event listeners
+            window.addEventListener('online', updateOnlineStatus);
+            window.addEventListener('offline', updateOnlineStatus);
+            
+            // Formularios
+            document.getElementById('form-cliente').addEventListener('submit', handleClienteSubmit);
+            document.getElementById('form-venta').addEventListener('submit', handleVentaSubmit);
+            document.getElementById('form-abono').addEventListener('submit', handleAbonoSubmit);
+            
+            // Actualizar contador cada 5 segundos
+            setInterval(updatePendingCount, 5000);
+            
+        } catch (error) {
+            console.error('Error en inicialización offline:', error);
+            showAlert('danger', 'Error inicializando la aplicación offline');
         }
+    }
 
         // Actualizar estado de conexión
         function updateOnlineStatus() {
