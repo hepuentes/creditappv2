@@ -1,6 +1,6 @@
 import os
 import traceback
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, request, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
@@ -18,16 +18,15 @@ bcrypt = Bcrypt()
 
 def create_app():
     app = Flask(__name__)
-
+    
     # Configuración
     app.config.from_object('app.config.Config')
-
-    # CSP PERMISIVO PARA FUNCIONALIDAD OFFLINE COMPLETA
+    
+    # Unificar CSP permisiva + CORS en un solo after_request
     @app.after_request
-    def set_security_headers(response):
-        # Solo configurar CSP para respuestas HTML y evitar conflictos
-        if response.mimetype == 'text/html' and not response.headers.get('Content-Security-Policy'):
-            # CSP permisivo para PWA offline completa
+    def set_security_and_cors(response):
+        # 1) Inyectar CSP permisiva si aún no existe
+        if not response.headers.get('Content-Security-Policy'):
             csp_policy = (
                 "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: *; "
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
@@ -43,12 +42,29 @@ def create_app():
                 "object-src 'none'"
             )
             response.headers['Content-Security-Policy'] = csp_policy
-        
-        # Headers adicionales para PWA
+
+        # 2) Asegurar headers adicionales de seguridad
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-        
+
+        # 3) Agregar CORS para rutas /api/
+        if request.path.startswith('/api/'):
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+            response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+            response.headers['Access-Control-Max-Age'] = '86400'
+
         return response
+
+    # Manejar OPTIONS para CORS en una sola capa
+    @app.before_request
+    def handle_preflight():
+        if request.method == "OPTIONS":
+            resp = make_response()
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            resp.headers["Access-Control-Allow-Headers"] = "*"
+            resp.headers["Access-Control-Allow-Methods"] = "*"
+            return resp
 
     # Asegurar que existan los directorios necesarios
     static_dir = app.static_folder
@@ -56,17 +72,17 @@ def create_app():
     js_dir = os.path.join(static_dir, 'js')
     uploads_dir = os.path.join(static_dir, 'uploads')
     img_dir = os.path.join(static_dir, 'img')  
-
+    
     for directory in [static_dir, css_dir, js_dir, uploads_dir, img_dir]:
         if not os.path.exists(directory):
             os.makedirs(directory)
-
+    
     # Inicializar extensiones con la app
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
     bcrypt.init_app(app)
-
+    
     # Configurar login_manager
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Inicie sesión para acceder a esta página'
@@ -81,10 +97,9 @@ def create_app():
             mimetype='image/vnd.microsoft.icon'
         )
 
-    # Ruta para servir el service worker desde la raíz
+    # Ruta para servir el service worker desde la raíz - CORREGIDO
     @app.route('/service-worker.js')
     def service_worker():
-        from flask import make_response
         response = make_response(
             send_from_directory(app.static_folder, 'service-worker.js')
         )
@@ -92,7 +107,7 @@ def create_app():
         response.headers['Service-Worker-Allowed'] = '/'
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         return response
-
+    
     # Importar y registrar los blueprints
     from app.controllers.auth import auth_bp
     from app.controllers.dashboard import dashboard_bp
@@ -107,7 +122,7 @@ def create_app():
     from app.controllers.reportes import reportes_bp
     from app.controllers.public import public_bp
     from app.controllers.test_sync import test_sync_bp
-
+    
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(clientes_bp)
@@ -121,44 +136,18 @@ def create_app():
     app.register_blueprint(reportes_bp)
     app.register_blueprint(public_bp)
     app.register_blueprint(test_sync_bp)
-
-    # Registrar blueprint de API PRIMERO para evitar conflictos
+    
+    # Registrar blueprint de API
     from app.api import api as api_bp
-    app.register_blueprint(api_bp, url_prefix='/api/v1')
+    app.register_blueprint(api_bp)
 
-    # CORS mejorado para API
-    @app.after_request
-    def after_request(response):
-        from flask import request
-        # Permitir CORS para endpoints de API
-        if request.path.startswith('/api/'):
-            response.headers['Access-Control-Allow-Origin'] = '*'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
-            response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
-            response.headers['Access-Control-Max-Age'] = '86400'
-        return response
-
-    # Manejar OPTIONS requests para CORS
-    @app.before_request
-    def handle_preflight():
-        from flask import request
-        if request.method == "OPTIONS":
-            from flask import make_response
-            response = make_response()
-            response.headers.add("Access-Control-Allow-Origin", "*")
-            response.headers.add('Access-Control-Allow-Headers', "*")
-            response.headers.add('Access-Control-Allow-Methods', "*")
-            return response
-
-    # Crear todas las tablas
+    # Crear todas las tablas (y usuario administrador si no existe)
     with app.app_context():
         try:
             db.create_all()
             
-            # Importamos aquí para evitar importaciones circulares
             from app.models import Usuario, Configuracion
-            
-            # Crear usuario administrador por defecto si no existe
+
             admin = Usuario.query.filter_by(email='admin@creditapp.com').first()
             if not admin:
                 admin = Usuario(
@@ -169,8 +158,7 @@ def create_app():
                 )
                 admin.set_password('admin123')
                 db.session.add(admin)
-                
-                # Crear configuración inicial
+
                 config = Configuracion(
                     nombre_empresa='CreditApp',
                     direccion='Dirección de la empresa',
@@ -184,7 +172,7 @@ def create_app():
                     min_password=6
                 )
                 db.session.add(config)
-                
+
                 db.session.commit()
         except Exception as e:
             print(f"Error inicializando DB: {e}")
