@@ -22,24 +22,32 @@ def create_app():
     # Configuración
     app.config.from_object('app.config.Config')
 
-    # Configurar CSP más permisivo para PWA offline
+    # CSP CORREGIDO - Más permisivo para PWA offline
     @app.after_request
     def set_security_headers(response):
-        # Solo configurar CSP para respuestas HTML
-        if response.mimetype == 'text/html':
-            # CSP más permisivo para IndexedDB y PWA
-            response.headers['Content-Security-Policy'] = (
-                "default-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://code.jquery.com https://cdnjs.cloudflare.com; "
+        # Solo configurar CSP para respuestas HTML y evitar conflictos
+        if response.mimetype == 'text/html' and not response.headers.get('Content-Security-Policy'):
+            # CSP específico para funcionalidad offline completa
+            csp_policy = (
+                "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+                "https://cdn.jsdelivr.net https://code.jquery.com https://cdnjs.cloudflare.com data: blob:; "
                 "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-                "font-src 'self' https://cdnjs.cloudflare.com; "
+                "font-src 'self' https://cdnjs.cloudflare.com data:; "
                 "img-src 'self' data: https: blob:; "
                 "connect-src 'self' https: wss: ws: data: blob:; "
-                "worker-src 'self' blob:; "
+                "worker-src 'self' blob: data:; "
+                "child-src 'self' blob: data:; "
+                "frame-src 'self' blob: data:; "
                 "manifest-src 'self'; "
-                "object-src 'none'; "
-                "frame-src 'none'"
+                "object-src 'none'"
             )
+            response.headers['Content-Security-Policy'] = csp_policy
+        
+        # Headers adicionales para PWA
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        
         return response
 
     # Asegurar que existan los directorios necesarios
@@ -114,55 +122,71 @@ def create_app():
     app.register_blueprint(public_bp)
     app.register_blueprint(test_sync_bp)
 
-    # Registrar blueprint de API
+    # Registrar blueprint de API PRIMERO para evitar conflictos
     from app.api import api as api_bp
-    app.register_blueprint(api_bp)
+    app.register_blueprint(api_bp, url_prefix='/api/v1')
 
-    # Configurar CORS para API
+    # CORS mejorado para API
     @app.after_request
     def after_request(response):
         from flask import request
         # Permitir CORS para endpoints de API
         if request.path.startswith('/api/'):
-            response.headers.add('Access-Control-Allow-Origin', '*')
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+            response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+            response.headers['Access-Control-Max-Age'] = '86400'
         return response
+
+    # Manejar OPTIONS requests para CORS
+    @app.before_request
+    def handle_preflight():
+        from flask import request
+        if request.method == "OPTIONS":
+            from flask import make_response
+            response = make_response()
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            response.headers.add('Access-Control-Allow-Headers', "*")
+            response.headers.add('Access-Control-Allow-Methods', "*")
+            return response
 
     # Crear todas las tablas
     with app.app_context():
-        db.create_all()
-        
-        # Importamos aquí para evitar importaciones circulares
-        from app.models import Usuario, Configuracion
-        
-        # Crear usuario administrador por defecto si no existe
-        admin = Usuario.query.filter_by(email='admin@creditapp.com').first()
-        if not admin:
-            admin = Usuario(
-                nombre='Administrador',
-                email='admin@creditapp.com',
-                rol='administrador',
-                activo=True
-            )
-            admin.set_password('admin123')
-            db.session.add(admin)
+        try:
+            db.create_all()
             
-            # Crear configuración inicial
-            config = Configuracion(
-                nombre_empresa='CreditApp',
-                direccion='Dirección de la empresa',
-                telefono='123456789',
-                logo='logo.png',
-                iva=19,
-                moneda='$',
-                porcentaje_comision_vendedor=5,
-                porcentaje_comision_cobrador=3,
-                periodo_comision='mensual',
-                min_password=6
-            )
-            db.session.add(config)
+            # Importamos aquí para evitar importaciones circulares
+            from app.models import Usuario, Configuracion
             
-            db.session.commit()
+            # Crear usuario administrador por defecto si no existe
+            admin = Usuario.query.filter_by(email='admin@creditapp.com').first()
+            if not admin:
+                admin = Usuario(
+                    nombre='Administrador',
+                    email='admin@creditapp.com',
+                    rol='administrador',
+                    activo=True
+                )
+                admin.set_password('admin123')
+                db.session.add(admin)
+                
+                # Crear configuración inicial
+                config = Configuracion(
+                    nombre_empresa='CreditApp',
+                    direccion='Dirección de la empresa',
+                    telefono='123456789',
+                    logo='logo.png',
+                    iva=19,
+                    moneda='$',
+                    porcentaje_comision_vendedor=5,
+                    porcentaje_comision_cobrador=3,
+                    periodo_comision='mensual',
+                    min_password=6
+                )
+                db.session.add(config)
+                
+                db.session.commit()
+        except Exception as e:
+            print(f"Error inicializando DB: {e}")
     
     return app
