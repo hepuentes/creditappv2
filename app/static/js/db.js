@@ -1,4 +1,4 @@
-// db.js - Manejo de IndexedDB para la aplicación
+// Mejora en la inicialización de DB
 class DB {
     constructor() {
         this.dbName = 'CreditAppDB';
@@ -6,9 +6,9 @@ class DB {
         this.db = null;
         this.ready = false;
         this.initPromise = null;
+        this.eventTarget = new EventTarget(); // Para notificaciones de eventos
         
         console.log('🗄️ DB: Inicializando...');
-        // Inicializar automáticamente
         this.init();
     }
     
@@ -24,14 +24,22 @@ class DB {
     async _initInternal() {
         try {
             return new Promise((resolve, reject) => {
+                // Aumentar el timeout para entornos con restricciones
+                const timeoutId = setTimeout(() => {
+                    console.error('❌ DB: Timeout en inicialización');
+                    reject(new Error('Timeout en inicialización de DB'));
+                }, 15000);
+                
                 const request = indexedDB.open(this.dbName, this.version);
                 
-                request.onerror = () => {
-                    console.error('❌ DB: Error abriendo la base de datos');
+                request.onerror = (event) => {
+                    clearTimeout(timeoutId);
+                    console.error('❌ DB: Error abriendo la base de datos', event.target.error);
                     reject(request.error);
                 };
                 
-                request.onsuccess = () => {
+                request.onsuccess = (event) => {
+                    clearTimeout(timeoutId);
                     this.db = request.result;
                     this.ready = true;
                     console.log('✅ DB: Base de datos abierta exitosamente');
@@ -40,6 +48,9 @@ class DB {
                     this.db.onerror = (event) => {
                         console.error('❌ DB: Error en operación:', event.target.error);
                     };
+                    
+                    // Notificar que DB está lista
+                    this.eventTarget.dispatchEvent(new Event('db-ready'));
                     
                     resolve(this.db);
                 };
@@ -106,7 +117,10 @@ class DB {
             throw error;
         }
     }
-    
+    // Método para suscribirse a eventos
+    addEventListener(eventName, callback) {
+        this.eventTarget.addEventListener(eventName, callback);
+    }    
     // Verificar si la DB está lista
     isReady() {
         return this.ready && this.db !== null;
@@ -363,8 +377,11 @@ class DB {
     }
 }
 
-// Crear instancia global
+// Crear instancia global de forma más robusta
 window.DB = DB;
-window.db = new DB();
-
-console.log('✅ db.js cargado');
+try {
+    window.db = new DB();
+    console.log('✅ Instancia de DB creada globalmente');
+} catch (error) {
+    console.error('❌ Error creando instancia global de DB:', error);
+}
