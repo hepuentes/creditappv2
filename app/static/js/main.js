@@ -1,4 +1,4 @@
-// main.js - VERSIÓN MEJORADA PARA PWA Y FUNCIONALIDAD ORIGINAL
+// main.js - VERSIÓN CORREGIDA PARA PWA Y OFFLINE
 document.addEventListener('DOMContentLoaded', () => {
   const sidebar = document.getElementById('sidebar');
   const content = document.getElementById('content');
@@ -123,16 +123,43 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('offline', updateOfflineMode);
   updateOfflineMode();
 
-  // Auto-cerrar alertas
+  // Auto-cerrar alertas con mejor manejo de errores
   setTimeout(() => {
     const alerts = document.querySelectorAll('.alert-dismissible');
     alerts.forEach(alert => {
-      if (window.bootstrap && bootstrap.Alert) {
-        const bsAlert = new bootstrap.Alert(alert);
-        setTimeout(() => bsAlert.close(), 5000);
-      } else {
-        alert.classList.add('fade');
-        setTimeout(() => alert.remove(), 300);
+      try {
+        if (window.bootstrap && bootstrap.Alert && alert.querySelector('.btn-close')) {
+          const bsAlert = new bootstrap.Alert(alert);
+          setTimeout(() => {
+            try {
+              bsAlert.close();
+            } catch (e) {
+              // Fallback manual si bootstrap falla
+              alert.classList.add('fade');
+              setTimeout(() => {
+                if (alert.parentElement) {
+                  alert.remove();
+                }
+              }, 300);
+            }
+          }, 5000);
+        } else {
+          // Método manual si bootstrap no está disponible
+          alert.classList.add('fade');
+          setTimeout(() => {
+            if (alert.parentElement) {
+              alert.remove();
+            }
+          }, 300);
+        }
+      } catch (error) {
+        console.warn('Error manejando alerta:', error);
+        // Último recurso - remover directamente
+        setTimeout(() => {
+          if (alert.parentElement) {
+            alert.remove();
+          }
+        }, 5000);
       }
     });
   }, 1000);
@@ -142,116 +169,34 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.classList.add('pwa-mode');
   }
 
-  // --------------------- FUNCIONALIDAD ORIGINAL DEL ARCHIVO ---------------------
-
-  // Cerrar sidebar al hacer clic fuera en móvil (compatibilidad original)
-  document.addEventListener('click', function(e) {
-    if (window.innerWidth < 768 && sidebar && sidebar.classList.contains('show')) {
-      if (!sidebar.contains(e.target) && !e.target.closest('#sidebarCollapseContent')) {
-        closeSidebar();
-      }
+  // Inicializar tooltips con manejo de errores
+  try {
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    if (tooltipTriggerList.length > 0 && window.bootstrap && bootstrap.Tooltip) {
+      [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
     }
-  });
-
-  // Cerrar sidebar al hacer clic en enlaces del menú en móvil (compatibilidad original)
-  sidebarLinks.forEach(link => {
-    link.addEventListener('click', function() {
-      if (window.innerWidth < 768) {
-        setTimeout(() => {
-          closeSidebar();
-        }, 100);
-      }
-    });
-  });
-
-  // Manejar cambios de tamaño de ventana (compatibilidad original)
-  window.addEventListener('resize', () => {
-    if (window.innerWidth >= 768) {
-      closeSidebar(); // Remover clases de móvil
-      // Aplicar estado guardado del sidebar en desktop
-      const savedState = localStorage.getItem('sidebarState');
-      if (savedState === 'collapsed') {
-        sidebar.classList.add('collapsed');
-        if (content) {
-          content.style.width = `calc(100% - ${getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width-collapsed')})`;
-          content.style.marginLeft = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width-collapsed');
-        }
-      } else {
-        sidebar.classList.remove('collapsed');
-        if (content) {
-          content.style.width = `calc(100% - ${getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')})`;
-          content.style.marginLeft = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width');
-        }
-      }
-    } else {
-      // En móvil, resetear estilos inline y asegurar que sidebar esté oculto
-      if (content) {
-        content.style.width = '';
-        content.style.marginLeft = '';
-      }
-      if (!sidebar.classList.contains('show')) {
-        closeSidebar();
-      }
-    }
-  });
-
-  // Recuperar estado del sidebar desde localStorage (solo en desktop)
-  if (window.innerWidth >= 768) {
-    const savedState = localStorage.getItem('sidebarState');
-    if (savedState === 'collapsed') {
-      sidebar.classList.add('collapsed');
-      if (content) {
-        content.style.width = `calc(100% - ${getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width-collapsed')})`;
-        content.style.marginLeft = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width-collapsed');
-      }
-    }
+  } catch (error) {
+    console.warn('Error inicializando tooltips:', error);
   }
 
-  // Inicializar estado correcto al cargar
-  if (window.innerWidth < 768) {
-    closeSidebar();
-    if (content) {
-      content.style.width = '';
-      content.style.marginLeft = '';
-    }
-  }
-
-  // Auto-close alerts después de 5 segundos (compatibilidad original)
-  setTimeout(function() {
-    const alerts = document.querySelectorAll('.alert');
-    alerts.forEach(alert => {
-      if (window.bootstrap && bootstrap.Alert) {
-        const bsAlert = new bootstrap.Alert(alert);
-        bsAlert.close();
-      } else {
-        alert.classList.add('fade');
-        setTimeout(() => {
-          alert.remove();
-        }, 300);
-      }
-    });
-  }, 5000);
-
-  // Inicializar tooltips
-  const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-  if (tooltipTriggerList.length > 0 && window.bootstrap && bootstrap.Tooltip) {
-    [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
-  }
-
-  // Función para actualizar total de venta (original)
+  // Función para actualizar total de venta
   window.actualizarTotal = function() {
-    const subtotales = document.querySelectorAll('#tabla-productos .subtotal');
-    let suma = 0;
-    subtotales.forEach(subtotal => {
-      suma += parseFloat(subtotal.textContent.replace(/[^\d.-]/g, '')) || 0;
-    });
-    const totalVenta = document.getElementById('total-venta');
-    if (totalVenta) {
-      totalVenta.textContent = new Intl.NumberFormat('es-CO', {
-        style: 'currency',
-        currency: 'COP',
-        minimumFractionDigits: 0
-      }).format(suma);
+    try {
+      const subtotales = document.querySelectorAll('#tabla-productos .subtotal');
+      let suma = 0;
+      subtotales.forEach(subtotal => {
+        suma += parseFloat(subtotal.textContent.replace(/[^\d.-]/g, '')) || 0;
+      });
+      const totalVenta = document.getElementById('total-venta');
+      if (totalVenta) {
+        totalVenta.textContent = new Intl.NumberFormat('es-CO', {
+          style: 'currency',
+          currency: 'COP',
+          minimumFractionDigits: 0
+        }).format(suma);
+      }
+    } catch (error) {
+      console.warn('Error actualizando total:', error);
     }
   };
 });
