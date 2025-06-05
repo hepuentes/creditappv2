@@ -304,54 +304,62 @@
 
         // Reemplazar la función init() en offline.html
         async function init() {
-        try {
-            // Esperar a que la DB esté disponible globalmente
-            while (!window.db) {
-                console.log('Esperando disponibilidad de DB...');
-                await new Promise(resolve => setTimeout(resolve, 200));
+    try {
+        // Asegurar que la DB está disponible
+        if (!window.db) {
+            console.log('Cargando scripts de DB...');
+            await loadScript('/static/js/db.js');
+            
+            // Esperar a que DB se inicialice
+            let retries = 0;
+            while (!window.db && retries < 50) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                retries++;
             }
-            
-            // Esperar a que la DB esté lista
-            if (!window.db.isReady()) {
-                console.log('Esperando inicialización de DB...');
-                
-                // Usar evento para saber cuando DB está lista
-                const dbReadyPromise = new Promise(resolve => {
-                    window.db.addEventListener('db-ready', resolve);
-                    
-                    // Timeout para evitar espera infinita
-                    setTimeout(resolve, 5000);
-                });
-                
-                await dbReadyPromise;
-            }
-            
-            console.log('✅ DB inicializada en página offline');
-            
-            // Actualizar estado
-            updateOnlineStatus();
-            await updatePendingCount();
-            
-            // Cargar datos cacheados
-            await loadCachedData();
-            
-            // Event listeners
-            window.addEventListener('online', updateOnlineStatus);
-            window.addEventListener('offline', updateOnlineStatus);
-            
-            // Formularios
-            document.getElementById('form-cliente').addEventListener('submit', handleClienteSubmit);
-            document.getElementById('form-venta').addEventListener('submit', handleVentaSubmit);
-            document.getElementById('form-abono').addEventListener('submit', handleAbonoSubmit);
-            
-            // Actualizar contador cada 5 segundos
-            setInterval(updatePendingCount, 5000);
-            
-        } catch (error) {
-            console.error('Error en inicialización offline:', error);
-            showAlert('danger', 'Error inicializando la aplicación offline');
         }
+        
+        if (!window.db) {
+            throw new Error('No se pudo inicializar la base de datos');
+        }
+        
+        // Esperar a que DB esté lista
+        await window.db.waitForReady();
+        
+        console.log('✅ DB inicializada en página offline');
+        
+        // Actualizar estado y cargar datos
+        updateOnlineStatus();
+        await updatePendingCount();
+        await loadCachedData();
+        
+        // Event listeners
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        
+        // Formularios
+        document.getElementById('form-cliente').addEventListener('submit', handleClienteSubmit);
+        document.getElementById('form-venta').addEventListener('submit', handleVentaSubmit);
+        document.getElementById('form-abono').addEventListener('submit', handleAbonoSubmit);
+        
+        // Actualizar contador cada 5 segundos
+        setInterval(updatePendingCount, 5000);
+        
+    } catch (error) {
+        console.error('Error en inicialización offline:', error);
+        showAlert('danger', 'Error inicializando la aplicación offline: ' + error.message);
     }
+}
+
+// Función auxiliar para cargar scripts
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error(`Error cargando ${src}`));
+        document.head.appendChild(script);
+    });
+}
 
         // Actualizar estado de conexión
         function updateOnlineStatus() {
@@ -371,8 +379,7 @@
             }
         }
 
-        // ... El resto del archivo JS continúa igual ...
-        // Actualizar contador de pendientes
+       // Actualizar contador de pendientes
         async function updatePendingCount() {
             if (db) {
                 const count = await db.countPendingChanges();
