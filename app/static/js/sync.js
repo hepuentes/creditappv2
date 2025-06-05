@@ -1,4 +1,4 @@
-// sync.js - Sistema de sincronización offline/online CORREGIDO
+// sync.js mejorado
 class SyncManager {
     constructor() {
         this.db = null;
@@ -6,7 +6,6 @@ class SyncManager {
         this.isOnline = navigator.onLine;
         this.syncInProgress = false;
         this.pendingOperations = [];
-        this.initPromise = null;
         this.initialized = false;
         
         // Configuración de reintentos
@@ -14,70 +13,55 @@ class SyncManager {
         this.retryDelay = 1000;
         
         console.log('🔄 SyncManager: Iniciando...');
-        // NO inicializar automáticamente
+        // Esperar a que DB esté lista
+        this.waitForDB();
+    }
+    
+    async waitForDB() {
+        // Esperar a que window.db esté disponible
+        if (!window.db) {
+            console.log('⏳ SyncManager: Esperando a que DB se inicialice...');
+            setTimeout(() => this.waitForDB(), 200);
+            return;
+        }
+        
+        // Cuando DB está disponible, suscribirse al evento db-ready
+        window.db.addEventListener('db-ready', () => {
+            console.log('✅ SyncManager: DB está lista, inicializando...');
+            this.init();
+        });
+        
+        // Si DB ya está lista, inicializar directamente
+        if (window.db.isReady()) {
+            console.log('✅ SyncManager: DB ya está lista, inicializando...');
+            this.init();
+        }
     }
     
     async init() {
-        // Evitar múltiples inicializaciones
-        if (this.initPromise) {
-            return this.initPromise;
-        }
+        if (this.initialized) return;
         
-        this.initPromise = this._initInternal();
-        return this.initPromise;
-    }
-    
-    async _initInternal() {
         try {
-            console.log('🔄 SyncManager: Esperando DB...');
+            // Guardar referencia a DB
+            this.db = window.db;
+            this.dbReady = true;
             
-            // Verificar si la DB ya existe
-            if (!window.db) {
-                console.log('🔄 SyncManager: DB no encontrada, esperando...');
-                // Esperar a que la DB se inicialice
-                await new Promise(resolve => {
-                    const checkDB = setInterval(() => {
-                        if (window.db && window.db.isReady && window.db.isReady()) {
-                            clearInterval(checkDB);
-                            resolve();
-                        }
-                    }, 100);
-                    
-                    // Timeout después de 10 segundos
-                    setTimeout(() => {
-                        clearInterval(checkDB);
-                        resolve();
-                    }, 10000);
-                });
+            // Configurar listeners
+            this.setupEventListeners();
+            
+            // Cargar operaciones pendientes
+            await this.loadPendingOperations();
+            
+            this.initialized = true;
+            
+            console.log('✅ SyncManager completamente inicializado');
+            
+            // Si estamos online, sincronizar
+            if (this.isOnline) {
+                setTimeout(() => this.syncAll(), 2000);
             }
-            
-            if (window.db && window.db.isReady()) {
-                this.db = window.db;
-                this.dbReady = true;
-                console.log('✅ SyncManager: DB lista y conectada');
-                
-                // Configurar listeners
-                this.setupEventListeners();
-                
-                // Cargar operaciones pendientes
-                await this.loadPendingOperations();
-                
-                this.initialized = true;
-                
-                // Si estamos online, sincronizar
-                if (this.isOnline) {
-                    setTimeout(() => this.syncAll(), 2000);
-                }
-            } else {
-                throw new Error('DB no disponible después del timeout');
-            }
-            
-            return true;
         } catch (error) {
-            console.error('❌ SyncManager: Error en inicialización:', error);
-            this.dbReady = false;
-            this.initialized = false;
-            throw error;
+            console.error('❌ Error inicializando SyncManager:', error);
         }
     }
     
@@ -484,4 +468,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 15000);
 });
 
+// No inicializar el SyncManager automáticamente
 console.log('✅ sync.js cargado');
