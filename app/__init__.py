@@ -18,24 +18,24 @@ bcrypt = Bcrypt()
 
 def create_app():
     app = Flask(__name__)
-    
+
     # Configuración
     app.config.from_object('app.config.Config')
-    
+
     # Configurar CSP para permitir eval (necesario para algunas librerías)
     @app.after_request
-def set_security_headers(response):
-    # Solo configurar CSP para respuestas HTML
-    if response.mimetype == 'text/html':
-        response.headers['Content-Security-Policy'] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://code.jquery.com https://cdnjs.cloudflare.com; "
-            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-            "font-src 'self' https://cdnjs.cloudflare.com; "
-            "img-src 'self' data: https:; "
-            "connect-src 'self' * https://*.onrender.com"
-        )
-    return response
+    def set_security_headers(response):
+        # Solo configurar CSP para respuestas HTML
+        if response.mimetype == 'text/html':
+            response.headers['Content-Security-Policy'] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://code.jquery.com https://cdnjs.cloudflare.com; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+                "font-src 'self' https://cdnjs.cloudflare.com; "
+                "img-src 'self' data: https:; "
+                "connect-src 'self' * https://*.onrender.com"
+            )
+        return response
 
     # Asegurar que existan los directorios necesarios
     static_dir = app.static_folder
@@ -43,17 +43,17 @@ def set_security_headers(response):
     js_dir = os.path.join(static_dir, 'js')
     uploads_dir = os.path.join(static_dir, 'uploads')
     img_dir = os.path.join(static_dir, 'img')  
-    
+
     for directory in [static_dir, css_dir, js_dir, uploads_dir, img_dir]:
         if not os.path.exists(directory):
             os.makedirs(directory)
-    
+
     # Inicializar extensiones con la app
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
     bcrypt.init_app(app)
-    
+
     # Configurar login_manager
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Inicie sesión para acceder a esta página'
@@ -79,7 +79,7 @@ def set_security_headers(response):
         response.headers['Service-Worker-Allowed'] = '/'
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         return response
-    
+
     # Importar y registrar los blueprints
     from app.controllers.auth import auth_bp
     from app.controllers.dashboard import dashboard_bp
@@ -94,7 +94,7 @@ def set_security_headers(response):
     from app.controllers.reportes import reportes_bp
     from app.controllers.public import public_bp
     from app.controllers.test_sync import test_sync_bp
-    
+
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(clientes_bp)
@@ -108,7 +108,7 @@ def set_security_headers(response):
     app.register_blueprint(reportes_bp)
     app.register_blueprint(public_bp)
     app.register_blueprint(test_sync_bp)
-    
+
     # Registrar blueprint de API
     from app.api import api as api_bp
     app.register_blueprint(api_bp)
