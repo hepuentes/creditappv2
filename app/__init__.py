@@ -24,17 +24,18 @@ def create_app():
     
     # Configurar CSP para permitir eval (necesario para algunas librerías)
     @app.after_request
-    def set_security_headers(response):
-        # Permitir eval solo para desarrollo/necesidades específicas
+def set_security_headers(response):
+    # Solo configurar CSP para respuestas HTML
+    if response.mimetype == 'text/html':
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://code.jquery.com https://cdnjs.cloudflare.com; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
             "font-src 'self' https://cdnjs.cloudflare.com; "
             "img-src 'self' data: https:; "
-            "connect-src 'self' https://creditappv2.onrender.com"
+            "connect-src 'self' * https://*.onrender.com"
         )
-        return response
+    return response
 
     # Asegurar que existan los directorios necesarios
     static_dir = app.static_folder
