@@ -286,5 +286,42 @@
     </script>
 
     {% block extra_js %}{% endblock %}
+    <!-- Interceptor de formularios para modo offline -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Interceptar envío de formularios cuando estamos offline
+    document.addEventListener('submit', function(e) {
+        if (!navigator.onLine && window.offlineHandler) {
+            e.preventDefault();
+            
+            const form = e.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+            
+            // Determinar tipo según la URL del formulario
+            let type = 'dato';
+            if (form.action.includes('/clientes')) type = 'cliente';
+            else if (form.action.includes('/ventas')) type = 'venta';
+            else if (form.action.includes('/abonos')) type = 'abono';
+            else if (form.action.includes('/productos')) type = 'producto';
+            
+            // Guardar offline
+            window.offlineHandler.saveOfflineData(type, data)
+                .then(() => {
+                    window.offlineHandler.showNotification(
+                        `✅ ${type.charAt(0).toUpperCase() + type.slice(1)} guardado offline. Se sincronizará cuando haya conexión.`
+                    );
+                    form.reset();
+                })
+                .catch(error => {
+                    window.offlineHandler.showNotification(
+                        `❌ Error guardando ${type}: ${error.message}`,
+                        'error'
+                    );
+                });
+        }
+    });
+});
+</script>
 </body>
 </html>
