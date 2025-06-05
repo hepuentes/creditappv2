@@ -27,9 +27,12 @@ def index():
 
     query = Venta.query
     
-    # Filtrar por vendedor si el usuario es vendedor y no admin
+    # FILTRAR POR VENDEDOR si no es admin - CRÍTICO PARA ROLES
     if current_user.is_vendedor() and not current_user.is_admin():
         query = query.filter(Venta.vendedor_id == current_user.id)
+    elif current_user.is_cobrador() and not current_user.is_admin():
+        # Los cobradores pueden ver todas las ventas, pero esto se puede ajustar
+        pass
         
     if busqueda:
         query = query.join(Cliente).filter(Cliente.nombre.ilike(f"%{busqueda}%"))
