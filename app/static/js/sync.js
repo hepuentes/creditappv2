@@ -1,4 +1,5 @@
-// sync.js mejorado
+// sync.js mejorado - solo mostrar notificaciones importantes
+
 class SyncManager {
     constructor() {
         this.db = null;
@@ -7,56 +8,50 @@ class SyncManager {
         this.syncInProgress = false;
         this.pendingOperations = [];
         this.initialized = false;
-        
+        this.lastNotificationTime = 0;
+        this.notificationThrottle = 5000; // 5 segundos entre notificaciones
+
         // Configuración de reintentos
         this.maxRetries = 5;
         this.retryDelay = 1000;
-        
+
         console.log('🔄 SyncManager: Iniciando...');
-        // Esperar a que DB esté lista
         this.waitForDB();
     }
-    
+
     async waitForDB() {
-        // Esperar a que window.db esté disponible
         if (!window.db) {
             console.log('⏳ SyncManager: Esperando a que DB se inicialice...');
             setTimeout(() => this.waitForDB(), 200);
             return;
         }
-        
-        // Cuando DB está disponible, suscribirse al evento db-ready
+
         window.db.addEventListener('db-ready', () => {
             console.log('✅ SyncManager: DB está lista, inicializando...');
             this.init();
         });
-        
-        // Si DB ya está lista, inicializar directamente
+
         if (window.db.isReady()) {
             console.log('✅ SyncManager: DB ya está lista, inicializando...');
             this.init();
         }
     }
-    
+
     async init() {
         if (this.initialized) return;
-        
+
         try {
-            // Guardar referencia a DB
             this.db = window.db;
             this.dbReady = true;
-            
-            // Configurar listeners
+
             this.setupEventListeners();
-            
-            // Cargar operaciones pendientes
             await this.loadPendingOperations();
-            
+            this.setupUI();
+
             this.initialized = true;
-            
+
             console.log('✅ SyncManager completamente inicializado');
-            
-            // Si estamos online, sincronizar
+
             if (this.isOnline) {
                 setTimeout(() => this.syncAll(), 2000);
             }
@@ -64,128 +59,188 @@ class SyncManager {
             console.error('❌ Error inicializando SyncManager:', error);
         }
     }
-    
+
     setupEventListeners() {
-        // Listener para cambios de conectividad
         window.addEventListener('online', () => {
             console.log('🌐 Online - Iniciando sincronización...');
             this.isOnline = true;
+            this.updatePendingIndicator();
             if (this.initialized && this.dbReady) {
                 this.syncAll();
             }
         });
-        
+
         window.addEventListener('offline', () => {
             console.log('📴 Offline - Modo sin conexión activado');
             this.isOnline = false;
+            this.updatePendingIndicator();
         });
-        
-        // Listener para mensajes del Service Worker
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-            navigator.serviceWorker.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'SYNC_REQUIRED') {
-                    console.log('📬 Mensaje del SW: Sincronización requerida');
-                    if (this.initialized && this.dbReady) {
-                        this.syncAll();
-                    }
-                }
-            });
-        }
     }
-    
+
+    setupUI() {
+        // Crear indicador de operaciones pendientes mejorado
+        let indicator = document.getElementById('pending-sync-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'pending-sync-indicator';
+            indicator.className = 'pending-sync-indicator';
+            indicator.innerHTML = `
+                <i class="fas fa-sync-alt sync-icon"></i>
+                <span class="pending-count">0</span>
+                <span> pendientes</span>
+            `;
+            indicator.onclick = () => this.syncAll();
+            document.body.appendChild(indicator);
+        }
+
+        this.updatePendingIndicator();
+    }
+
     async loadPendingOperations() {
         if (!this.dbReady || !this.db) return;
-        
+
         try {
             const operations = await this.db.getAllData('pending_sync');
             this.pendingOperations = operations || [];
             console.log(`📋 ${this.pendingOperations.length} operaciones pendientes cargadas`);
+            this.updatePendingIndicator();
         } catch (error) {
             console.error('Error cargando operaciones pendientes:', error);
             this.pendingOperations = [];
         }
     }
-    
-    async addPendingOperation(operation) {
-        if (!this.dbReady || !this.db) {
-            console.warn('⚠️ DB no lista, operación no guardada');
-            return;
-        }
-        
-        try {
-            const pendingOp = {
-                id: Date.now(),
-                timestamp: new Date().toISOString(),
-                ...operation
-            };
-            
-            await this.db.saveData('pending_sync', pendingOp);
-            this.pendingOperations.push(pendingOp);
-            
-            console.log('✅ Operación guardada para sincronización:', pendingOp.type);
-            
-            // Actualizar contador en UI
-            this.updatePendingCount();
-            
-            // Si estamos online, intentar sincronizar inmediatamente
-            if (this.isOnline && this.initialized) {
-                this.syncAll();
+
+    updatePendingIndicator() {
+        const indicator = document.getElementById('pending-sync-indicator');
+        const countElement = indicator?.querySelector('.pending-count');
+
+        if (indicator && countElement) {
+            const count = this.pendingOperations.length;
+            countElement.textContent = count;
+
+            if (count > 0) {
+                indicator.classList.add('show');
+                indicator.title = `${count} operaciones pendientes de sincronizar. Click para sincronizar ahora.`;
+            } else {
+                indicator.classList.remove('show');
             }
-            
-            return pendingOp;
-        } catch (error) {
-            console.error('Error guardando operación pendiente:', error);
-            throw error;
+
+            // Cambiar color según estado de conexión
+            if (!this.isOnline && count > 0) {
+                indicator.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
+            } else {
+                indicator.style.background = 'linear-gradient(135deg, #ffc107, #ff9800)';
+            }
         }
     }
-    
+
+    showNotification(message, type = 'info', force = false) {
+        const now = Date.now();
+
+        // Throttle de notificaciones a menos que sea forzada
+        if (!force && (now - this.lastNotificationTime) < this.notificationThrottle) {
+            console.log('Notificación throttled:', message);
+            return;
+        }
+
+        this.lastNotificationTime = now;
+
+        // Crear contenedor si no existe
+        let container = document.querySelector('.notification-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'notification-container';
+            document.body.appendChild(container);
+        }
+
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type} notification-item alert-dismissible fade show`;
+        notification.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+        `;
+
+        container.appendChild(notification);
+
+        // Auto-remover después de 4 segundos
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.remove();
+            }
+        }, 4000);
+    }
+
     async syncAll() {
         if (!this.isOnline || this.syncInProgress || !this.dbReady || !this.initialized) {
             return;
         }
-        
+
         this.syncInProgress = true;
         console.log('🔄 Iniciando sincronización completa...');
-        
+
+        // Mostrar indicador de sincronización
+        const indicator = document.getElementById('pending-sync-indicator');
+        if (indicator) {
+            const icon = indicator.querySelector('.sync-icon');
+            if (icon) {
+                icon.classList.add('fa-spin');
+            }
+        }
+
         try {
-            // Sincronizar cada tipo de datos
             await this.syncClientes();
             await this.syncVentas();
             await this.syncAbonos();
-            
-            // Procesar operaciones pendientes
             await this.processPendingOperations();
-            
+
             console.log('✅ Sincronización completa exitosa');
+
+            // Solo mostrar notificación si había operaciones pendientes
+            if (this.pendingOperations.length > 0) {
+                this.showNotification('✅ Datos sincronizados correctamente', 'success', true);
+
+                // Disparar evento para actualizar listas
+                window.dispatchEvent(new CustomEvent('clientes-updated'));
+                window.dispatchEvent(new CustomEvent('sync-completed'));
+            }
         } catch (error) {
             console.error('❌ Error en sincronización:', error);
+            this.showNotification('❌ Error en sincronización', 'danger', true);
         } finally {
             this.syncInProgress = false;
+
+            // Quitar indicador de sincronización
+            if (indicator) {
+                const icon = indicator.querySelector('.sync-icon');
+                if (icon) {
+                    icon.classList.remove('fa-spin');
+                }
+            }
+
+            this.updatePendingIndicator();
         }
     }
-    
+
     async syncClientes() {
         if (!this.db) return;
-        
+
         try {
             console.log('👥 Sincronizando clientes...');
-            
-            // Obtener clientes locales
+
             const localClientes = await this.db.getAllData('clientes');
             const pendingClientes = localClientes.filter(c => c.pendingSync);
-            
+
             if (pendingClientes.length === 0) {
-                console.log('✅ No hay clientes pendientes de sincronizar');
                 return;
             }
-            
+
             for (const cliente of pendingClientes) {
                 try {
-                    const response = await this.fetchWithRetry('/api/clientes', {
+                    const response = await this.fetchWithRetry('/api/v1/clientes', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
+                            'Authorization': 'Bearer test-token-creditapp-2025'
                         },
                         body: JSON.stringify({
                             nombre: cliente.nombre,
@@ -196,19 +251,16 @@ class SyncManager {
                             local_id: cliente.local_id || cliente.id
                         })
                     });
-                    
+
                     if (response.ok) {
                         const data = await response.json();
-                        
-                        // Actualizar cliente local con ID del servidor
+
                         cliente.id = data.id;
                         cliente.pendingSync = false;
                         cliente.syncDate = new Date().toISOString();
-                        
+
                         await this.db.saveData('clientes', cliente);
                         console.log(`✅ Cliente ${cliente.nombre} sincronizado`);
-                    } else {
-                        console.error(`Error sincronizando cliente ${cliente.nombre}:`, response.status);
                     }
                 } catch (error) {
                     console.error(`Error sincronizando cliente ${cliente.nombre}:`, error);
@@ -218,24 +270,22 @@ class SyncManager {
             console.error('Error en syncClientes:', error);
         }
     }
-    
+
     async syncVentas() {
         if (!this.db) return;
-        
+
         try {
             console.log('🛒 Sincronizando ventas...');
-            
+
             const localVentas = await this.db.getAllData('ventas');
             const pendingVentas = localVentas.filter(v => v.pendingSync);
-            
+
             if (pendingVentas.length === 0) {
-                console.log('✅ No hay ventas pendientes de sincronizar');
                 return;
             }
-            
+
             for (const venta of pendingVentas) {
                 try {
-                    // Preparar datos de venta
                     const ventaData = {
                         cliente_id: venta.cliente_id,
                         fecha: venta.fecha || new Date().toISOString(),
@@ -244,7 +294,7 @@ class SyncManager {
                         productos: venta.productos || [],
                         local_id: venta.local_id || venta.id
                     };
-                    
+
                     const response = await this.fetchWithRetry('/api/ventas', {
                         method: 'POST',
                         headers: {
@@ -253,15 +303,14 @@ class SyncManager {
                         },
                         body: JSON.stringify(ventaData)
                     });
-                    
+
                     if (response.ok) {
                         const data = await response.json();
-                        
-                        // Actualizar venta local
+
                         venta.id = data.id;
                         venta.pendingSync = false;
                         venta.syncDate = new Date().toISOString();
-                        
+
                         await this.db.saveData('ventas', venta);
                         console.log(`✅ Venta sincronizada: ${venta.id}`);
                     } else {
@@ -275,21 +324,20 @@ class SyncManager {
             console.error('Error en syncVentas:', error);
         }
     }
-    
+
     async syncAbonos() {
         if (!this.db) return;
-        
+
         try {
             console.log('💰 Sincronizando abonos...');
-            
+
             const localAbonos = await this.db.getAllData('abonos');
             const pendingAbonos = localAbonos.filter(a => a.pendingSync);
-            
+
             if (pendingAbonos.length === 0) {
-                console.log('✅ No hay abonos pendientes de sincronizar');
                 return;
             }
-            
+
             for (const abono of pendingAbonos) {
                 try {
                     const response = await this.fetchWithRetry('/api/abonos', {
@@ -305,15 +353,14 @@ class SyncManager {
                             local_id: abono.local_id || abono.id
                         })
                     });
-                    
+
                     if (response.ok) {
                         const data = await response.json();
-                        
-                        // Actualizar abono local
+
                         abono.id = data.id;
                         abono.pendingSync = false;
                         abono.syncDate = new Date().toISOString();
-                        
+
                         await this.db.saveData('abonos', abono);
                         console.log(`✅ Abono sincronizado: ${abono.id}`);
                     } else {
@@ -327,14 +374,14 @@ class SyncManager {
             console.error('Error en syncAbonos:', error);
         }
     }
-    
+
     async processPendingOperations() {
         if (!this.db || this.pendingOperations.length === 0) return;
-        
+
         console.log(`📋 Procesando ${this.pendingOperations.length} operaciones pendientes...`);
-        
+
         const completedOps = [];
-        
+
         for (const op of this.pendingOperations) {
             try {
                 const success = await this.executeOperation(op);
@@ -345,31 +392,30 @@ class SyncManager {
                 console.error('Error procesando operación:', error);
             }
         }
-        
-        // Eliminar operaciones completadas
+
         if (completedOps.length > 0) {
             for (const id of completedOps) {
                 await this.db.deleteData('pending_sync', id);
             }
-            
+
             this.pendingOperations = this.pendingOperations.filter(
                 op => !completedOps.includes(op.id)
             );
-            
+
             this.updatePendingCount();
         }
     }
-    
+
     async executeOperation(operation) {
         console.log(`⚡ Ejecutando operación: ${operation.type}`);
-        
+
         try {
             const response = await this.fetchWithRetry(operation.url, {
                 method: operation.method,
                 headers: operation.headers,
                 body: operation.body
             });
-            
+
             if (response.ok) {
                 console.log(`✅ Operación ${operation.type} completada`);
                 return true;
@@ -382,23 +428,22 @@ class SyncManager {
             return false;
         }
     }
-    
+
     async fetchWithRetry(url, options, retries = 0) {
         try {
-            // Asegurar que la URL sea completa
             const fullUrl = url.startsWith('http') ? url : window.location.origin + url;
-            
+
             const response = await fetch(fullUrl, {
                 ...options,
                 credentials: 'same-origin'
             });
-            
+
             if (!response.ok && retries < this.maxRetries) {
                 console.log(`⚠️ Reintentando (${retries + 1}/${this.maxRetries})...`);
                 await new Promise(resolve => setTimeout(resolve, this.retryDelay));
                 return this.fetchWithRetry(url, options, retries + 1);
             }
-            
+
             return response;
         } catch (error) {
             if (retries < this.maxRetries) {
@@ -409,7 +454,7 @@ class SyncManager {
             throw error;
         }
     }
-    
+
     updatePendingCount() {
         const badge = document.querySelector('.pending-sync-badge');
         if (badge) {
@@ -417,19 +462,18 @@ class SyncManager {
             badge.textContent = count;
             badge.style.display = count > 0 ? 'inline-block' : 'none';
         }
-        
-        // Actualizar contador en el indicador offline
+
         const pendingCount = document.getElementById('pending-count');
         if (pendingCount) {
             pendingCount.textContent = this.pendingOperations.length;
         }
     }
-    
+
     // Método auxiliar para verificar si estamos online
     checkOnlineStatus() {
         return navigator.onLine;
     }
-    
+
     // Método para forzar sincronización
     async forceSyncNow() {
         console.log('🔄 Forzando sincronización...');
@@ -442,24 +486,21 @@ class SyncManager {
     }
 }
 
-// Inicializar el SyncManager cuando el DOM Y la DB estén listos
+// Inicializar el SyncManager cuando el DOM y la DB estén listos
 document.addEventListener('DOMContentLoaded', async () => {
-    // Esperar a que la DB esté lista
     let dbReady = false;
     const waitForDB = setInterval(() => {
         if (window.db && window.db.isReady && window.db.isReady()) {
             clearInterval(waitForDB);
             dbReady = true;
-            
-            // Ahora sí inicializar SyncManager
+
             window.syncManager = new SyncManager();
             window.syncManager.init().catch(error => {
                 console.error('Error inicializando SyncManager:', error);
             });
         }
     }, 100);
-    
-    // Timeout después de 15 segundos
+
     setTimeout(() => {
         if (!dbReady) {
             clearInterval(waitForDB);
@@ -468,5 +509,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 15000);
 });
 
-// No inicializar el SyncManager automáticamente
-console.log('✅ sync.js cargado');
+console.log('✅ sync.js mejorado cargado');
