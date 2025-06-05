@@ -40,6 +40,36 @@ def require_api_auth(f):
 
 # --- ENDPOINTS DE SINCRONIZACIÓN PRINCIPALES ---
 
+@api.route('/clientes', methods=['GET'])
+@require_api_auth
+def sync_get_clientes(dispositivo=None):
+    """Obtener lista de clientes para caché"""
+    try:
+        clientes = Cliente.query.all()
+        
+        clientes_data = []
+        for cliente in clientes:
+            clientes_data.append({
+                'id': cliente.id,
+                'uuid': getattr(cliente, 'uuid', None),
+                'nombre': cliente.nombre,
+                'cedula': cliente.cedula,
+                'telefono': cliente.telefono or '',
+                'email': cliente.email or '',
+                'direccion': cliente.direccion or '',
+                'fecha_registro': cliente.fecha_registro.isoformat() if hasattr(cliente, 'fecha_registro') and cliente.fecha_registro else None
+            })
+
+        return jsonify({
+            'success': True,
+            'data': clientes_data,
+            'count': len(clientes_data)
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error obteniendo clientes: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @api.route('/clientes', methods=['POST'])
 @require_api_auth
 def sync_crear_cliente(dispositivo=None):
@@ -201,106 +231,6 @@ def sync_crear_abono(dispositivo=None):
         db.session.rollback()
         current_app.logger.error(f"Error creando abono: {str(e)}")
         return jsonify({'error': f'Error creando abono: {str(e)}'}), 500
-
-# --- ENDPOINTS PARA OBTENER DATOS ---
-
-@api.route('/clientes', methods=['GET'])
-@require_api_auth
-def sync_get_clientes(dispositivo=None):
-    """Obtener lista de clientes para caché"""
-    try:
-        clientes = Cliente.query.all()
-        
-        clientes_data = []
-        for cliente in clientes:
-            clientes_data.append({
-                'id': cliente.id,
-                'uuid': getattr(cliente, 'uuid', None),
-                'nombre': cliente.nombre,
-                'cedula': cliente.cedula,
-                'telefono': cliente.telefono or '',
-                'email': cliente.email or '',
-                'direccion': cliente.direccion or '',
-                'fecha_registro': cliente.fecha_registro.isoformat() if hasattr(cliente, 'fecha_registro') and cliente.fecha_registro else None
-            })
-
-        return jsonify({
-            'success': True,
-            'data': clientes_data,
-            'count': len(clientes_data)
-        }), 200
-
-    except Exception as e:
-        current_app.logger.error(f"Error obteniendo clientes: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@api.route('/productos', methods=['GET'])
-@require_api_auth
-def sync_get_productos(dispositivo=None):
-    """Obtener lista de productos para caché"""
-    try:
-        productos = Producto.query.filter(Producto.stock > 0).all()
-
-        productos_data = []
-        for producto in productos:
-            productos_data.append({
-                'id': producto.id,
-                'uuid': getattr(producto, 'uuid', None),
-                'codigo': producto.codigo,
-                'nombre': producto.nombre,
-                'descripcion': producto.descripcion or '',
-                'precio_compra': float(producto.precio_compra) if producto.precio_compra else 0,
-                'precio_venta': float(producto.precio_venta),
-                'stock': producto.stock,
-                'stock_minimo': producto.stock_minimo,
-                'unidad': producto.unidad or 'UND'
-            })
-
-        return jsonify({
-            'success': True,
-            'data': productos_data,
-            'count': len(productos_data)
-        }), 200
-
-    except Exception as e:
-        current_app.logger.error(f"Error obteniendo productos: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@api.route('/ventas', methods=['GET'])
-@require_api_auth
-def sync_get_ventas(dispositivo=None):
-    """Obtener lista de ventas para caché"""
-    try:
-        # Solo ventas a crédito con saldo pendiente
-        ventas = Venta.query.filter(
-            Venta.tipo == 'credito',
-            Venta.saldo_pendiente > 0
-        ).all()
-
-        ventas_data = []
-        for venta in ventas:
-            ventas_data.append({
-                'id': venta.id,
-                'uuid': getattr(venta, 'uuid', None),
-                'cliente_id': venta.cliente_id,
-                'cliente_nombre': venta.cliente.nombre if venta.cliente else '',
-                'vendedor_id': venta.vendedor_id,
-                'total': float(venta.total),
-                'saldo_pendiente': float(venta.saldo_pendiente),
-                'tipo': venta.tipo,
-                'estado': venta.estado,
-                'fecha': venta.fecha.isoformat() if venta.fecha else None
-            })
-
-        return jsonify({
-            'success': True,
-            'data': ventas_data,
-            'count': len(ventas_data)
-        }), 200
-
-    except Exception as e:
-        current_app.logger.error(f"Error obteniendo ventas: {str(e)}")
-        return jsonify({'error': str(e)}), 500
 
 # --- ENDPOINT DE SINCRONIZACIÓN BULK ---
 
