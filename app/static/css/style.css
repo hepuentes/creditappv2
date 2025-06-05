@@ -595,3 +595,88 @@ html, body {
 body.offline-mode {
     border-top: 3px solid #ffc107;
 }
+/* Mejoras para badge de operaciones pendientes */
+.pending-sync-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #ffc107, #ff9800);
+    color: #000;
+    padding: 10px 15px;
+    border-radius: 25px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: none;
+    z-index: 1060;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.pending-sync-indicator:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+}
+
+.pending-sync-indicator.show {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pending-sync-indicator .pending-count {
+    background: #dc3545;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    min-width: 20px;
+    text-align: center;
+}
+
+.pending-sync-indicator .sync-icon {
+    font-size: 14px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+/* Ocultar indicador offline original si existe */
+.offline-indicator {
+    display: none !important;
+}
+
+/* Mejorar notificaciones para evitar spam */
+.notification-container {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    z-index: 9999;
+    max-width: 350px;
+}
+
+.notification-item {
+    margin-bottom: 10px;
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Sidebar badge ajustado */
+.sidebar .badge {
+    font-size: 10px;
+    padding: 2px 5px;
+    margin-left: 5px;
+}
