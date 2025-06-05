@@ -22,12 +22,12 @@ def create_app():
     # Configuración
     app.config.from_object('app.config.Config')
 
-    # CSP CORREGIDO - Más permisivo para PWA offline
+    # CSP CORREGIDO - Más permisivo para PWA offline con eval
     @app.after_request
     def set_security_headers(response):
         # Solo configurar CSP para respuestas HTML y evitar conflictos
         if response.mimetype == 'text/html' and not response.headers.get('Content-Security-Policy'):
-            # CSP específico para funcionalidad offline completa
+            # CSP específico para funcionalidad offline completa con eval permitido
             csp_policy = (
                 "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; "
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
