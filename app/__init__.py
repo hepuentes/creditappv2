@@ -1,135 +1,192 @@
-# app/api/ventas.py
-from flask import jsonify, request, current_app
-from app import db
-from app.models import Venta, DetalleVenta, Cliente, Producto, Usuario
-from app.api import api
-from datetime import datetime
-import json
-import uuid
+import os
+import traceback
+from flask import Flask, send_from_directory
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_login import LoginManager
+from flask_bcrypt import Bcrypt
+from dotenv import load_dotenv
 
-# Token simple para testing
-TEST_TOKEN = 'test-token-creditapp-2025'
+# Cargar variables de entorno
+load_dotenv()
 
-def require_api_auth(f):
-    """Decorador para autenticación API"""
-    from functools import wraps
+# Inicializar extensiones
+db = SQLAlchemy()
+migrate = Migrate()
+login_manager = LoginManager()
+bcrypt = Bcrypt()
 
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+def create_app():
+    app = Flask(__name__)
 
-        if not token:
-            return jsonify({'error': 'Token no proporcionado'}), 401
+    # Configuración
+    app.config.from_object('app.config.Config')
 
-        # Para desarrollo, aceptar token de prueba
-        if token == TEST_TOKEN:
-            # Usuario admin por defecto
-            usuario_admin = Usuario.query.filter_by(rol='administrador').first()
-            if not usuario_admin:
-                usuario_admin = Usuario.query.first()
-            
-            # Crear objeto dispositivo simulado
-            dispositivo = type('obj', (object,), {
-                'id': 1,
-                'usuario_id': usuario_admin.id if usuario_admin else 1,
-                'usuario': usuario_admin
-            })
-            kwargs['dispositivo'] = dispositivo
-            return f(*args, **kwargs)
-
-        return jsonify({'error': 'Token inválido'}), 401
-
-    return decorated_function
-
-@api.route('/ventas', methods=['GET'])
-@require_api_auth
-def get_ventas(dispositivo=None):
-    """Obtener lista de ventas para sincronización"""
-    try:
-        ventas = Venta.query.all()
+    # CSP PERMISIVO PARA FUNCIONALIDAD OFFLINE COMPLETA
+    @app.after_request
+    def set_security_headers(response):
+        # Solo configurar CSP para respuestas HTML y evitar conflictos
+        if response.mimetype == 'text/html' and not response.headers.get('Content-Security-Policy'):
+            # CSP permisivo para PWA offline completa
+            csp_policy = (
+                "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: *; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+                "https://cdn.jsdelivr.net https://code.jquery.com https://cdnjs.cloudflare.com data: blob: *; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com *; "
+                "font-src 'self' https://cdnjs.cloudflare.com data: *; "
+                "img-src 'self' data: https: blob: *; "
+                "connect-src 'self' https: wss: ws: data: blob: *; "
+                "worker-src 'self' blob: data: *; "
+                "child-src 'self' blob: data: *; "
+                "frame-src 'self' blob: data: *; "
+                "manifest-src 'self' *; "
+                "object-src 'none'"
+            )
+            response.headers['Content-Security-Policy'] = csp_policy
         
-        ventas_data = []
-        for venta in ventas:
-            ventas_data.append({
-                'id': venta.id,
-                'uuid': getattr(venta, 'uuid', str(uuid.uuid4())),
-                'cliente_id': venta.cliente_id,
-                'vendedor_id': venta.vendedor_id,
-                'total': float(venta.total),
-                'tipo': venta.tipo,
-                'saldo_pendiente': float(venta.saldo_pendiente) if venta.saldo_pendiente else 0,
-                'estado': venta.estado,
-                'fecha': venta.fecha.isoformat() if venta.fecha else datetime.now().isoformat()
-            })
+        # Headers adicionales para PWA
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        
+        return response
 
-        return jsonify({
-            'success': True,
-            'data': ventas_data,
-            'count': len(ventas_data)
-        }), 200
+    # Asegurar que existan los directorios necesarios
+    static_dir = app.static_folder
+    css_dir = os.path.join(static_dir, 'css')
+    js_dir = os.path.join(static_dir, 'js')
+    uploads_dir = os.path.join(static_dir, 'uploads')
+    img_dir = os.path.join(static_dir, 'img')  
 
-    except Exception as e:
-        current_app.logger.error(f"Error obteniendo ventas: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+    for directory in [static_dir, css_dir, js_dir, uploads_dir, img_dir]:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
 
-@api.route('/ventas', methods=['POST'])
-@require_api_auth
-def crear_venta(dispositivo=None):
-    """Crear venta desde sincronización offline"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No se recibieron datos'}), 400
-            
-        # Crear nueva venta
-        nueva_venta = Venta(
-            cliente_id=int(data.get('cliente_id')),
-            vendedor_id=dispositivo.usuario_id,
-            total=float(data.get('total', 0)),
-            tipo=data.get('tipo', 'contado'),
-            saldo_pendiente=float(data.get('saldo_pendiente', 0)),
-            estado=data.get('estado', 'pendiente')
+    # Inicializar extensiones con la app
+    db.init_app(app)
+    migrate.init_app(app, db)
+    login_manager.init_app(app)
+    bcrypt.init_app(app)
+
+    # Configurar login_manager
+    login_manager.login_view = 'auth.login'
+    login_manager.login_message = 'Inicie sesión para acceder a esta página'
+    login_manager.login_message_category = 'warning'
+
+    # Ruta para servir el favicon.ico desde la carpeta static
+    @app.route('/favicon.ico')
+    def favicon():
+        return send_from_directory(
+            os.path.join(app.root_path, 'static'),
+            'favicon.ico',
+            mimetype='image/vnd.microsoft.icon'
         )
 
-        # Asegurar que tenga UUID si no lo tiene
-        if not hasattr(nueva_venta, 'uuid') or not nueva_venta.uuid:
-            nueva_venta.uuid = str(uuid.uuid4())
+    # Ruta para servir el service worker desde la raíz
+    @app.route('/service-worker.js')
+    def service_worker():
+        from flask import make_response
+        response = make_response(
+            send_from_directory(app.static_folder, 'service-worker.js')
+        )
+        response.headers['Content-Type'] = 'application/javascript'
+        response.headers['Service-Worker-Allowed'] = '/'
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
 
-        db.session.add(nueva_venta)
-        db.session.flush()  # Para obtener el ID
+    # Importar y registrar los blueprints
+    from app.controllers.auth import auth_bp
+    from app.controllers.dashboard import dashboard_bp
+    from app.controllers.clientes import clientes_bp
+    from app.controllers.productos import productos_bp
+    from app.controllers.ventas import ventas_bp
+    from app.controllers.creditos import creditos_bp
+    from app.controllers.abonos import abonos_bp
+    from app.controllers.cajas import cajas_bp
+    from app.controllers.usuarios import usuarios_bp
+    from app.controllers.config import config_bp
+    from app.controllers.reportes import reportes_bp
+    from app.controllers.public import public_bp
+    from app.controllers.test_sync import test_sync_bp
 
-        # Procesar productos si vienen
-        productos = data.get('productos', [])
-        for producto_data in productos:
-            detalle = DetalleVenta(
-                venta_id=nueva_venta.id,
-                producto_id=int(producto_data.get('id')),
-                cantidad=int(producto_data.get('cantidad', 1)),
-                precio_unitario=float(producto_data.get('precio_venta', 0)),
-                subtotal=float(producto_data.get('cantidad', 1)) * float(producto_data.get('precio_venta', 0))
-            )
-            db.session.add(detalle)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(dashboard_bp)
+    app.register_blueprint(clientes_bp)
+    app.register_blueprint(productos_bp)
+    app.register_blueprint(ventas_bp)
+    app.register_blueprint(creditos_bp)
+    app.register_blueprint(abonos_bp)
+    app.register_blueprint(cajas_bp)
+    app.register_blueprint(usuarios_bp)
+    app.register_blueprint(config_bp)
+    app.register_blueprint(reportes_bp)
+    app.register_blueprint(public_bp)
+    app.register_blueprint(test_sync_bp)
 
-        db.session.commit()
+    # Registrar blueprint de API PRIMERO para evitar conflictos
+    from app.api import api as api_bp
+    app.register_blueprint(api_bp, url_prefix='/api/v1')
 
-        current_app.logger.info(f"Venta creada vía API: #{nueva_venta.id}")
+    # CORS mejorado para API
+    @app.after_request
+    def after_request(response):
+        from flask import request
+        # Permitir CORS para endpoints de API
+        if request.path.startswith('/api/'):
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+            response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+            response.headers['Access-Control-Max-Age'] = '86400'
+        return response
 
-        return jsonify({
-            'success': True,
-            'id': nueva_venta.id,
-            'message': f'Venta #{nueva_venta.id} creada exitosamente',
-            'action': 'created',
-            'data': {
-                'id': nueva_venta.id,
-                'total': float(nueva_venta.total),
-                'tipo': nueva_venta.tipo,
-                'uuid': nueva_venta.uuid
-            }
-        }), 201
+    # Manejar OPTIONS requests para CORS
+    @app.before_request
+    def handle_preflight():
+        from flask import request
+        if request.method == "OPTIONS":
+            from flask import make_response
+            response = make_response()
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            response.headers.add('Access-Control-Allow-Headers', "*")
+            response.headers.add('Access-Control-Allow-Methods', "*")
+            return response
 
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error creando venta vía API: {str(e)}")
-        import traceback
-        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({'error': f'Error creando venta: {str(e)}'}), 500
+    # Crear todas las tablas
+    with app.app_context():
+        try:
+            db.create_all()
+            
+            # Importamos aquí para evitar importaciones circulares
+            from app.models import Usuario, Configuracion
+            
+            # Crear usuario administrador por defecto si no existe
+            admin = Usuario.query.filter_by(email='admin@creditapp.com').first()
+            if not admin:
+                admin = Usuario(
+                    nombre='Administrador',
+                    email='admin@creditapp.com',
+                    rol='administrador',
+                    activo=True
+                )
+                admin.set_password('admin123')
+                db.session.add(admin)
+                
+                # Crear configuración inicial
+                config = Configuracion(
+                    nombre_empresa='CreditApp',
+                    direccion='Dirección de la empresa',
+                    telefono='123456789',
+                    logo='logo.png',
+                    iva=19,
+                    moneda='$',
+                    porcentaje_comision_vendedor=5,
+                    porcentaje_comision_cobrador=3,
+                    periodo_comision='mensual',
+                    min_password=6
+                )
+                db.session.add(config)
+                
+                db.session.commit()
+        except Exception as e:
+            print(f"Error inicializando DB: {e}")
+    
+    return app
