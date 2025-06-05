@@ -72,9 +72,11 @@ class Cliente(db.Model, SyncMixin):
     email = db.Column(db.String(100), nullable=True)
     direccion = db.Column(db.String(200), nullable=True)
     fecha_registro = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)  # NUEVO CAMPO
 
     ventas = db.relationship('Venta', back_populates='cliente', lazy=True, cascade='all, delete-orphan')
     creditos = db.relationship('Credito', backref='cliente', lazy=True, cascade='all, delete-orphan')
+    creador = db.relationship('Usuario', foreign_keys=[created_by], backref='clientes_creados')  # NUEVA RELACIÓN
 
     def saldo_pendiente(self):
         return sum(v.saldo_pendiente for v in self.ventas if v.tipo == 'credito')
