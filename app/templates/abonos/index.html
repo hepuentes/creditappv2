@@ -83,17 +83,39 @@
                                 <td>{{ abono.id }}</td>
                                 <td>{{ abono.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
                                 <td>
-                                    <a href="{{ url_for('clientes.detalle', id=abono.venta.cliente_id) }}">
-                                        {{ abono.venta.cliente.nombre }}
-                                    </a>
+                                    {% if abono.venta and abono.venta.cliente %}
+                                        <a href="{{ url_for('clientes.detalle', id=abono.venta.cliente.id) }}">
+                                            {{ abono.venta.cliente.nombre }}
+                                        </a>
+                                    {% elif abono.credito and abono.credito.cliente %}
+                                        <a href="{{ url_for('clientes.detalle', id=abono.credito.cliente.id) }}">
+                                            {{ abono.credito.cliente.nombre }}
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">Cliente no disponible</span>
+                                    {% endif %}
                                 </td>
                                 <td>
-                                    <a href="{{ url_for('ventas.detalle', id=abono.venta_id) }}">
-                                        #{{ abono.venta_id }}
-                                    </a>
+                                    {% if abono.venta_id %}
+                                        <a href="{{ url_for('ventas.detalle', id=abono.venta_id) }}">
+                                            #{{ abono.venta_id }}
+                                        </a>
+                                    {% elif abono.credito_id %}
+                                        <span class="badge bg-info">Crédito #{{ abono.credito_id }}</span>
+                                    {% elif abono.credito_venta_id %}
+                                        <span class="badge bg-warning">CV #{{ abono.credito_venta_id }}</span>
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
                                 </td>
                                 <td>{{ "${:,}".format(abono.monto|default(0)) }}</td>
-                                <td>{{ abono.cobrador.nombre }}</td>
+                                <td>
+                                    {% if abono.cobrador %}
+                                        {{ abono.cobrador.nombre }}
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <div class="btn-group">
                                         <a href="{{ url_for('abonos.detalle', id=abono.id) }}" class="btn btn-sm btn-info" data-bs-toggle="tooltip" title="Ver Detalle">
