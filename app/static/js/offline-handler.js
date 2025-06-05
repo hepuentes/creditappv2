@@ -1,32 +1,78 @@
 // offline-handler.js
+
 class OfflineHandler {
-    constructor(db) {
-        this.db = db;
-        this.clientesManager = new ClientesManager(db);
-        this.ventasManager = new VentasManager(db);
-        this.productosManager = new ProductosManager(db);
-        this.abonosManager = new AbonosManager(db);
-        this.init();
-    }
+    constructor() {
+        this.db = null;
+        this.dbReady = false;
+        this.isOnline = navigator.onLine;
+        this.pendingOperations = [];
+        this.initialized = false;
         
-    async init() {
         console.log('✅ OfflineHandler inicializando...');
         
-        // Inicializar IndexedDB
-        await this.initDB();
-        
-        // Configurar listeners
-        this.setupEventListeners();
-        
-        // Interceptar fetch para peticiones API
-        this.interceptFetch();
-        
-        // Actualizar UI según estado de conexión
-        this.updateConnectionStatus();
-        
-        console.log('✅ OfflineHandler inicializado con DB');
+        // No inicializar automáticamente, esperar a que DB esté lista
+        this.waitForDB();
     }
+    
+    async waitForDB() {
+        // Esperar a que window.db esté disponible
+        if (!window.db) {
+            console.log('⏳ OfflineHandler: Esperando a que DB se inicialice...');
+            setTimeout(() => this.waitForDB(), 200);
+            return;
+        }
         
+        // Cuando DB está disponible, suscribirse al evento db-ready
+        window.db.addEventListener('db-ready', () => {
+            console.log('✅ OfflineHandler: DB está lista, inicializando...');
+            this.init();
+        });
+        
+        // Si DB ya está lista, inicializar directamente
+        if (window.db.isReady()) {
+            console.log('✅ OfflineHandler: DB ya está lista, inicializando...');
+            this.init();
+        }
+    }
+    
+    async init() {
+        if (this.initialized) return;
+        
+        try {
+            // Guardar referencia a DB
+            this.db = window.db;
+            this.dbReady = true;
+            
+            // Configurar listeners
+            this.setupEventListeners();
+            
+            // Interceptar fetch para peticiones API
+            this.interceptFetch();
+            
+            // Actualizar UI según estado de conexión
+            this.updateConnectionStatus();
+            
+            // Inicializar managers una vez que DB está lista
+            this.clientesManager = new ClientesManager(this.db);
+            this.ventasManager = new VentasManager(this.db);
+            this.productosManager = new ProductosManager(this.db);
+            this.abonosManager = new AbonosManager(this.db);
+            
+            this.initialized = true;
+            
+            console.log('✅ OfflineHandler completamente inicializado');
+            
+            // Si estamos online, intentar sincronizar datos pendientes
+            if (this.isOnline) {
+                setTimeout(() => this.syncPendingData(), 2000);
+            }
+        } catch (error) {
+            console.error('❌ Error inicializando OfflineHandler:', error);
+        }
+    }
+
+    // Métodos existentes
+    
     async initDB() {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open('CreditAppDB', 5);
@@ -926,14 +972,18 @@ class OfflineHandler {
     }
 } // <-- Fin de la clase OfflineHandler
 
-// Inicializar cuando el DOM esté listo
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        window.offlineHandler = new OfflineHandler();
+// Inicialización controlada
+document.addEventListener('DOMContentLoaded', () => {
+    // No crear instancia inmediatamente, esperar al evento load
+    window.addEventListener('load', () => {
+        // Esperar un poco para permitir que otros componentes críticos se inicialicen
+        setTimeout(() => {
+            if (!window.offlineHandler) {
+                window.offlineHandler = new OfflineHandler();
+            }
+        }, 500);
     });
-} else {
-    window.offlineHandler = new OfflineHandler();
-}
+});
 
 // Exportar para uso en otros módulos
 if (typeof module !== 'undefined' && module.exports) {
