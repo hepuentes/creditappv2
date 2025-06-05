@@ -23,22 +23,16 @@ def index():
         desde_str = request.args.get('desde', '')
         hasta_str = request.args.get('hasta', '')
         
-        # Consulta base con LEFT JOIN para evitar errores
-        query = Abono.query.outerjoin(Venta, Abono.venta_id == Venta.id).outerjoin(Cliente, Venta.cliente_id == Cliente.id)
+        # Consulta base simplificada - evitar joins complejos que causan errores
+        query = Abono.query
         
-        # Si es vendedor, filtrar solo sus propias ventas/abonos
+        # Si es vendedor, filtrar solo sus propios abonos
         if current_user.is_vendedor() and not current_user.is_admin():
-            query = query.filter(
-                db.or_(
-                    Venta.vendedor_id == current_user.id,
-                    Abono.cobrador_id == current_user.id
-                )
-            )
+            # Subconsulta para obtener IDs de ventas del vendedor
+            ventas_vendedor = db.session.query(Venta.id).filter(Venta.vendedor_id == current_user.id).subquery()
+            query = query.filter(Abono.venta_id.in_(ventas_vendedor))
         
-        if busqueda:
-            # Buscar por nombre de cliente asociado a la venta del abono
-            query = query.filter(Cliente.nombre.ilike(f"%{busqueda}%"))
-        
+        # Aplicar filtros de fecha
         if desde_str:
             try:
                 desde_dt = datetime.strptime(desde_str, '%Y-%m-%d')
@@ -54,11 +48,30 @@ def index():
             except ValueError:
                 flash('Fecha "hasta" inválida.', 'warning')
 
-        # Ordenar por fecha descendente y obtener solo los abonos
-        abonos = query.with_entities(Abono).order_by(Abono.fecha.desc()).all()
+        # Obtener abonos ordenados por fecha
+        abonos = query.order_by(Abono.fecha.desc()).all()
         
-        # Calcular total de abonos
-        total_abonos = sum(float(a.monto) for a in abonos if a.monto) if abonos else 0
+        # Filtrar por búsqueda en memoria para evitar joins complejos
+        if busqueda and abonos:
+            abonos_filtrados = []
+            for abono in abonos:
+                try:
+                    if (abono.venta and abono.venta.cliente and 
+                        busqueda.lower() in abono.venta.cliente.nombre.lower()):
+                        abonos_filtrados.append(abono)
+                except AttributeError:
+                    # Si hay problemas con las relaciones, incluir el abono sin filtrar
+                    abonos_filtrados.append(abono)
+            abonos = abonos_filtrados
+        
+        # Calcular total de abonos con manejo de errores
+        total_abonos = 0
+        for abono in abonos:
+            try:
+                if abono.monto:
+                    total_abonos += float(abono.monto)
+            except (ValueError, TypeError):
+                continue
         
         return render_template('abonos/index.html', 
                               abonos=abonos, 
@@ -66,8 +79,11 @@ def index():
                               busqueda=busqueda,
                               desde=desde_str,
                               hasta=hasta_str)
+                              
     except Exception as e:
         current_app.logger.error(f"Error en abonos index: {str(e)}")
+        import traceback
+        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
         flash('Error al cargar los abonos. Intente nuevamente.', 'danger')
         return render_template('abonos/index.html', 
                               abonos=[], 
