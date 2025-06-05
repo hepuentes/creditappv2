@@ -22,20 +22,23 @@ def create_app():
     # Configuración
     app.config.from_object('app.config.Config')
 
-    # Configurar CSP para permitir eval (necesario para algunas librerías)
+    # Configurar CSP más permisivo para PWA offline
     @app.after_request
     def set_security_headers(response):
         # Solo configurar CSP para respuestas HTML
         if response.mimetype == 'text/html':
+            # CSP más permisivo para IndexedDB y PWA
             response.headers['Content-Security-Policy'] = (
-                "default-src 'self'; "
+                "default-src 'self' 'unsafe-inline' 'unsafe-eval'; "
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://code.jquery.com https://cdnjs.cloudflare.com; "
                 "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
                 "font-src 'self' https://cdnjs.cloudflare.com; "
-                "img-src 'self' data: https:; "
-                "connect-src 'self' https: wss: ws:; "
-                "worker-src 'self'; "
-                "manifest-src 'self'"
+                "img-src 'self' data: https: blob:; "
+                "connect-src 'self' https: wss: ws: data: blob:; "
+                "worker-src 'self' blob:; "
+                "manifest-src 'self'; "
+                "object-src 'none'; "
+                "frame-src 'none'"
             )
         return response
 
@@ -70,7 +73,7 @@ def create_app():
             mimetype='image/vnd.microsoft.icon'
         )
 
-    # Ruta para servir el service worker desde la raíz - CORREGIDO
+    # Ruta para servir el service worker desde la raíz
     @app.route('/service-worker.js')
     def service_worker():
         from flask import make_response
