@@ -213,39 +213,32 @@
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
+    <!-- Sección de scripts en base.html -->
+    <!-- Scripts fundamentales -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
-    <!-- Scripts de la aplicación (NUEVO BLOQUE) -->
+    <!-- Scripts de la aplicación -->
     <script src="{{ url_for('static', filename='js/db.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/sync-queue.js') }}"></script>
     <script>
-    // Esperar a que DB esté lista antes de cargar otros scripts
-    (async function() {
-        // Inicializar DB primero
-        if (!window.db) {
-            window.db = new DB();
+    // Verificar estado de conexión para UI
+    const updateOnlineStatus = () => {
+        document.body.classList.toggle('offline-mode', !navigator.onLine);
+        const offlineIndicator = document.querySelector('.offline-indicator');
+        if (offlineIndicator) {
+            offlineIndicator.style.display = navigator.onLine ? 'none' : 'block';
         }
+    };
 
-        // Esperar a que esté lista
-        let attempts = 0;
-        const maxAttempts = 50;
-
-        while (!window.db.isReady() && attempts < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-        }
-
-        if (window.db.isReady()) {
-            console.log('✅ DB inicializada correctamente');
-        } else {
-            console.error('❌ DB no se pudo inicializar');
-        }
-    })();
+    // Configurar listeners para estado de conexión
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
     </script>
+
+    <!-- Cargar scripts restantes después de DB -->
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/sync-queue.js') }}"></script>
     <script src="{{ url_for('static', filename='js/clientes.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ventas.js') }}"></script>
     <script src="{{ url_for('static', filename='js/productos.js') }}"></script>
@@ -254,30 +247,45 @@
     <script src="{{ url_for('static', filename='js/offline-handler.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
-    {% block extra_js %}{% endblock %}
-    <!-- Registro del Service Worker -->
-<script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', async function() {
-            try {
-                const registration = await navigator.serviceWorker.register('/service-worker.js', {
-                    scope: '/'
-                });
-                console.log('✅ Service Worker registrado correctamente con alcance:', registration.scope);
-                
-                // Establecer un canal de comunicación con el SW
-                if (navigator.serviceWorker.controller) {
-                    console.log('✅ Esta página está controlada por un Service Worker');
-                } else {
-                    console.log('⚠️ Esta página aún no está controlada por un Service Worker (primera carga)');
+    <!-- Registro del Service Worker (como se definió anteriormente) -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', async function() {
+                try {
+                    const registration = await navigator.serviceWorker.register('/service-worker.js', {
+                        scope: '/'
+                    });
+                    console.log('✅ Service Worker registrado correctamente con alcance:', registration.scope);
+                } catch (error) {
+                    console.error('❌ Error al registrar el Service Worker:', error);
                 }
-            } catch (error) {
-                console.error('❌ Error al registrar el Service Worker:', error);
-            }
-        });
-    } else {
-        console.warn('⚠️ Service Workers no soportados en este navegador');
-    }
-</script>
+            });
+        } else {
+            console.warn('⚠️ Service Workers no soportados en este navegador');
+        }
+    </script>
+
+    <!-- Inicialización de componentes principales -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar componentes cuando DB esté lista
+        if (window.db) {
+            window.db.addEventListener('db-ready', function() {
+                console.log('✅ Inicializando componentes principales...');
+                
+                // Crear instancias si aún no existen
+                if (!window.syncManager) {
+                    window.syncManager = new SyncManager();
+                }
+                
+                if (!window.offlineHandler) {
+                    window.offlineHandler = new OfflineHandler();
+                }
+            });
+        }
+    });
+    </script>
+
+    {% block extra_js %}{% endblock %}
 </body>
 </html>
