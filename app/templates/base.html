@@ -134,7 +134,7 @@
                 </li>
                 {% endif %}
 
-                <!-- Link a centro offline -->
+                <!-- Link a centro offline - Solo si hay capacidades offline -->
                 <li>
                     <a href="/offline">
                         <i class="fas fa-wifi-slash"></i>
@@ -159,7 +159,7 @@
                         <i class="fas fa-bars"></i>
                     </button>
 
-                    <!-- Indicador de conexión -->
+                    <!-- Indicador de conexión simple -->
                     <div class="connection-status ms-auto me-3">
                         <span id="connection-indicator" class="badge bg-success">
                             <i class="fas fa-wifi"></i> Online
@@ -247,57 +247,28 @@
 
     <!-- Scripts de la aplicación en orden específico -->
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/db.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/offline-data-manager.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
-    <!-- Inicialización mejorada de offline -->
+    <!-- Inicialización básica de estado -->
     <script>
-        // Estado de conexión
+        // Estado de conexión simple
         let isOnline = navigator.onLine;
         
         function updateConnectionStatus() {
             const indicator = document.getElementById('connection-indicator');
-            const badge = document.getElementById('pending-sync-badge');
             
             if (navigator.onLine) {
-                indicator.innerHTML = '<i class="fas fa-wifi"></i> Online';
-                indicator.className = 'badge bg-success';
+                if (indicator) {
+                    indicator.innerHTML = '<i class="fas fa-wifi"></i> Online';
+                    indicator.className = 'badge bg-success';
+                }
                 document.body.classList.remove('offline-mode');
             } else {
-                indicator.innerHTML = '<i class="fas fa-wifi-slash"></i> Offline';
-                indicator.className = 'badge bg-danger';
-                document.body.classList.add('offline-mode');
-            }
-            
-            // Mostrar badge de sincronización pendiente
-            updatePendingBadge();
-        }
-        
-        async function updatePendingBadge() {
-            try {
-                if (window.db && window.db.isReady()) {
-                    const stores = ['clientes', 'ventas', 'abonos'];
-                    let totalPending = 0;
-                    
-                    for (const store of stores) {
-                        const data = await window.db.getAllData(store);
-                        const pending = data.filter(item => item.pendingSync);
-                        totalPending += pending.length;
-                    }
-                    
-                    const badge = document.getElementById('pending-sync-badge');
-                    const count = document.getElementById('pending-count');
-                    
-                    if (totalPending > 0) {
-                        badge.style.display = 'inline-block';
-                        count.textContent = totalPending;
-                    } else {
-                        badge.style.display = 'none';
-                    }
+                if (indicator) {
+                    indicator.innerHTML = '<i class="fas fa-wifi-slash"></i> Offline';
+                    indicator.className = 'badge bg-danger';
                 }
-            } catch (error) {
-                console.error('Error actualizando badge:', error);
+                document.body.classList.add('offline-mode');
             }
         }
         
@@ -308,19 +279,10 @@
         // Inicialización
         document.addEventListener('DOMContentLoaded', function() {
             updateConnectionStatus();
-            
-            // Actualizar badge cada 5 segundos
-            setInterval(updatePendingBadge, 5000);
-            
-            // Si no estamos autenticados y estamos offline, simular auth offline
-            if (!window.isAuthenticated && !navigator.onLine) {
-                console.log('Modo offline detectado sin autenticación');
-                // Permitir navegación offline básica
-            }
         });
     </script>
 
-    <!-- Registro del Service Worker mejorado -->
+    <!-- Registro del Service Worker solo si es necesario -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', async function() {
@@ -336,8 +298,8 @@
                         const newWorker = registration.installing;
                         newWorker.addEventListener('statechange', () => {
                             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                console.log('Nueva versión disponible, recargando...');
-                                window.location.reload();
+                                console.log('Nueva versión disponible');
+                                // Opcionalmente mostrar notificación de actualización
                             }
                         });
                     });
@@ -347,6 +309,53 @@
                 }
             });
         }
+    </script>
+
+    <!-- Scripts offline solo cuando sea necesario -->
+    <script>
+        // Solo cargar funcionalidad offline si realmente estamos offline
+        if (!navigator.onLine) {
+            // Cargar scripts offline de manera diferida
+            const loadOfflineScripts = () => {
+                const scripts = [
+                    '/static/js/db.js',
+                    '/static/js/offline-data-manager.js',
+                    '/static/js/sync.js'
+                ];
+                
+                scripts.forEach(src => {
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.async = true;
+                    document.head.appendChild(script);
+                });
+            };
+            
+            // Cargar con retraso para no bloquear el renderizado
+            setTimeout(loadOfflineScripts, 1000);
+        }
+        
+        // Escuchar cuando vayamos offline para cargar los scripts
+        window.addEventListener('offline', () => {
+            if (!window.db) {
+                const loadOfflineScripts = () => {
+                    const scripts = [
+                        '/static/js/db.js',
+                        '/static/js/offline-data-manager.js',
+                        '/static/js/sync.js'
+                    ];
+                    
+                    scripts.forEach(src => {
+                        const script = document.createElement('script');
+                        script.src = src;
+                        script.async = true;
+                        document.head.appendChild(script);
+                    });
+                };
+                
+                setTimeout(loadOfflineScripts, 500);
+            }
+        });
     </script>
 
     {% block extra_js %}{% endblock %}
